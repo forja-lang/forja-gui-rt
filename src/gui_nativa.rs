@@ -23,7 +23,6 @@ use crate::{
 };
 use crate::theme::animation::AnimationEngine;
 use crate::theme::motion::{EASE_EMPHASIZED, EASE_STANDARD};
-use crate::vello::peniko::color::AlphaColor;
 // icons module used implicitly through svg_icon() call
 
 #[derive(Debug, Clone)]
@@ -798,6 +797,16 @@ pub enum Layout {
     /// Borde con brillo (Glow)
     GlowBorder { child: Box<Layout>, color: String, ancho: f64 },
 
+    /// Lienzo de dibujo libre (Canvas / Pintura)
+    ///
+    /// Lee comandos de dibujo desde una variable JSON en VariableStore.
+    /// Los comandos se especifican como un array JSON del tipo [`CanvasCommand`].
+    Canvas {
+        commands_var: String,
+        width: f64,
+        height: f64,
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // ICONOS MATERIAL (Fase Iconos)
     // ═══════════════════════════════════════════════════════════════════
@@ -860,10 +869,10 @@ fn extraer_callback(args: &[Expresion], index: usize) -> String {
     args.get(index)
         .map(|a| match a {
             Expresion::Referencia { expr, .. } => match expr.as_ref() {
-                Expresion::Identificador(n, ..) => n.clone(),
+                Expresion::Identificador { nombre: n, .. } => n.clone(),
                 _ => String::new(),
             },
-            Expresion::Identificador(n, ..) => n.clone(),
+            Expresion::Identificador { nombre: n, .. } => n.clone(),
             _ => String::new(),
         })
         .unwrap_or_default()
@@ -1012,10 +1021,10 @@ fn extraer_icon_actions(args: &[Expresion], index: usize) -> Vec<IconAction> {
                         let callback = argumentos.get(1)
                             .map(|a| match a {
                                 Expresion::Referencia { expr, .. } => match expr.as_ref() {
-                                    Expresion::Identificador(n, ..) => n.clone(),
+                                    Expresion::Identificador { nombre: n, .. } => n.clone(),
                                     _ => String::new(),
                                 },
-                                Expresion::Identificador(n, ..) => n.clone(),
+                                Expresion::Identificador { nombre: n, .. } => n.clone(),
                                 _ => String::new(),
                             }).unwrap_or_default();
                         Some(IconAction { icono, callback })
@@ -1036,10 +1045,10 @@ fn extraer_icon_actions(args: &[Expresion], index: usize) -> Vec<IconAction> {
                         let callback = argumentos.get(1)
                             .map(|a| match a {
                                 Expresion::Referencia { expr, .. } => match expr.as_ref() {
-                                    Expresion::Identificador(n, ..) => n.clone(),
+                                    Expresion::Identificador { nombre: n, .. } => n.clone(),
                                     _ => String::new(),
                                 },
-                                Expresion::Identificador(n, ..) => n.clone(),
+                                Expresion::Identificador { nombre: n, .. } => n.clone(),
                                 _ => String::new(),
                             }).unwrap_or_default();
                         Some(vec![IconAction { icono, callback }])
@@ -1097,7 +1106,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "escribir" | "etiqueta" | "label" | "text" => {
                     if let Some(arg) = argumentos.first() {
                         match arg {
-Expresion::Identificador(v, ..) =>
+Expresion::Identificador { nombre: v, .. } =>
                                 Some(Layout::Label { texto: v.clone(), es_variable: true }),
                             Expresion::LiteralTexto(s) =>
                                 Some(Layout::Label { texto: s.clone(), es_variable: false }),
@@ -1129,7 +1138,7 @@ Expresion::Identificador(v, ..) =>
                 "etiqueta_dinamica" | "varlabel" => {
                     let variable = argumentos.first()
                         .map(|a| match a {
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             Expresion::LiteralTexto(s) => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
@@ -1150,7 +1159,7 @@ Expresion::Identificador(v, ..) =>
                     let variable = argumentos.first()
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
                     let placeholder = argumentos.get(1)
@@ -1164,7 +1173,7 @@ Expresion::Identificador(v, ..) =>
                     let variable = argumentos.first()
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
                     let placeholder = argumentos.get(1)
@@ -1178,7 +1187,7 @@ Expresion::Identificador(v, ..) =>
                     let variable = argumentos.first()
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
                     Some(Layout::ProgressBar { variable })
@@ -1187,7 +1196,7 @@ Expresion::Identificador(v, ..) =>
                     let variable = argumentos.first()
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
                     let min = argumentos.get(1)
@@ -1202,12 +1211,12 @@ Expresion::Identificador(v, ..) =>
                     let variable = argumentos.get(1)
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).or_else(|| {
                             argumentos.first().map(|a| match a {
                                 Expresion::LiteralTexto(s) => s.clone(),
-                                Expresion::Identificador(s, ..) => s.clone(),
+                                Expresion::Identificador { nombre: s, .. } => s.clone(),
                                 _ => String::new(),
                             })
                         }).unwrap_or_default();
@@ -1972,7 +1981,7 @@ Expresion::Identificador(v, ..) =>
                     let child = argumentos.first().and_then(expr_a_layout);
                     let _variable = argumentos.get(1)
                         .map(|a| match a {
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
                     child.map(|c| Layout::MaterialCard {
@@ -2480,7 +2489,7 @@ Expresion::Identificador(v, ..) =>
                     let valor = argumentos.get(1)
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => Some(s.clone()),
-                            Expresion::Identificador(s, ..) => Some(s.clone()),
+                            Expresion::Identificador { nombre: s, .. } => Some(s.clone()),
                             Expresion::LiteralNumero(n) => Some(n.to_string()),
                             _ => None,
                         }).unwrap_or(None);
@@ -2526,7 +2535,7 @@ Expresion::Identificador(v, ..) =>
                         _ => None,
                     }).unwrap_or(None);
                     let accion_cb = argumentos.get(3).map(|a| match a {
-                        Expresion::Identificador(s, ..) => Some(s.clone()),
+                        Expresion::Identificador { nombre: s, .. } => Some(s.clone()),
                         _ => None,
                     }).unwrap_or(None);
                     Some(Layout::EmptyState {
@@ -2541,7 +2550,7 @@ Expresion::Identificador(v, ..) =>
                 "estado_error" | "error_state" => {
                     let mensaje = extraer_texto(argumentos, 0);
                     let on_retry = argumentos.get(1).map(|a| match a {
-                        Expresion::Identificador(s, ..) => Some(s.clone()),
+                        Expresion::Identificador { nombre: s, .. } => Some(s.clone()),
                         _ => None,
                     }).unwrap_or(None);
                     Some(Layout::ErrorState { mensaje, on_retry })
@@ -2640,7 +2649,7 @@ Expresion::Identificador(v, ..) =>
                     let callback = extraer_callback(argumentos, 1);
                     let refreshing = argumentos.get(2)
                         .map(|a| match a {
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             Expresion::LiteralTexto(s) => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
@@ -2658,7 +2667,7 @@ Expresion::Identificador(v, ..) =>
                     let label = extraer_texto(argumentos, 2);
                     let dismissed = argumentos.get(3)
                         .map(|a| match a {
-                            Expresion::Identificador(s, ..) => s.clone(),
+                            Expresion::Identificador { nombre: s, .. } => s.clone(),
                             Expresion::LiteralTexto(s) => s.clone(),
                             _ => String::new(),
                         }).unwrap_or_default();
@@ -2875,6 +2884,18 @@ Expresion::Identificador(v, ..) =>
                     })
                 }
 
+                // ─── Canvas / Lienzo ────────────────────────────────────
+                "lienzo" | "canvas" | "lona" => {
+                    let commands_var = extraer_texto(argumentos, 0);
+                    let width = extraer_f64(argumentos, 1);
+                    let height = extraer_f64(argumentos, 2);
+                    Some(Layout::Canvas {
+                        commands_var,
+                        width: if width <= 0.0 { 300.0 } else { width },
+                        height: if height <= 0.0 { 200.0 } else { height },
+                    })
+                }
+
                 // ═══════════════════════════════════════════════════════════
                 // ICONOS MATERIAL DESIGN
                 // ═══════════════════════════════════════════════════════════
@@ -2979,7 +3000,7 @@ fn styled_label(args: &[Expresion], style: &str) -> Option<Layout> {
     let texto = args.first()
         .map(|a| match a {
             Expresion::LiteralTexto(s) => s.clone(),
-            Expresion::Identificador(s, ..) => s.clone(),
+            Expresion::Identificador { nombre: s, .. } => s.clone(),
             _ => String::new(),
         }).unwrap_or_default();
     Some(Layout::StyledLabel {
@@ -3031,10 +3052,10 @@ fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
     }
 }
 
-/// Convierte un color role (string) a AlphaColor para usar con chart_widgets
-fn color_role_to_alpha(scheme: &ColorScheme, role: &str) -> AlphaColor {
+/// Convierte un color role (string) a Rgba para usar con chart_widgets
+fn color_role_to_rgba(scheme: &ColorScheme, role: &str) -> Rgba {
     let rgb = get_color_role(scheme, role);
-    AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255)
+    Rgba::new(rgb.0, rgb.1, rgb.2, 255)
 }
 
 /// Obtiene el TextStyle de la escala tipográfica por nombre de estilo
@@ -5706,16 +5727,16 @@ pub fn layout_a_view<'a>(
         //
         // Reemplaza la emulación anterior (barras flex, puntos Unicode,
         // leyendas de texto) por dibujo vectorial real con Vello Scene.
-        // Usa widgets Masonry personalizados de chart_widgets.rs.
+        // Usa widgets Masonry personalizados con View wrappers Xilem.
 
         // ─── LineChart ────────────────────────────────────────────────
         Layout::LineChart { datos, color, etiquetas } => {
-            let c = color_role_to_alpha(&theme.scheme, color);
+            let c = color_role_to_rgba(&theme.scheme, color);
             let puntos: Vec<ChartDataPoint> = datos.iter().enumerate().map(|(i, &v)| {
                 let label = etiquetas.get(i).cloned().unwrap_or_default();
                 ChartDataPoint::new(&label, v, c)
             }).collect();
-            Box::new(Pod::new(LineChartWidget::new(puntos)))
+            Box::new(LineChartView::<AppStateNativo>::new(puntos))
         }
 
         // ─── BarChart ────────────────────────────────────────────────
@@ -5729,14 +5750,14 @@ pub fn layout_a_view<'a>(
                 let c_str = colores.get(i).cloned().unwrap_or_default();
                 let c = if c_str.is_empty() {
                     let rgb = colores_ciclo[i % colores_ciclo.len()];
-                    AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255)
+                    Rgba::new(rgb.0, rgb.1, rgb.2, 255)
                 } else {
-                    color_role_to_alpha(&theme.scheme, &c_str)
+                    color_role_to_rgba(&theme.scheme, &c_str)
                 };
                 let label = etiquetas.get(i).cloned().unwrap_or_default();
                 ChartDataPoint::new(&label, v, c)
             }).collect();
-            Box::new(Pod::new(BarChartWidget::new(puntos, *apilado)))
+            Box::new(BarChartView::<AppStateNativo>::new(puntos, *apilado))
         }
 
         // ─── PieChart / Donut ─────────────────────────────────────────
@@ -5749,31 +5770,23 @@ pub fn layout_a_view<'a>(
             ];
             let puntos: Vec<ChartDataPoint> = datos.iter().enumerate().map(|(i, &v)| {
                 let rgb = colores_pie[i % colores_pie.len()];
-                let c = AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255);
+                let c = Rgba::new(rgb.0, rgb.1, rgb.2, 255);
                 let label = etiquetas.get(i).cloned().unwrap_or_default();
                 ChartDataPoint::new(&label, v, c)
             }).collect();
-            let mut pie = PieChartWidget::new(puntos);
-            if *donut {
-                pie.set_donut(0.5);
-            }
-            Box::new(Pod::new(pie))
+            Box::new(PieChartView::<AppStateNativo>::new(puntos, *donut, 0.5))
         }
 
         // ─── GaugeChart ──────────────────────────────────────────────
-        Layout::GaugeChart { valor, min, max, color: _ } => {
-            let threshold = *max * 0.75; // umbral por defecto al 75%
-            let mut gauge = GaugeChartWidget::new(*valor, *max, threshold);
-            let verde = AlphaColor::from_rgba8(0x4C, 0xAF, 0x50, 0xFF);
-            let rojo = AlphaColor::from_rgba8(0xF4, 0x43, 0x36, 0xFF);
-            gauge = gauge.with_colors(verde, rojo);
-            Box::new(Pod::new(gauge))
+        Layout::GaugeChart { valor, min: _, max, color: _ } => {
+            let threshold = *max * 0.75;
+            Box::new(GaugeChartView::<AppStateNativo>::new(*valor, *max, threshold))
         }
 
         // ─── Sparkline ───────────────────────────────────────────────
         Layout::Sparkline { datos, color } => {
-            let c = color_role_to_alpha(&theme.scheme, color);
-            Box::new(Pod::new(SparklineWidget::new(datos.clone(), c)))
+            let c = color_role_to_rgba(&theme.scheme, color);
+            Box::new(SparklineView::<AppStateNativo>::new(datos.clone(), c))
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -6177,6 +6190,27 @@ pub fn layout_a_view<'a>(
                     .border_width(*ancho)
                     .corner_radius(12.0)
             )
+        }
+
+        // ─── Canvas / Lienzo de dibujo libre ───────────────────────────
+        Layout::Canvas { commands_var, width, height } => {
+            // Leer comandos de la variable si existe
+            let commands_json = data.leer(commands_var).to_string();
+            let view = if commands_json != "null" && !commands_json.is_empty() {
+                crate::canvas_widget::CanvasView::<AppStateNativo>::new(
+                    commands_var.clone(),
+                    commands_json,
+                    *width,
+                    *height,
+                )
+            } else {
+                crate::canvas_widget::CanvasView::<AppStateNativo>::empty(
+                    commands_var.clone(),
+                    *width,
+                    *height,
+                )
+            };
+            Box::new(view)
         }
 
         // ═══════════════════════════════════════════════════════════════════

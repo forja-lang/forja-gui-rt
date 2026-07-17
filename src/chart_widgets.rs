@@ -3,34 +3,54 @@
 // Reemplaza la emulación anterior (barras flex, puntos Unicode, leyendas de texto)
 // por dibujo vectorial real con Vello Scene, usando kurbo para formas geométricas.
 //
-// Cada widget implementa el trait Widget de Masonry y puede usarse directamente
-// envuelto en un Pod<Widget> desde layout_a_view() en gui_nativa.rs.
+// Incluye View wrappers Xilem para integración directa en layout_a_view().
+
+use std::marker::PhantomData;
 
 use crate::accesskit::{Node, Role};
-use crate::vello::kurbo::{Affine, Arc, BezPath, Circle, Line, Point, Rect, Size, Stroke, Vec2};
+use crate::vello::kurbo::{Affine, BezPath, Circle, Line, Point, Rect, Size, Stroke};
 use crate::vello::peniko::{self, Brush, Fill};
-use crate::vello::peniko::color::AlphaColor;
 use crate::vello::Scene;
 use crate::{
     AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx,
     PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
 };
+use crate::{MessageContext, MessageResult, Mut, Pod, View, ViewCtx, ViewMarker};
 use std::f64::consts::PI;
 
 // ═══════════════════════════════════════════════════════════════════
 // DATA: Estructura de datos compartida para todos los charts
 // ═══════════════════════════════════════════════════════════════════
 
+/// Representación compacta de color RGBA para almacenar en widgets
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rgba(pub u8, pub u8, pub u8, pub u8);
+
+impl Rgba {
+    pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self(r, g, b, a)
+    }
+
+    pub fn to_peniko_color(&self) -> peniko::Color {
+        peniko::Color::from_rgba8(self.0, self.1, self.2, self.3)
+    }
+
+    pub fn to_brush(&self) -> Brush {
+        Brush::Solid(self.to_peniko_color())
+    }
+}
+
+
 /// Un punto individual de datos para cualquier chart
 #[derive(Debug, Clone)]
 pub struct ChartDataPoint {
     pub label: String,
     pub value: f64,
-    pub color: AlphaColor,
+    pub color: Rgba,
 }
 
 impl ChartDataPoint {
-    pub fn new(label: &str, value: f64, color: AlphaColor) -> Self {
+    pub fn new(label: &str, value: f64, color: Rgba) -> Self {
         Self {
             label: label.to_string(),
             value,
@@ -38,30 +58,110 @@ impl ChartDataPoint {
         }
     }
 
-    /// Crea un punto desde un color en formato RGBA u8
     pub fn from_rgba8(label: &str, value: f64, r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
             label: label.to_string(),
             value,
-            color: AlphaColor::from_rgba8(r, g, b, a),
+            color: Rgba(r, g, b, a),
         }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Helper: convertir un ratio 0..1 a un color de gradiente
+// Helpers de dibujo vectorial
 // ═══════════════════════════════════════════════════════════════════
 
-fn lerp_color(a: AlphaColor, b: AlphaColor, t: f64) -> AlphaColor {
-    let t = t.clamp(0.0, 1.0);
-    let [ar, ag, ab, aa] = a.components;
-    let [br, bg, bb, ba] = b.components;
-    AlphaColor::from_rgba8(
-        (ar as f64 + (br as f64 - ar as f64) * t) as u8,
-        (ag as f64 + (bg as f64 - ag as f64) * t) as u8,
-        (ab as f64 + (bb as f64 - ab as f64) * t) as u8,
-        (aa as f64 + (ba as f64 - aa as f64) * t) as u8,
-    )
+/// Dibuja un arco aproximado usando pequeños segmentos de línea.
+/// Esto evita la dependencia de `kurbo::Arc` o `BezPath::arc_to`.
+fn add_arc_to_path(
+    path: &mut BezPath,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+    start_angle: f64,
+    sweep_angle: f64,
+    segments: usize,
+) {
+    let segments = segments.max(4);
+    for i in 1..=segments {
+        let t = i as f64 / segments as f64;
+        let angle = start_angle + sweep_angle * t;
+        let x = cx + angle.cos() * radius;
+        let y = cy + angle.sin() * radius;
+        path.line_to(Point::new(x, y));
+    }
+}
+
+/// Dibuja un segmento de pastel (centro → arco → centro) usando BezPath con segmentos de línea.
+fn draw_pie_segment(
+    scene: &mut Scene,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+    start_angle: f64,
+    sweep_angle: f64,
+    brush: &Brush,
+) {
+    if sweep_angle.abs() < 0.001 {
+        return;
+    }
+
+    let mut path = BezPath::new();
+    // Centro
+    path.move_to(Point::new(cx, cy));
+    // Primer punto en el arco
+    let x0 = cx + start_angle.cos() * radius;
+    let y0 = cy + start_angle.sin() * radius;
+    path.line_to(Point::new(x0, y0));
+    // Segmentos del arco
+    let num_seg = (sweep_angle.abs() / (PI / 32.0)).ceil() as usize;
+    add_arc_to_path(&mut path, cx, cy, radius, start_angle, sweep_angle, num_seg);
+    // Cerrar al centro
+    path.close_path();
+
+    scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
+}
+
+/// Dibuja un arco grueso (anillo) usando BezPath con segmentos de línea.
+/// Útil para el gauge y donut avanzado.
+fn draw_thick_arc(
+    scene: &mut Scene,
+    cx: f64,
+    cy: f64,
+    radius: f64,
+    thickness: f64,
+    start_angle: f64,
+    sweep_angle: f64,
+    brush: &Brush,
+) {
+    if sweep_angle.abs() < 0.001 {
+        return;
+    }
+
+    let outer_r = radius;
+    let inner_r = radius - thickness;
+    let end_angle = start_angle + sweep_angle;
+    let num_seg = (sweep_angle.abs() / (PI / 32.0)).ceil() as usize;
+    let num_seg = num_seg.max(4);
+
+    let mut path = BezPath::new();
+
+    // Arco exterior (start → end)
+    let x0_outer = cx + start_angle.cos() * outer_r;
+    let y0_outer = cy + start_angle.sin() * outer_r;
+    path.move_to(Point::new(x0_outer, y0_outer));
+    add_arc_to_path(&mut path, cx, cy, outer_r, start_angle, sweep_angle, num_seg);
+
+    // Línea hacia el interior
+    let x1_inner = cx + end_angle.cos() * inner_r;
+    let y1_inner = cy + end_angle.sin() * inner_r;
+    path.line_to(Point::new(x1_inner, y1_inner));
+
+    // Arco interior (end → start, inverso)
+    add_arc_to_path(&mut path, cx, cy, inner_r, end_angle, -sweep_angle, num_seg);
+
+    path.close_path();
+    scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -69,14 +169,11 @@ fn lerp_color(a: AlphaColor, b: AlphaColor, t: f64) -> AlphaColor {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Widget de gráfico de líneas vectorial.
-///
-/// Dibuja una línea poligonal conectando puntos de datos, con puntos opcionales
-/// en cada vértice y líneas de referencia horizontales.
 pub struct LineChartWidget {
     data: Vec<ChartDataPoint>,
     show_points: bool,
     show_grid: bool,
-    line_color: AlphaColor,
+    line_color: Rgba,
     line_width: f64,
 }
 
@@ -86,12 +183,12 @@ impl LineChartWidget {
             data,
             show_points: true,
             show_grid: true,
-            line_color: AlphaColor::from_rgba8(0x67, 0x50, 0xA4, 0xFF), // Material primary
+            line_color: Rgba::new(0x67, 0x50, 0xA4, 0xFF),
             line_width: 3.0,
         }
     }
 
-    pub fn with_line_color(mut self, color: AlphaColor) -> Self {
+    pub fn with_line_color(mut self, color: Rgba) -> Self {
         self.line_color = color;
         self
     }
@@ -144,28 +241,25 @@ impl crate::Widget for LineChartWidget {
             return;
         }
 
-        // Encontrar valor máximo
         let max_val = self.data.iter().map(|d| d.value).fold(0.0_f64, f64::max).max(1.0);
         let count = self.data.len();
-        let step_x = if count > 1 { chart_w / (count - 1) as f64 } else { chart_w / 2.0 };
+        let step_x = if count > 1 {
+            chart_w / (count - 1) as f64
+        } else {
+            chart_w / 2.0
+        };
 
-        // ── Dibujar líneas de referencia (grid) ──
+        // ── Grid ──
         if self.show_grid {
-            let grid_color = Brush::Solid(AlphaColor::from_rgba8(0xE0, 0xE0, 0xE0, 0xFF));
+            let grid_brush = Brush::Solid(peniko::Color::from_rgba8(0xE0, 0xE0, 0xE0, 0xFF));
             for i in 0..=4 {
                 let y = padding + chart_h * (1.0 - i as f64 / 4.0);
                 let line = Line::new(Point::new(padding, y), Point::new(padding + chart_w, y));
-                scene.stroke(
-                    &Stroke::new(1.0),
-                    Affine::IDENTITY,
-                    &grid_color,
-                    None,
-                    &line,
-                );
+                scene.stroke(&Stroke::new(1.0), Affine::IDENTITY, &grid_brush, None, &line);
             }
         }
 
-        // ── Construir línea poligonal ──
+        // ── Línea poligonal ──
         let mut path = BezPath::new();
         for (i, point) in self.data.iter().enumerate() {
             let x = padding + i as f64 * step_x;
@@ -177,37 +271,33 @@ impl crate::Widget for LineChartWidget {
             }
         }
 
-        // Dibujar línea
-        let line_brush = Brush::Solid(self.line_color);
         scene.stroke(
             &Stroke::new(self.line_width),
             Affine::IDENTITY,
-            &line_brush,
+            &self.line_color.to_brush(),
             None,
             &path,
         );
 
-        // ── Dibujar puntos en los vértices ──
+        // ── Puntos ──
         if self.show_points {
             for (i, point) in self.data.iter().enumerate() {
                 let x = padding + i as f64 * step_x;
                 let y = padding + chart_h - (point.value / max_val * chart_h);
                 let circle = Circle::new(Point::new(x, y), 4.0);
-                let point_brush = Brush::Solid(point.color);
                 scene.fill(
                     Fill::NonZero,
                     Affine::IDENTITY,
-                    &point_brush,
+                    &point.color.to_brush(),
                     None,
                     &circle,
                 );
-
-                // Borde blanco alrededor del punto
+                // Borde blanco
                 let border = Circle::new(Point::new(x, y), 4.0);
                 scene.stroke(
                     &Stroke::new(1.5),
                     Affine::IDENTITY,
-                    &Brush::Solid(AlphaColor::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
+                    &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
                     None,
                     &border,
                 );
@@ -237,33 +327,25 @@ impl crate::Widget for LineChartWidget {
 // BARCHART WIDGET
 // ═══════════════════════════════════════════════════════════════════
 
-/// Widget de gráfico de barras vectorial.
-///
-/// Dibuja barras rectangulares usando Vello, con soporte para apilado.
 pub struct BarChartWidget {
     data: Vec<ChartDataPoint>,
-    apilado: bool,
+    _apilado: bool,
     bar_width: f64,
-    show_values: bool,
+    _show_values: bool,
 }
 
 impl BarChartWidget {
     pub fn new(data: Vec<ChartDataPoint>, apilado: bool) -> Self {
         Self {
             data,
-            apilado,
+            _apilado: apilado,
             bar_width: 40.0,
-            show_values: true,
+            _show_values: true,
         }
     }
 
     pub fn with_bar_width(mut self, width: f64) -> Self {
         self.bar_width = width;
-        self
-    }
-
-    pub fn with_show_values(mut self, show: bool) -> Self {
-        self.show_values = show;
         self
     }
 }
@@ -302,17 +384,16 @@ impl crate::Widget for BarChartWidget {
 
         let max_val = self.data.iter().map(|d| d.value).fold(0.0_f64, f64::max).max(1.0);
         let count = self.data.len();
-        let total_bar_space = chart_w - (count as f64 * 4.0); // 4px gap between bars
-        let bar_w = (total_bar_space / count as f64).min(self.bar_width).max(4.0);
         let step_x = chart_w / count as f64;
+        let bar_w = (step_x * 0.7).min(self.bar_width).max(4.0);
 
-        // ── Dibujar eje base ──
+        // Eje base
         let axis_y = padding + chart_h;
         let axis = Line::new(Point::new(padding, axis_y), Point::new(padding + chart_w, axis_y));
         scene.stroke(
             &Stroke::new(1.0),
             Affine::IDENTITY,
-            &Brush::Solid(AlphaColor::from_rgba8(0xCC, 0xCC, 0xCC, 0xFF)),
+            &Brush::Solid(peniko::Color::from_rgba8(0xCC, 0xCC, 0xCC, 0xFF)),
             None,
             &axis,
         );
@@ -321,18 +402,15 @@ impl crate::Widget for BarChartWidget {
             let bar_height = (point.value / max_val * chart_h).max(2.0);
             let x = padding + i as f64 * step_x + (step_x - bar_w) / 2.0;
             let y = padding + chart_h - bar_height;
-
             let rect = Rect::new(x, y, x + bar_w, padding + chart_h);
-            let brush = Brush::Solid(point.color);
 
-            // Dibujar barra con esquinas redondeadas (simuladas con rect simple)
-            scene.fill(Fill::NonZero, Affine::IDENTITY, &brush, None, &rect);
+            scene.fill(Fill::NonZero, Affine::IDENTITY, &point.color.to_brush(), None, &rect);
 
             // Borde sutil
             scene.stroke(
                 &Stroke::new(0.5),
                 Affine::IDENTITY,
-                &Brush::Solid(AlphaColor::from_rgba8(0x00, 0x00, 0x00, 0x20)),
+                &Brush::Solid(peniko::Color::from_rgba8(0x00, 0x00, 0x00, 0x20)),
                 None,
                 &rect,
             );
@@ -361,14 +439,10 @@ impl crate::Widget for BarChartWidget {
 // PIECHART WIDGET (con soporte Donut)
 // ═══════════════════════════════════════════════════════════════════
 
-/// Widget de gráfico de pastel / donut vectorial.
-///
-/// Dibuja arcos circulares usando `kurbo::Arc` para cada segmento.
-/// Si `donut` es true, dibuja un círculo hueco en el centro.
 pub struct PieChartWidget {
     data: Vec<ChartDataPoint>,
     donut: bool,
-    donut_ratio: f64, // 0.0-1.0, qué tan grande es el agujero central
+    donut_ratio: f64,
 }
 
 impl PieChartWidget {
@@ -389,69 +463,6 @@ impl PieChartWidget {
     pub fn set_donut(&mut self, ratio: f64) {
         self.donut = true;
         self.donut_ratio = ratio.clamp(0.1, 0.9);
-    }
-}
-
-impl PieChartWidget {
-    /// Dibuja un segmento de arco relleno (pastel).
-    /// Construye un path cerrado: centro → arco → centro.
-    fn draw_pie_segment(
-        scene: &mut Scene,
-        cx: f64,
-        cy: f64,
-        radius: f64,
-        start_angle: f64,
-        sweep_angle: f64,
-        brush: &Brush,
-    ) {
-        if sweep_angle.abs() < 0.001 {
-            return;
-        }
-
-        // Construir path de pastel (centro → arco → centro)
-        let mut path = BezPath::new();
-        path.move_to(Point::new(cx, cy));
-
-        // Punto inicial del arco
-        let x0 = cx + start_angle.cos() * radius;
-        let y0 = cy + start_angle.sin() * radius;
-        path.line_to(Point::new(x0, y0));
-
-        // Si el sweep es > PI, necesitamos dos arcos
-        let end_angle = start_angle + sweep_angle;
-        if sweep_angle.abs() > PI {
-            // Primer arco (mitad)
-            let mid_angle = start_angle + sweep_angle / 2.0;
-            let xm = cx + mid_angle.cos() * radius;
-            let ym = cy + mid_angle.sin() * radius;
-            path.arc_to(
-                Vec2::new(radius, radius),
-                Vec2::new(xm - x0, ym - y0).hypot().recip() * 0.0, // rotation
-                &Point::new(xm, ym),
-            );
-            // Segundo arco
-            let x1 = cx + end_angle.cos() * radius;
-            let y1 = cy + end_angle.sin() * radius;
-            path.arc_to(
-                Vec2::new(radius, radius),
-                0.0,
-                &Point::new(x1, y1),
-            );
-        } else {
-            // Arco simple
-            let x1 = cx + end_angle.cos() * radius;
-            let y1 = cy + end_angle.sin() * radius;
-            path.arc_to(
-                Vec2::new(radius, radius),
-                0.0,
-                &Point::new(x1, y1),
-            );
-        }
-
-        // Cerrar al centro
-        path.close_path();
-
-        scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
     }
 }
 
@@ -488,45 +499,40 @@ impl crate::Widget for PieChartWidget {
             return;
         }
 
-        let mut start_angle = -PI / 2.0; // empezar desde arriba
+        let mut start_angle = -PI / 2.0;
 
         for point in &self.data {
             let sweep = (point.value / total) * 2.0 * PI;
-            let brush = Brush::Solid(point.color);
-
-            Self::draw_pie_segment(scene, cx, cy, radius, start_angle, sweep, &brush);
-
+            draw_pie_segment(scene, cx, cy, radius, start_angle, sweep, &point.color.to_brush());
             start_angle += sweep;
         }
 
-        // Si es donut, dibujar círculo en el centro (agujero)
+        // Donut: círculo central
         if self.donut {
             let inner_r = radius * self.donut_ratio;
             let inner_circle = Circle::new(Point::new(cx, cy), inner_r);
             scene.fill(
                 Fill::NonZero,
                 Affine::IDENTITY,
-                &Brush::Solid(AlphaColor::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
+                &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
                 None,
                 &inner_circle,
             );
-
-            // Borde del agujero para definición
             scene.stroke(
                 &Stroke::new(1.0),
                 Affine::IDENTITY,
-                &Brush::Solid(AlphaColor::from_rgba8(0xDD, 0xDD, 0xDD, 0xFF)),
+                &Brush::Solid(peniko::Color::from_rgba8(0xDD, 0xDD, 0xDD, 0xFF)),
                 None,
                 &inner_circle,
             );
         }
 
-        // Borde exterior del pastel
+        // Borde exterior
         let outer_circle = Circle::new(Point::new(cx, cy), radius);
         scene.stroke(
             &Stroke::new(1.0),
             Affine::IDENTITY,
-            &Brush::Solid(AlphaColor::from_rgba8(0x40, 0x40, 0x40, 0x30)),
+            &Brush::Solid(peniko::Color::from_rgba8(0x40, 0x40, 0x40, 0x30)),
             None,
             &outer_circle,
         );
@@ -542,7 +548,11 @@ impl crate::Widget for PieChartWidget {
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.set_label(if self.donut { "Gráfico de donut" } else { "Gráfico de pastel" });
+        node.set_label(if self.donut {
+            "Gráfico de donut"
+        } else {
+            "Gráfico de pastel"
+        });
     }
 
     fn children_ids(&self) -> ChildrenIds {
@@ -554,17 +564,13 @@ impl crate::Widget for PieChartWidget {
 // GAUGE CHART WIDGET
 // ═══════════════════════════════════════════════════════════════════
 
-/// Widget de indicador tipo Gauge (velocímetro) vectorial.
-///
-/// Dibuja un arco parcial de 270° con color de relleno según umbral,
-/// una aguja indicadora y un círculo central.
 pub struct GaugeChartWidget {
     value: f64,
     max_value: f64,
-    threshold: f64, // valor donde cambia de color
-    low_color: AlphaColor,
-    high_color: AlphaColor,
-    show_label: bool,
+    threshold: f64,
+    low_color: Rgba,
+    high_color: Rgba,
+    _show_label: bool,
 }
 
 impl GaugeChartWidget {
@@ -573,75 +579,16 @@ impl GaugeChartWidget {
             value,
             max_value: max_value.max(1.0),
             threshold,
-            low_color: AlphaColor::from_rgba8(0x4C, 0xAF, 0x50, 0xFF),  // verde
-            high_color: AlphaColor::from_rgba8(0xF4, 0x43, 0x36, 0xFF), // rojo
-            show_label: true,
+            low_color: Rgba::new(0x4C, 0xAF, 0x50, 0xFF),
+            high_color: Rgba::new(0xF4, 0x43, 0x36, 0xFF),
+            _show_label: true,
         }
     }
 
-    pub fn with_colors(mut self, low: AlphaColor, high: AlphaColor) -> Self {
+    pub fn with_colors(mut self, low: Rgba, high: Rgba) -> Self {
         self.low_color = low;
         self.high_color = high;
         self
-    }
-
-    pub fn with_show_label(mut self, show: bool) -> Self {
-        self.show_label = show;
-        self
-    }
-}
-
-impl GaugeChartWidget {
-    /// Dibuja un arco grueso usando path de BezPath.
-    fn draw_thick_arc(
-        scene: &mut Scene,
-        cx: f64,
-        cy: f64,
-        radius: f64,
-        thickness: f64,
-        start_angle: f64,
-        sweep_angle: f64,
-        brush: &Brush,
-    ) {
-        if sweep_angle.abs() < 0.001 {
-            return;
-        }
-
-        let outer_r = radius;
-        let inner_r = radius - thickness;
-
-        let end_angle = start_angle + sweep_angle;
-
-        // Puntos del arco exterior e interior
-        let x0_outer = cx + start_angle.cos() * outer_r;
-        let y0_outer = cy + start_angle.sin() * outer_r;
-        let x1_outer = cx + end_angle.cos() * outer_r;
-        let y1_outer = cy + end_angle.sin() * outer_r;
-
-        let x0_inner = cx + start_angle.cos() * inner_r;
-        let y0_inner = cy + start_angle.sin() * inner_r;
-        let x1_inner = cx + end_angle.cos() * inner_r;
-        let y1_inner = cy + end_angle.sin() * inner_r;
-
-        let mut path = BezPath::new();
-        // Arco exterior
-        path.move_to(Point::new(x0_outer, y0_outer));
-        path.arc_to(
-            Vec2::new(outer_r, outer_r),
-            0.0,
-            &Point::new(x1_outer, y1_outer),
-        );
-        // Línea hacia el interior
-        path.line_to(Point::new(x1_inner, y1_inner));
-        // Arco interior (en dirección inversa)
-        path.arc_to(
-            Vec2::new(inner_r, inner_r),
-            0.0,
-            &Point::new(x0_inner, y0_inner),
-        );
-        path.close_path();
-
-        scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
     }
 }
 
@@ -685,12 +632,11 @@ impl crate::Widget for GaugeChartWidget {
             self.low_color
         };
 
-        // Ángulos: el gauge abarca 270° empezando desde 135° (abajo-izquierda)
-        let gauge_start = 0.75 * PI;   // 135°
-        let gauge_sweep = 1.5 * PI;    // 270°
+        let gauge_start = 0.75 * PI; // 135°
+        let gauge_sweep = 1.5 * PI; // 270°
 
-        // ── Arco de fondo (gris claro) ──
-        Self::draw_thick_arc(
+        // Arco de fondo
+        draw_thick_arc(
             scene,
             cx,
             cy,
@@ -698,12 +644,12 @@ impl crate::Widget for GaugeChartWidget {
             thickness,
             gauge_start,
             gauge_sweep,
-            &Brush::Solid(AlphaColor::from_rgba8(0xE8, 0xE8, 0xE8, 0xFF)),
+            &Brush::Solid(peniko::Color::from_rgba8(0xE8, 0xE8, 0xE8, 0xFF)),
         );
 
-        // ── Arco de progreso ──
+        // Arco de progreso
         if progress > 0.0 {
-            Self::draw_thick_arc(
+            draw_thick_arc(
                 scene,
                 cx,
                 cy,
@@ -711,11 +657,11 @@ impl crate::Widget for GaugeChartWidget {
                 thickness,
                 gauge_start,
                 gauge_sweep * progress,
-                &Brush::Solid(color),
+                &color.to_brush(),
             );
         }
 
-        // ── Aguja indicadora ──
+        // Aguja
         let angle = gauge_start + gauge_sweep * progress;
         let needle_len = radius * 0.65;
         let needle_end = Point::new(
@@ -726,32 +672,29 @@ impl crate::Widget for GaugeChartWidget {
         scene.stroke(
             &Stroke::new(2.5),
             Affine::IDENTITY,
-            &Brush::Solid(AlphaColor::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
+            &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
             None,
             &needle,
         );
 
-        // ── Círculo central ──
+        // Círculo central
         let center = Circle::new(Point::new(cx, cy), 5.0);
         scene.fill(
             Fill::NonZero,
             Affine::IDENTITY,
-            &Brush::Solid(AlphaColor::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
+            &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
+            None,
+            &center,
+        );
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
             None,
             &center,
         );
 
-        // Borde blanco del círculo central
-        let center_border = Circle::new(Point::new(cx, cy), 5.0);
-        scene.stroke(
-            &Stroke::new(1.0),
-            Affine::IDENTITY,
-            &Brush::Solid(AlphaColor::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
-            None,
-            &center_border,
-        );
-
-        // ── Marcas de referencia (opcional) ──
+        // Marcas de referencia
         for i in 0..=4 {
             let t = i as f64 / 4.0;
             let a = gauge_start + gauge_sweep * t;
@@ -759,13 +702,12 @@ impl crate::Widget for GaugeChartWidget {
             let outer_tick = radius - thickness - 10.0;
             let p1 = Point::new(cx + a.cos() * inner_tick, cy + a.sin() * inner_tick);
             let p2 = Point::new(cx + a.cos() * outer_tick, cy + a.sin() * outer_tick);
-            let tick = Line::new(p1, p2);
             scene.stroke(
                 &Stroke::new(1.5),
                 Affine::IDENTITY,
-                &Brush::Solid(AlphaColor::from_rgba8(0x66, 0x66, 0x66, 0xFF)),
+                &Brush::Solid(peniko::Color::from_rgba8(0x66, 0x66, 0x66, 0xFF)),
                 None,
-                &tick,
+                &Line::new(p1, p2),
             );
         }
     }
@@ -792,33 +734,29 @@ impl crate::Widget for GaugeChartWidget {
 // SPARKLINE WIDGET
 // ═══════════════════════════════════════════════════════════════════
 
-/// Widget de minigráfico (Sparkline) vectorial.
-///
-/// Similar a LineChart pero sin ejes, etiquetas ni puntos: solo la línea
-/// y opcionalmente un relleno degradado bajo la curva.
 pub struct SparklineWidget {
     data: Vec<f64>,
-    line_color: AlphaColor,
-    fill_color: Option<AlphaColor>, // relleno bajo la línea
+    line_color: Rgba,
+    fill_color: Option<Rgba>,
     line_width: f64,
 }
 
 impl SparklineWidget {
-    pub fn new(data: Vec<f64>, line_color: AlphaColor) -> Self {
+    pub fn new(data: Vec<f64>, line_color: Rgba) -> Self {
         Self {
             data,
             line_color,
-            fill_color: Some(AlphaColor::from_rgba8(
-                line_color.components[0],
-                line_color.components[1],
-                line_color.components[2],
-                40, // 15% de opacidad
+            fill_color: Some(Rgba(
+                line_color.0,
+                line_color.1,
+                line_color.2,
+                40, // 15% opacidad
             )),
             line_width: 2.0,
         }
     }
 
-    pub fn with_fill(mut self, color: Option<AlphaColor>) -> Self {
+    pub fn with_fill(mut self, color: Option<Rgba>) -> Self {
         self.fill_color = color;
         self
     }
@@ -864,7 +802,27 @@ impl crate::Widget for SparklineWidget {
         let count = self.data.len();
         let step_x = w / (count - 1).max(1) as f64;
 
-        // ── Construir línea poligonal ──
+        // Relleno bajo la línea
+        if let Some(fill_color) = self.fill_color {
+            let mut fill_path = BezPath::new();
+            fill_path.move_to(Point::new(0.0, h));
+            for (i, &v) in self.data.iter().enumerate() {
+                let x = i as f64 * step_x;
+                let y = h - (v / max_val * h);
+                fill_path.line_to(Point::new(x, y));
+            }
+            fill_path.line_to(Point::new(w, h));
+            fill_path.close_path();
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                &fill_color.to_brush(),
+                None,
+                &fill_path,
+            );
+        }
+
+        // Línea
         let mut path = BezPath::new();
         for (i, &v) in self.data.iter().enumerate() {
             let x = i as f64 * step_x;
@@ -876,35 +834,10 @@ impl crate::Widget for SparklineWidget {
             }
         }
 
-        // ── Relleno bajo la línea ──
-        if let Some(fill_color) = self.fill_color {
-            let mut fill_path = BezPath::new();
-            // Empezar desde abajo a la izquierda
-            fill_path.move_to(Point::new(0.0, h));
-            for (i, &v) in self.data.iter().enumerate() {
-                let x = i as f64 * step_x;
-                let y = h - (v / max_val * h);
-                fill_path.line_to(Point::new(x, y));
-            }
-            // Cerrar hasta abajo a la derecha
-            fill_path.line_to(Point::new(w, h));
-            fill_path.close_path();
-
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                &Brush::Solid(fill_color),
-                None,
-                &fill_path,
-            );
-        }
-
-        // ── Línea ──
-        let line_brush = Brush::Solid(self.line_color);
         scene.stroke(
             &Stroke::new(self.line_width),
             Affine::IDENTITY,
-            &line_brush,
+            &self.line_color.to_brush(),
             None,
             &path,
         );
@@ -925,5 +858,307 @@ impl crate::Widget for SparklineWidget {
 
     fn children_ids(&self) -> ChildrenIds {
         ChildrenIds::from_slice(&[])
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// XILEM VIEW WRAPPERS
+// ═══════════════════════════════════════════════════════════════════
+//
+// Estos wrappers permiten usar los chart widgets desde layout_a_view()
+// devolviendo Box<AnyWidgetView<AppStateNativo>>.
+
+// ─── LineChartView ────────────────────────────────────────────────
+
+pub struct LineChartView<State> {
+    data: Vec<ChartDataPoint>,
+    phantom: PhantomData<fn() -> State>,
+}
+
+impl<State: 'static> LineChartView<State> {
+    pub fn new(data: Vec<ChartDataPoint>) -> Self {
+        Self {
+            data,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<State: 'static> ViewMarker for LineChartView<State> {}
+
+impl<State: 'static> View<State, (), ViewCtx> for LineChartView<State> {
+    type Element = Pod<LineChartWidget>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<LineChartWidget>, ()) {
+        (ctx.create_pod(LineChartWidget::new(self.data.clone())), ())
+    }
+
+    fn rebuild(
+        &self,
+        _prev: &Self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<LineChartWidget>>,
+        _app_state: &mut State,
+    ) {
+    }
+
+    fn teardown(
+        &self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<LineChartWidget>>,
+    ) {
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut (),
+        _message: &mut MessageContext,
+        _element: Mut<'_, Pod<LineChartWidget>>,
+        _app_state: &mut State,
+    ) -> MessageResult<()> {
+        MessageResult::Nop
+    }
+}
+
+// ─── BarChartView ─────────────────────────────────────────────────
+
+pub struct BarChartView<State> {
+    data: Vec<ChartDataPoint>,
+    apilado: bool,
+    phantom: PhantomData<fn() -> State>,
+}
+
+impl<State: 'static> BarChartView<State> {
+    pub fn new(data: Vec<ChartDataPoint>, apilado: bool) -> Self {
+        Self {
+            data,
+            apilado,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<State: 'static> ViewMarker for BarChartView<State> {}
+
+impl<State: 'static> View<State, (), ViewCtx> for BarChartView<State> {
+    type Element = Pod<BarChartWidget>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<BarChartWidget>, ()) {
+        (ctx.create_pod(BarChartWidget::new(self.data.clone(), self.apilado)), ())
+    }
+
+    fn rebuild(
+        &self,
+        _prev: &Self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<BarChartWidget>>,
+        _app_state: &mut State,
+    ) {
+    }
+
+    fn teardown(
+        &self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<BarChartWidget>>,
+    ) {
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut (),
+        _message: &mut MessageContext,
+        _element: Mut<'_, Pod<BarChartWidget>>,
+        _app_state: &mut State,
+    ) -> MessageResult<()> {
+        MessageResult::Nop
+    }
+}
+
+// ─── PieChartView ─────────────────────────────────────────────────
+
+pub struct PieChartView<State> {
+    data: Vec<ChartDataPoint>,
+    donut: bool,
+    donut_ratio: f64,
+    phantom: PhantomData<fn() -> State>,
+}
+
+impl<State: 'static> PieChartView<State> {
+    pub fn new(data: Vec<ChartDataPoint>, donut: bool, donut_ratio: f64) -> Self {
+        Self {
+            data,
+            donut,
+            donut_ratio,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<State: 'static> ViewMarker for PieChartView<State> {}
+
+impl<State: 'static> View<State, (), ViewCtx> for PieChartView<State> {
+    type Element = Pod<PieChartWidget>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<PieChartWidget>, ()) {
+        let mut widget = PieChartWidget::new(self.data.clone());
+        if self.donut {
+            widget.set_donut(self.donut_ratio);
+        }
+        (ctx.create_pod(widget), ())
+    }
+
+    fn rebuild(
+        &self,
+        _prev: &Self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<PieChartWidget>>,
+        _app_state: &mut State,
+    ) {
+    }
+
+    fn teardown(
+        &self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<PieChartWidget>>,
+    ) {
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut (),
+        _message: &mut MessageContext,
+        _element: Mut<'_, Pod<PieChartWidget>>,
+        _app_state: &mut State,
+    ) -> MessageResult<()> {
+        MessageResult::Nop
+    }
+}
+
+// ─── GaugeChartView ───────────────────────────────────────────────
+
+pub struct GaugeChartView<State> {
+    value: f64,
+    max_value: f64,
+    threshold: f64,
+    phantom: PhantomData<fn() -> State>,
+}
+
+impl<State: 'static> GaugeChartView<State> {
+    pub fn new(value: f64, max_value: f64, threshold: f64) -> Self {
+        Self {
+            value,
+            max_value,
+            threshold,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<State: 'static> ViewMarker for GaugeChartView<State> {}
+
+impl<State: 'static> View<State, (), ViewCtx> for GaugeChartView<State> {
+    type Element = Pod<GaugeChartWidget>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<GaugeChartWidget>, ()) {
+        let verde = Rgba::new(0x4C, 0xAF, 0x50, 0xFF);
+        let rojo = Rgba::new(0xF4, 0x43, 0x36, 0xFF);
+        let widget = GaugeChartWidget::new(self.value, self.max_value, self.threshold)
+            .with_colors(verde, rojo);
+        (ctx.create_pod(widget), ())
+    }
+
+    fn rebuild(
+        &self,
+        _prev: &Self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<GaugeChartWidget>>,
+        _app_state: &mut State,
+    ) {
+    }
+
+    fn teardown(
+        &self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<GaugeChartWidget>>,
+    ) {
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut (),
+        _message: &mut MessageContext,
+        _element: Mut<'_, Pod<GaugeChartWidget>>,
+        _app_state: &mut State,
+    ) -> MessageResult<()> {
+        MessageResult::Nop
+    }
+}
+
+// ─── SparklineView ────────────────────────────────────────────────
+
+pub struct SparklineView<State> {
+    data: Vec<f64>,
+    color: Rgba,
+    phantom: PhantomData<fn() -> State>,
+}
+
+impl<State: 'static> SparklineView<State> {
+    pub fn new(data: Vec<f64>, color: Rgba) -> Self {
+        Self {
+            data,
+            color,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<State: 'static> ViewMarker for SparklineView<State> {}
+
+impl<State: 'static> View<State, (), ViewCtx> for SparklineView<State> {
+    type Element = Pod<SparklineWidget>;
+    type ViewState = ();
+
+    fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<SparklineWidget>, ()) {
+        (ctx.create_pod(SparklineWidget::new(self.data.clone(), self.color)), ())
+    }
+
+    fn rebuild(
+        &self,
+        _prev: &Self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<SparklineWidget>>,
+        _app_state: &mut State,
+    ) {
+    }
+
+    fn teardown(
+        &self,
+        _view_state: &mut (),
+        _ctx: &mut ViewCtx,
+        _element: Mut<'_, Pod<SparklineWidget>>,
+    ) {
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut (),
+        _message: &mut MessageContext,
+        _element: Mut<'_, Pod<SparklineWidget>>,
+        _app_state: &mut State,
+    ) -> MessageResult<()> {
+        MessageResult::Nop
     }
 }

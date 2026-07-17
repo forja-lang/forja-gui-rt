@@ -146,9 +146,14 @@ pub use qr_widget::{QRWidget, QRView, qr_view};
 // === Módulo de gráficos vectoriales con Vello (Fase 9) ===
 pub mod chart_widgets;
 pub use chart_widgets::{
-    BarChartWidget, ChartDataPoint, GaugeChartWidget, LineChartWidget, PieChartWidget,
+    BarChartView, BarChartWidget, ChartDataPoint, GaugeChartView, GaugeChartWidget,
+    LineChartView, LineChartWidget, PieChartView, PieChartWidget, Rgba, SparklineView,
     SparklineWidget,
 };
+
+// === Módulo de canvas / pintura libre con Vello (Fase 10) ===
+pub mod canvas_widget;
+pub use canvas_widget::{CanvasWidget, CanvasView, CanvasCommand};
 
 // === Re-exportaciones del GUI runtime ===
 // Funciones principales para convertir AST → Layout → Widgets
