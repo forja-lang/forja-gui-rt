@@ -45,7 +45,7 @@ pub use xilem::masonry::core::ChildrenIds;
 pub use xilem::masonry::core::{
     WidgetPod, WidgetMut, NoAction, LayoutCtx, RegisterCtx, PaintCtx, AccessCtx,
     PropertiesMut, PropertiesRef, UpdateCtx, WidgetId, EventCtx, ComposeCtx,
-    PointerEvent, PointerButtonEvent, PointerUpdate, AccessEvent, TextEvent,
+    PointerEvent, PointerButtonEvent, PointerId, PointerUpdate, AccessEvent, TextEvent,
     Update,
 };
 pub use xilem::masonry::ui_events::pointer::PointerButton;
@@ -130,7 +130,10 @@ pub use animated_widgets::{AnimatedOpacity, AnimatedSlide, AnimatedScale, Ripple
 
 // === Módulo de gestos táctiles ===
 pub mod gesture_widgets;
-pub use gesture_widgets::{SwipeWidget, PanWidget, PullToRefreshWidget, GestureResult, GestureTracker};
+pub use gesture_widgets::{
+    SwipeWidget, PanWidget, PullToRefreshWidget, PinchZoomWidget, RotateWidget,
+    GestureResult, GestureTracker, MultiTouchState,
+};
 
 // === Módulo de pickers (DatePicker, TimePicker, ColorPicker) ===
 pub mod pickers;

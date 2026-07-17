@@ -7,6 +7,7 @@
 //
 // Compatibles con el sistema Xilem vía Pod wrappers.
 
+use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::{
@@ -18,8 +19,9 @@ use crate::{
         Scene,
     },
     AccessCtx, AccessEvent, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx,
-    NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PointerUpdate,
-    PropertiesMut, PropertiesRef, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetPod,
+    NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PointerId,
+    PointerUpdate, PropertiesMut, PropertiesRef, RegisterCtx, TextEvent, Update, UpdateCtx,
+    Widget, WidgetPod,
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -624,6 +626,373 @@ impl PanWidget {
 }
 
 impl PullToRefreshWidget {
+    pub fn child_mut<'a>(
+        this: &'a mut crate::WidgetMut<'_, Self>,
+    ) -> crate::WidgetMut<'a, dyn Widget> {
+        this.ctx.get_mut(&mut this.widget.child)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MultiTouchState — seguimiento de múltiples puntos táctiles
+// ═══════════════════════════════════════════════════════════════════
+
+/// Trackea múltiples puntos táctiles para detección de gestos multi-touch
+#[derive(Debug, Clone, Default)]
+pub struct MultiTouchState {
+    /// Puntos activos: pointer_id → posición
+    pub active_pointers: HashMap<PointerId, Point>,
+}
+
+impl MultiTouchState {
+    pub fn new() -> Self {
+        Self { active_pointers: HashMap::new() }
+    }
+
+    /// Agregar o actualizar un punto táctil
+    pub fn update(&mut self, pointer_id: PointerId, pos: Point) {
+        self.active_pointers.insert(pointer_id, pos);
+    }
+
+    /// Eliminar un punto táctil
+    pub fn remove(&mut self, pointer_id: &PointerId) {
+        self.active_pointers.remove(pointer_id);
+    }
+
+    /// Detectar gesto de pellizco (pinch). Retorna factor de escala relativo.
+    /// Se llama en cada Move, comparando con el frame anterior.
+    pub fn detect_pinch(&self, prev: &Self) -> Option<f64> {
+        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 { return None; }
+
+        let current_dists = self.pointer_distances();
+        let prev_dists = prev.pointer_distances();
+
+        if current_dists.is_empty() || prev_dists.is_empty() { return None; }
+
+        let curr_dist = current_dists[0];
+        let prev_dist = prev_dists[0];
+
+        if prev_dist > 0.0 {
+            Some(curr_dist / prev_dist)
+        } else {
+            None
+        }
+    }
+
+    /// Detectar gesto de rotación. Retorna ángulo en radianes.
+    pub fn detect_rotate(&self, prev: &Self) -> Option<f64> {
+        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 { return None; }
+
+        let curr_angle = self.angle_between_pointers();
+        let prev_angle = prev.angle_between_pointers();
+
+        if let (Some(ca), Some(pa)) = (curr_angle, prev_angle) {
+            Some(ca - pa)
+        } else {
+            None
+        }
+    }
+
+    /// Distancias entre todos los pares de punteros
+    fn pointer_distances(&self) -> Vec<f64> {
+        let points: Vec<&Point> = self.active_pointers.values().collect();
+        let mut dists = Vec::new();
+        for i in 0..points.len() {
+            for j in (i+1)..points.len() {
+                let dx = points[i].x - points[j].x;
+                let dy = points[i].y - points[j].y;
+                dists.push((dx*dx + dy*dy).sqrt());
+            }
+        }
+        dists
+    }
+
+    /// Ángulo entre los 2 primeros punteros
+    fn angle_between_pointers(&self) -> Option<f64> {
+        let points: Vec<&Point> = self.active_pointers.values().collect();
+        if points.len() < 2 { return None; }
+        let dx = points[1].x - points[0].x;
+        let dy = points[1].y - points[0].y;
+        Some(dy.atan2(dx))
+    }
+
+    /// Centroide de todos los puntos activos
+    pub fn centroid(&self) -> Option<Point> {
+        let count = self.active_pointers.len();
+        if count == 0 { return None; }
+        let sum: Point = self.active_pointers.values().fold(Point::ZERO, |acc, p| Point::new(acc.x + p.x, acc.y + p.y));
+        Some(Point::new(sum.x / count as f64, sum.y / count as f64))
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PinchZoomWidget — zoom por pellizco (pinch-to-zoom)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Widget que aplica zoom por gesto de pellizco (pinch) a su hijo
+pub struct PinchZoomWidget {
+    child: WidgetPod<dyn Widget>,
+    multi_touch: MultiTouchState,
+    prev_multi_touch: MultiTouchState,
+    scale: f64,
+    min_scale: f64,
+    max_scale: f64,
+}
+
+impl PinchZoomWidget {
+    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+        Self {
+            child: child.erased().to_pod(),
+            multi_touch: MultiTouchState::new(),
+            prev_multi_touch: MultiTouchState::new(),
+            scale: 1.0,
+            min_scale: 0.5,
+            max_scale: 3.0,
+        }
+    }
+
+    pub fn with_min_scale(mut self, min: f64) -> Self {
+        self.min_scale = min;
+        self
+    }
+
+    pub fn with_max_scale(mut self, max: f64) -> Self {
+        self.max_scale = max;
+        self
+    }
+
+    fn get_pointer_id(event: &PointerEvent) -> Option<PointerId> {
+        match event {
+            PointerEvent::Down(btn) => btn.pointer.pointer_id,
+            PointerEvent::Move(upd) => upd.pointer.pointer_id,
+            PointerEvent::Up(btn) => btn.pointer.pointer_id,
+            PointerEvent::Cancel(info) => info.pointer_id,
+            _ => None,
+        }
+    }
+
+    fn get_position(event: &PointerEvent) -> Option<Point> {
+        match event {
+            PointerEvent::Down(btn) => Some(Point::new(btn.state.position.x, btn.state.position.y)),
+            PointerEvent::Move(upd) => Some(Point::new(upd.current.position.x, upd.current.position.y)),
+            PointerEvent::Up(btn) => Some(Point::new(btn.state.position.x, btn.state.position.y)),
+            _ => None,
+        }
+    }
+}
+
+impl Widget for PinchZoomWidget {
+    type Action = ();
+
+    fn on_pointer_event(
+        &mut self,
+        ctx: &mut EventCtx<'_>,
+        _props: &mut PropertiesMut<'_>,
+        event: &PointerEvent,
+    ) {
+        let id = Self::get_pointer_id(event);
+        let pos = Self::get_position(event);
+
+        match event {
+            PointerEvent::Down(_) => {
+                if let (Some(id), Some(pos)) = (id, pos) {
+                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.multi_touch.update(id, pos);
+                }
+            }
+            PointerEvent::Move { .. } => {
+                if let (Some(id), Some(pos)) = (id, pos) {
+                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.multi_touch.update(id, pos);
+
+                    if let Some(scale_factor) = self.multi_touch.detect_pinch(&self.prev_multi_touch) {
+                        self.scale = (self.scale * scale_factor).clamp(self.min_scale, self.max_scale);
+                        let size = ctx.size();
+                        let center = Point::new(size.width / 2.0, size.height / 2.0);
+                        let transform = Affine::translate(center.to_vec2())
+                            .then_scale(self.scale)
+                            .then_translate(-center.to_vec2());
+                        ctx.set_transform(transform);
+                        ctx.request_render();
+                    }
+                }
+            }
+            PointerEvent::Up(_) | PointerEvent::Cancel(_) => {
+                if let Some(ref id) = id {
+                    self.multi_touch.remove(id);
+                    // Reset transform when last pointer is removed
+                    if self.multi_touch.active_pointers.is_empty() {
+                        ctx.set_transform(Affine::IDENTITY);
+                        ctx.request_render();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
+        ctx.register_child(&mut self.child);
+    }
+
+    fn layout(
+        &mut self,
+        ctx: &mut LayoutCtx<'_>,
+        _props: &mut PropertiesMut<'_>,
+        bc: &BoxConstraints,
+    ) -> Size {
+        let size = ctx.run_layout(&mut self.child, bc);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+        size
+    }
+
+    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+        // La transformación se aplica via ctx.set_transform() en on_pointer_event
+    }
+
+    fn accessibility_role(&self) -> crate::accesskit::Role {
+        crate::accesskit::Role::GenericContainer
+    }
+
+    fn accessibility(
+        &mut self,
+        _ctx: &mut AccessCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _node: &mut crate::accesskit::Node,
+    ) {
+    }
+
+    fn children_ids(&self) -> ChildrenIds {
+        ChildrenIds::from_slice(&[self.child.id()])
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RotateWidget — rotación por gesto multi-touch
+// ═══════════════════════════════════════════════════════════════════
+
+/// Widget que aplica rotación por gesto multi-touch a su hijo
+pub struct RotateWidget {
+    child: WidgetPod<dyn Widget>,
+    multi_touch: MultiTouchState,
+    prev_multi_touch: MultiTouchState,
+    angle: f64,
+}
+
+impl RotateWidget {
+    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+        Self {
+            child: child.erased().to_pod(),
+            multi_touch: MultiTouchState::new(),
+            prev_multi_touch: MultiTouchState::new(),
+            angle: 0.0,
+        }
+    }
+
+    fn get_pointer_id(event: &PointerEvent) -> Option<PointerId> {
+        PinchZoomWidget::get_pointer_id(event)
+    }
+
+    fn get_position(event: &PointerEvent) -> Option<Point> {
+        PinchZoomWidget::get_position(event)
+    }
+}
+
+impl Widget for RotateWidget {
+    type Action = f64;
+
+    fn on_pointer_event(
+        &mut self,
+        ctx: &mut EventCtx<'_>,
+        _props: &mut PropertiesMut<'_>,
+        event: &PointerEvent,
+    ) {
+        let id = Self::get_pointer_id(event);
+        let pos = Self::get_position(event);
+
+        match event {
+            PointerEvent::Down(_) => {
+                if let (Some(id), Some(pos)) = (id, pos) {
+                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.multi_touch.update(id, pos);
+                }
+            }
+            PointerEvent::Move { .. } => {
+                if let (Some(id), Some(pos)) = (id, pos) {
+                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.multi_touch.update(id, pos);
+
+                    if let Some(delta) = self.multi_touch.detect_rotate(&self.prev_multi_touch) {
+                        self.angle += delta;
+                        let size = ctx.size();
+                        let center = Point::new(size.width / 2.0, size.height / 2.0);
+                        let transform = Affine::translate(center.to_vec2())
+                            .then_rotate(self.angle)
+                            .then_translate(-center.to_vec2());
+                        ctx.set_transform(transform);
+                        ctx.submit_action::<f64>(self.angle);
+                        ctx.request_render();
+                    }
+                }
+            }
+            PointerEvent::Up(_) | PointerEvent::Cancel(_) => {
+                if let Some(ref id) = id {
+                    self.multi_touch.remove(id);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
+        ctx.register_child(&mut self.child);
+    }
+
+    fn layout(
+        &mut self,
+        ctx: &mut LayoutCtx<'_>,
+        _props: &mut PropertiesMut<'_>,
+        bc: &BoxConstraints,
+    ) -> Size {
+        let size = ctx.run_layout(&mut self.child, bc);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+        size
+    }
+
+    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+        // La transformación se aplica via ctx.set_transform() en on_pointer_event
+    }
+
+    fn accessibility_role(&self) -> crate::accesskit::Role {
+        crate::accesskit::Role::GenericContainer
+    }
+
+    fn accessibility(
+        &mut self,
+        _ctx: &mut AccessCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _node: &mut crate::accesskit::Node,
+    ) {
+    }
+
+    fn children_ids(&self) -> ChildrenIds {
+        ChildrenIds::from_slice(&[self.child.id()])
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Helpers para acceder a children de PinchZoomWidget y RotateWidget
+// ═══════════════════════════════════════════════════════════════════
+
+impl PinchZoomWidget {
+    pub fn child_mut<'a>(
+        this: &'a mut crate::WidgetMut<'_, Self>,
+    ) -> crate::WidgetMut<'a, dyn Widget> {
+        this.ctx.get_mut(&mut this.widget.child)
+    }
+}
+
+impl RotateWidget {
     pub fn child_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {

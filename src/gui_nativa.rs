@@ -748,6 +748,17 @@ pub enum Layout {
         dismissed: String,
     },
 
+    /// Pinch-to-zoom: zoom por pellizco multi-touch
+    PinchZoom {
+        child: Box<Layout>,
+        min_scale: f64,
+        max_scale: f64,
+    },
+    /// Rotate: rotación por gesto multi-touch
+    Rotate {
+        child: Box<Layout>,
+    },
+
     // ═══════════════════════════════════════════════════════════════════
     // GRÁFICOS (Fase 9)
     // ═══════════════════════════════════════════════════════════════════
@@ -2676,6 +2687,30 @@ Expresion::Identificador { nombre: v, .. } =>
                         on_dismiss: if on_dismiss.is_empty() { String::new() } else { on_dismiss },
                         label: if label.is_empty() { "Descartar".to_string() } else { label },
                         dismissed: if dismissed.is_empty() { "dismissed".to_string() } else { dismissed },
+                    })
+                }
+
+                // ─── PinchZoom ────────────────────────────────────
+                "zoom_pellizco" | "pinch_zoom" | "zoom" => {
+                    let child = argumentos.first().and_then(expr_a_layout);
+                    let min_scale = argumentos.get(1)
+                        .and_then(|a| match a { Expresion::LiteralNumero(n) => Some(*n as f64), _ => None })
+                        .unwrap_or(0.5);
+                    let max_scale = argumentos.get(2)
+                        .and_then(|a| match a { Expresion::LiteralNumero(n) => Some(*n as f64), _ => None })
+                        .unwrap_or(3.0);
+                    child.map(|c| Layout::PinchZoom {
+                        child: Box::new(c),
+                        min_scale,
+                        max_scale,
+                    })
+                }
+
+                // ─── Rotate ───────────────────────────────────────
+                "rotar" | "rotate" | "girar" => {
+                    let child = argumentos.first().and_then(expr_a_layout);
+                    child.map(|c| Layout::Rotate {
+                        child: Box::new(c),
                     })
                 }
 
@@ -5721,6 +5756,20 @@ pub fn layout_a_view<'a>(
             }
         }
 
+        // ─── PinchZoom ──────────────────────────────────────────────
+        Layout::PinchZoom { child, min_scale, max_scale } => {
+            let inner = layout_a_view(child, data, _prog, theme);
+            let view = PinchZoomView::new(inner, *min_scale, *max_scale);
+            Box::new(view)
+        }
+
+        // ─── Rotate ─────────────────────────────────────────────────
+        Layout::Rotate { child } => {
+            let inner = layout_a_view(child, data, _prog, theme);
+            let view = RotateView::new(inner);
+            Box::new(view)
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // GRÁFICOS VECTORIALES (Fase 9) — Vello Scene
         // ═══════════════════════════════════════════════════════════════
@@ -6546,8 +6595,10 @@ pub fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
 // que el Button view de xilem.
 
 use crate::GestureResult as GestureAction;
-use crate::SwipeWidget as SwipeGestureWidget;
+use crate::PinchZoomWidget;
 use crate::PullToRefreshWidget as PullRefreshWidget;
+use crate::RotateWidget;
+use crate::SwipeWidget as SwipeGestureWidget;
 use crate::{Pod, ViewCtx, WidgetView};
 use xilem::core::{MessageContext, Mut, View, ViewId, ViewMarker, ViewPathTracker};
 
@@ -6803,6 +6854,204 @@ where
                     None => crate::MessageResult::Stale,
                 }
             }
+            _ => crate::MessageResult::Stale,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PinchZoomView
+// ═══════════════════════════════════════════════════════════════════
+
+/// View de Xilem que envuelve un hijo en un PinchZoomWidget.
+/// Aplica zoom por gesto de pellizco (pinch-to-zoom).
+pub struct PinchZoomView<V> {
+    child: V,
+    min_scale: f64,
+    max_scale: f64,
+}
+
+impl<V> PinchZoomView<V> {
+    pub fn new(child: V, min_scale: f64, max_scale: f64) -> Self {
+        Self { child, min_scale, max_scale }
+    }
+}
+
+impl<V> ViewMarker for PinchZoomView<V> {}
+
+impl<V> View<AppStateNativo, (), ViewCtx> for PinchZoomView<V>
+where
+    V: WidgetView<AppStateNativo, ()>,
+{
+    type Element = Pod<PinchZoomWidget>;
+    type ViewState = V::ViewState;
+
+    fn build(
+        &self,
+        ctx: &mut ViewCtx,
+        app_state: &mut AppStateNativo,
+    ) -> (Self::Element, Self::ViewState) {
+        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        });
+        let widget = PinchZoomWidget::new(child.new_widget)
+            .with_min_scale(self.min_scale)
+            .with_max_scale(self.max_scale);
+        (ctx.with_action_widget(|ctx| ctx.create_pod(widget)), child_state)
+    }
+
+    fn rebuild(
+        &self,
+        prev: &Self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::rebuild(
+                &self.child,
+                &prev.child,
+                view_state,
+                ctx,
+                PinchZoomWidget::child_mut(&mut element).downcast(),
+                app_state,
+            );
+        });
+    }
+
+    fn teardown(
+        &self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::teardown(
+                &self.child,
+                view_state,
+                ctx,
+                PinchZoomWidget::child_mut(&mut element).downcast(),
+            );
+        });
+        ctx.teardown_leaf(element);
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut Self::ViewState,
+        message: &mut MessageContext,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) -> crate::MessageResult<()> {
+        match message.take_first() {
+            Some(GESTURE_CHILD_VIEW_ID) => {
+                View::<AppStateNativo, (), _>::message(
+                    &self.child,
+                    _view_state,
+                    message,
+                    PinchZoomWidget::child_mut(&mut element).downcast(),
+                    app_state,
+                )
+            }
+            None => crate::MessageResult::Nop,
+            _ => crate::MessageResult::Stale,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RotateView
+// ═══════════════════════════════════════════════════════════════════
+
+/// View de Xilem que envuelve un hijo en un RotateWidget.
+/// Aplica rotación por gesto multi-touch.
+pub struct RotateView<V> {
+    child: V,
+}
+
+impl<V> RotateView<V> {
+    pub fn new(child: V) -> Self {
+        Self { child }
+    }
+}
+
+impl<V> ViewMarker for RotateView<V> {}
+
+impl<V> View<AppStateNativo, (), ViewCtx> for RotateView<V>
+where
+    V: WidgetView<AppStateNativo, ()>,
+{
+    type Element = Pod<RotateWidget>;
+    type ViewState = V::ViewState;
+
+    fn build(
+        &self,
+        ctx: &mut ViewCtx,
+        app_state: &mut AppStateNativo,
+    ) -> (Self::Element, Self::ViewState) {
+        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        });
+        let widget = RotateWidget::new(child.new_widget);
+        (ctx.with_action_widget(|ctx| ctx.create_pod(widget)), child_state)
+    }
+
+    fn rebuild(
+        &self,
+        prev: &Self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::rebuild(
+                &self.child,
+                &prev.child,
+                view_state,
+                ctx,
+                RotateWidget::child_mut(&mut element).downcast(),
+                app_state,
+            );
+        });
+    }
+
+    fn teardown(
+        &self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::teardown(
+                &self.child,
+                view_state,
+                ctx,
+                RotateWidget::child_mut(&mut element).downcast(),
+            );
+        });
+        ctx.teardown_leaf(element);
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut Self::ViewState,
+        message: &mut MessageContext,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) -> crate::MessageResult<()> {
+        match message.take_first() {
+            Some(GESTURE_CHILD_VIEW_ID) => {
+                View::<AppStateNativo, (), _>::message(
+                    &self.child,
+                    _view_state,
+                    message,
+                    RotateWidget::child_mut(&mut element).downcast(),
+                    app_state,
+                )
+            }
+            None => crate::MessageResult::Nop,
             _ => crate::MessageResult::Stale,
         }
     }
