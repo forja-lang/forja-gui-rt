@@ -71,8 +71,9 @@ fn cubic_bezier_y(y1: f64, y2: f64, t: f64) -> f64 {
 /// Standard: (0.2, 0.0, 0.0, 1.0) — para animaciones generales
 pub const EASE_STANDARD: EasingCurve = EasingCurve(0.2, 0.0, 0.0, 1.0);
 
-/// Emphasized: (0.2, 0.0, 0.0, 1.0) — para animaciones destacadas
-pub const EASE_EMPHASIZED: EasingCurve = EasingCurve(0.2, 0.0, 0.0, 1.0);
+/// Emphasized: (0.3, 0.0, 0.0, 1.0) — para animaciones destacadas
+/// con duración 1.5× más larga que standard y curva más pronunciada
+pub const EASE_EMPHASIZED: EasingCurve = EasingCurve(0.3, 0.0, 0.0, 1.0);
 
 /// Decelerate: (0.0, 0.0, 0.0, 1.0) — para entradas
 pub const EASE_DECELERATE: EasingCurve = EasingCurve(0.0, 0.0, 0.0, 1.0);

@@ -381,7 +381,8 @@ mod tests {
         assert_eq!(material_role("button"), Role::Button);
         assert_eq!(material_role("checkbox"), Role::CheckBox);
         assert_eq!(material_role("slider"), Role::Slider);
-        assert_eq!(material_role("text_input"), Role::TextField);
+        // Note: AccessKit 0.21 uses TextInput (not TextField) for text input roles
+        assert_eq!(material_role("text_input"), Role::TextInput);
         assert_eq!(material_role("no_existe"), Role::GenericContainer);
     }
 }

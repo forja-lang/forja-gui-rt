@@ -39,6 +39,26 @@ pub struct AnimationEngine {
     /// Lista de animaciones activas
     pub animations: Vec<Box<dyn Animation>>,
 }
+// Manual Debug impl (Animation is not Debug)
+impl std::fmt::Debug for AnimationEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnimationEngine")
+            .field("last_frame", &self.last_frame)
+            .field("delta_ms", &self.delta_ms)
+            .field("animations.len", &self.animations.len())
+            .finish()
+    }
+}
+// Manual Clone impl (Animation is not Clone)
+impl Clone for AnimationEngine {
+    fn clone(&self) -> Self {
+        Self {
+            last_frame: self.last_frame,
+            delta_ms: self.delta_ms,
+            animations: Vec::new(), // animaciones no se clonan
+        }
+    }
+}
 
 impl AnimationEngine {
     /// Crea un nuevo motor de animaciones
@@ -88,7 +108,7 @@ impl Default for AnimationEngine {
 ///
 /// Cualquier tipo que implemente este trait puede ser agregado al
 /// [`AnimationEngine`] para ser actualizado automáticamente en cada frame.
-pub trait Animation: Send {
+pub trait Animation: Send + Sync {
     /// Actualiza el estado interno con el delta time en milisegundos
     fn update(&mut self, delta_ms: f64);
     /// Indica si la animación ha finalizado

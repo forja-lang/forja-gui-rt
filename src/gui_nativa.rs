@@ -3,13 +3,15 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use crate::ast::*;
-use forja_gui_rt::*;
-use forja_gui_rt::{map_message, MessageResult};
-use forja_gui_rt::view::{self, Axis};
-use forja_gui_rt::Length;
-use forja_gui_rt::{FontWeight, palette};
-use forja_gui_rt::{
+use std::time::Instant;
+use forja::ast::*;
+use chrono::Datelike;
+use crate::*;
+use crate::{map_message, MessageResult};
+use crate::view::{self, Axis};
+use crate::Length;
+use crate::{FontWeight, palette};
+use crate::{
     MaterialTheme,       // Tema Material You completo
     ColorScheme,         // Esquema de color con roles
     RgbColor,            // Color RGB (convierte a xilem::Color vía From)
@@ -19,7 +21,10 @@ use forja_gui_rt::{
     ShapeFamily,         // Familia de componentes para formas
     VariableStore,       // Store reactivo de variables
 };
-use forja_gui_rt::icons;
+use crate::theme::animation::AnimationEngine;
+use crate::theme::motion::{EASE_EMPHASIZED, EASE_STANDARD};
+use crate::vello::peniko::color::AlphaColor;
+// icons module used implicitly through svg_icon() call
 
 #[derive(Debug, Clone)]
 pub enum ValorGUI {
@@ -31,7 +36,7 @@ pub enum ValorGUI {
 }
 
 impl ValorGUI {
-    fn to_string(&self) -> String {
+    pub(crate) fn to_string(&self) -> String {
         match self {
             ValorGUI::Texto(s) => s.clone(),
             ValorGUI::Entero(n) => n.to_string(),
@@ -41,7 +46,7 @@ impl ValorGUI {
         }
     }
 
-    fn to_f64(&self) -> f64 {
+    pub(crate) fn to_f64(&self) -> f64 {
         match self {
             ValorGUI::Entero(n) => *n as f64,
             ValorGUI::Decimal(f) => *f,
@@ -69,6 +74,32 @@ pub struct AppStateNativo {
     pub store: VariableStore,
     pub window_size: WindowSizeClass,
     pub window_width: f64,
+    pub animation_engine: AnimationEngine,
+    /// Previous visibility values keyed by variable name, for detecting transitions
+    anim_prev_visibility: HashMap<String, bool>,
+    /// Animation start times for transitions keyed by variable name
+    anim_start_time: HashMap<String, Instant>,
+}
+
+/// Helper struct for tracking a simple animation (from→to over duration)
+#[derive(Debug, Clone)]
+struct AnimState {
+    pub desde: f64,
+    pub hasta: f64,
+    pub duracion_ms: f64,
+    pub progreso: f64,
+    pub activa: bool,
+}
+
+impl AnimState {
+    fn new(desde: f64, hasta: f64, duracion_ms: f64) -> Self {
+        Self { desde, hasta, duracion_ms, progreso: 0.0, activa: true }
+    }
+    
+    fn valor_actual(&self) -> f64 {
+        let t = self.progreso.clamp(0.0, 1.0);
+        self.desde + (self.hasta - self.desde) * t
+    }
 }
 
 // ─── Conversión ValorGUI ↔ serde_json::Value ─────────────────────
@@ -111,7 +142,38 @@ impl AppStateNativo {
             store: VariableStore::new(),
             window_size: WindowSizeClass::Compact,
             window_width: 800.0, // Valor por defecto razonable
+            animation_engine: AnimationEngine::new(),
+            anim_prev_visibility: HashMap::new(),
+            anim_start_time: HashMap::new(),
         }
+    }
+    
+    /// Detecta si una variable de visibilidad cambió de estado
+    pub fn anim_visibility_changed(&mut self, var_name: &str, current_visible: bool) -> bool {
+        let prev = self.anim_prev_visibility.get(var_name).copied().unwrap_or(false);
+        let changed = prev != current_visible;
+        self.anim_prev_visibility.insert(var_name.to_string(), current_visible);
+        if changed {
+            self.anim_start_time.insert(var_name.to_string(), Instant::now());
+        }
+        changed
+    }
+    
+    /// Obtiene el progreso de animación (0.0 a 1.0) para una transición
+    pub fn anim_progress(&self, var_name: &str, duracion_ms: f64) -> f64 {
+        if let Some(start) = self.anim_start_time.get(var_name) {
+            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+            let progress = (elapsed / duracion_ms).clamp(0.0, 1.0);
+            progress
+        } else {
+            0.0
+        }
+    }
+    
+    /// Obtiene el progreso de animación suavizado con easing emphasized
+    pub fn anim_progress_eased(&self, var_name: &str, duracion_ms: f64) -> f64 {
+        let raw = self.anim_progress(var_name, duracion_ms);
+        EASE_EMPHASIZED.apply(raw)
     }
     
     /// Anuncia un mensaje de accesibilidad (TalkBack)
@@ -310,7 +372,7 @@ pub enum AvatarVariant {
 // ─── Layout (representación intermedia) ───────────────────────────
 
 #[derive(Debug)]
-pub(crate) enum Layout {
+pub enum Layout {
     // ─── Layouts básicos ──────────────────────────────────────────
     Column { children: Vec<Layout>, gap: f64, alignment: String },
     CenteredColumn(Vec<Layout>),
@@ -331,8 +393,8 @@ pub(crate) enum Layout {
     StyledLabel { texto: String, style: String },
     /// Aplica una familia de forma (border-radius) al hijo
     ShapedBox { child: Box<Layout>, shape_family: String },
-    /// Aplica elevación (sombra) al hijo
-    ElevatedBox { child: Box<Layout>, level: u8 },
+    /// Aplica elevación (sombra) al hijo, con familia de forma opcional
+    ElevatedBox { child: Box<Layout>, level: u8, shape_family: String },
     /// Aplica un estado visual al hijo (hover, pressed, etc.)
     StateLayerBox { child: Box<Layout>, state: String },
     /// Layout responsivo con 3 variantes
@@ -466,6 +528,9 @@ pub(crate) enum Layout {
         variable: String,
     },
     MaterialTimePicker {
+        variable: String,
+    },
+    ColorPicker {
         variable: String,
     },
 
@@ -749,7 +814,7 @@ pub(crate) enum Layout {
 // ─── AST → Layout ─────────────────────────────────────────────────
 
 /// Extrae el layout del AST (recursivo: soporta desplazable, pila, etc.)
-fn extraer_layout(decls: &[Declaracion]) -> Layout {
+pub fn extraer_layout(decls: &[Declaracion]) -> Layout {
     for decl in decls {
         if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
             if nombre == "main" {
@@ -1025,7 +1090,7 @@ fn extraer_array_f64(args: &[Expresion], index: usize) -> Vec<f64> {
 
 // ─── AST → Layout ─────────────────────────────────────────────────
 
-fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
+pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
     match expr {
         Expresion::LlamadaFuncion { nombre, argumentos } => {
             match nombre.as_str() {
@@ -1303,7 +1368,12 @@ Expresion::Identificador(v, ..) =>
                             Expresion::LiteralNumero(n) => Some(*n as u8),
                             _ => None,
                         }).unwrap_or(1);
-                    child.map(|c| Layout::ElevatedBox { child: Box::new(c), level })
+                    let shape_family = argumentos.get(2)
+                        .and_then(|a| match a {
+                            Expresion::LiteralTexto(s) => Some(s.clone()),
+                            _ => None,
+                        }).unwrap_or_else(|| "surface".to_string());
+                    child.map(|c| Layout::ElevatedBox { child: Box::new(c), level, shape_family })
                 }
                 "adaptable" | "responsive" => {
                     let compact = argumentos.get(0).and_then(expr_a_layout);
@@ -1867,15 +1937,7 @@ Expresion::Identificador(v, ..) =>
                 }
                 "selector_color" | "color_picker" => {
                     let variable = extraer_texto(argumentos, 0);
-                    Some(Layout::MaterialTextField {
-                        variable,
-                        label: "Color".to_string(),
-                        placeholder: "#RRGGBB".to_string(),
-                        variant: TextFieldVariant::Outlined,
-                        multiline: false,
-                        error: String::new(),
-                        counter: false,
-                    })
+                    Some(Layout::ColorPicker { variable })
                 }
 
                 // ─── Tarjetas (Cards) ─────────────────────────────
@@ -2969,6 +3031,12 @@ fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
     }
 }
 
+/// Convierte un color role (string) a AlphaColor para usar con chart_widgets
+fn color_role_to_alpha(scheme: &ColorScheme, role: &str) -> AlphaColor {
+    let rgb = get_color_role(scheme, role);
+    AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255)
+}
+
 /// Obtiene el TextStyle de la escala tipográfica por nombre de estilo
 fn get_text_style(typography: &TypeScale, style: &str) -> TextStyle {
     match style {
@@ -3248,7 +3316,7 @@ fn render_navigator_rail(
 
 /// Convierte Layout a xilem usando AnyWidgetView para type erasure.
 /// Recibe el tema actual como referencia para aplicar colores, tipografía y formas.
-fn layout_a_view<'a>(
+pub fn layout_a_view<'a>(
     layout: &'a Layout,
     data: &'a mut AppStateNativo,
     _prog: &'a [Declaracion],
@@ -3363,14 +3431,15 @@ fn layout_a_view<'a>(
             let val = data.leer(&var_name).to_string();
             let gen = data.store.generation(&var_name);
             let ph = placeholder.clone();
+            let tc: forja_gui_rt::Color = theme.scheme.on_surface.into();
             Box::new(memoize(
-                (gen, val.clone(), var_name.clone(), ph.clone()),
-                move |(_, text, vn, pl): &(u64, String, String, String)| {
+                (gen, val.clone(), var_name.clone(), ph.clone(), tc),
+                move |(_, text, vn, pl, tc): &(u64, String, String, String, forja_gui_rt::Color)| {
                     let vn = vn.clone();
                     let pl = pl.clone();
                     let mut ti = view::text_input(text.clone(), move |data: &mut AppStateNativo, new_val: String| {
                         data.escribir(&vn, ValorGUI::Texto(new_val));
-                    });
+                    }).text_color(*tc);
                     if !pl.is_empty() {
                         ti = ti.placeholder(pl.as_str());
                     }
@@ -3450,12 +3519,10 @@ fn layout_a_view<'a>(
         }
 
         // ColoredBox: aplica un color del esquema como fondo
-        Layout::ColoredBox { child, color_role: _ } => {
+        Layout::ColoredBox { child, color_role } => {
             let inner = layout_a_view(child, data, _prog, theme);
-            // Nota: xilem 0.4 sized_box no expone background_color directamente.
-            // El color role está disponible para uso futuro con renderizado personalizado.
-            // let _bg: forja_gui_rt::Color = get_color_role(&theme.scheme, color_role).into();
-            Box::new(view::sized_box(inner))
+            let bg: Color = get_color_role(&theme.scheme, color_role).into();
+            Box::new(view::sized_box(inner).background(Background::Color(bg)))
         }
 
         // StyledLabel: etiqueta con estilo tipográfico predefinido
@@ -3472,20 +3539,21 @@ fn layout_a_view<'a>(
 
         // ShapedBox: aplica border-radius al hijo
         Layout::ShapedBox { child, shape_family } => {
-            let _radius = get_shape_radius(&theme.shapes, shape_family);
+            let radius = get_shape_radius(&theme.shapes, shape_family);
             let inner = layout_a_view(child, data, _prog, theme);
-            // Nota: xilem 0.4 no expone border-radius directamente en sized_box.
-            // El radio se usa donde la API de renderizado lo permita.
-            Box::new(view::sized_box(inner))
+            Box::new(view::sized_box(inner).corner_radius(radius))
         }
 
-        // ElevatedBox: aplica elevación (sombra)
-        Layout::ElevatedBox { child, level } => {
-            let _shadow = theme.elevation.shadow_for_level(*level);
+        // ElevatedBox: aplica elevación con BoxShadow real + corner radius
+        Layout::ElevatedBox { child, level, shape_family } => {
+            let shadow_cfg = theme.elevation.shadow_for_level(*level);
             let inner = layout_a_view(child, data, _prog, theme);
-            // Nota: xilem 0.4 no tiene sombras nativas; la config de sombra
-            // está disponible para uso futuro con renderizado personalizado.
-            Box::new(view::sized_box(inner))
+            let shape_radius = get_shape_radius(&theme.shapes, shape_family);
+            let box_shadow = shadow_to_box_shadow(&shadow_cfg);
+            // Masonry BoxShadow ahora soportado por SizedBox (vía patch)
+            Box::new(view::sized_box(inner)
+                .box_shadow(box_shadow)
+                .corner_radius(shape_radius))
         }
 
         // StateLayerBox: overlay de estado visual
@@ -3504,10 +3572,10 @@ fn layout_a_view<'a>(
             }
         }
 
-        // Padding: añade espacio alrededor (usando sized_box con dimensiones)
+        // Padding: añade espacio alrededor del hijo
         Layout::Padding { child, amount } => {
             let inner = layout_a_view(child, data, _prog, theme);
-            Box::new(view::sized_box(inner).width(Length::px(*amount)))
+            Box::new(view::sized_box(inner).padding(*amount))
         }
 
         // Expanded: llena el espacio disponible
@@ -3836,7 +3904,7 @@ fn layout_a_view<'a>(
             // Campo de texto
             let mut ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
                 data.escribir(&var_name, ValorGUI::Texto(new_val));
-            });
+            }).text_color(scheme.on_surface.into());
             if !placeholder_text.is_empty() {
                 ti = ti.placeholder(placeholder_text.as_str());
             }
@@ -3910,7 +3978,7 @@ fn layout_a_view<'a>(
 
             let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
                 data.escribir(&var_name, ValorGUI::Texto(new_val));
-            }).placeholder("••••••••");
+            }).placeholder("••••••••").text_color(scheme.on_surface.into());
 
             let input_widget = Box::new(view::sized_box(ti)
                 .background(Background::Color(bg))
@@ -4117,7 +4185,7 @@ fn layout_a_view<'a>(
             let lbl = label.clone();
             let checked = data.leer(variable).to_bool();
 
-            let _track_color: Color = if checked {
+            let track_color: Color = if checked {
                 scheme.primary.into()
             } else {
                 scheme.surface_variant.into()
@@ -4128,15 +4196,15 @@ fn layout_a_view<'a>(
                 scheme.outline.into()
             };
 
-            // Usamos checkbox de xilem estilizado como switch
+            // Usamos checkbox de xilem con colores del tema aplicados al track y thumb
             let checkbox = view::checkbox(lbl.clone(), checked, move |data: &mut AppStateNativo, new_checked: bool| {
                 data.escribir(&var_name, ValorGUI::Booleano(new_checked));
             });
 
-            // Envolvemos en un flex con colores del tema
-            Box::new(view::flex(Axis::Horizontal, (
-                checkbox,
-            )).gap(Length::px(8.0)))
+            // Envolvemos en un sized_box con los colores reales del tema
+            Box::new(view::sized_box(checkbox)
+                .background(Background::Color(track_color))
+                .corner_radius(12.0))
         }
 
         // ─── MaterialSliderDiscrete ────────────────────────────────────
@@ -4241,48 +4309,17 @@ fn layout_a_view<'a>(
 
         // ─── MaterialDatePicker ────────────────────────────────────────
         Layout::MaterialDatePicker { variable } => {
-            let scheme = &theme.scheme;
-            let var_name = variable.clone();
-            let val = data.leer(variable).to_string();
-            let border: Color = scheme.outline.into();
-            let bg: Color = scheme.surface_variant.into();
-
-            // Nota: Xilem 0.4 no tiene date picker nativo.
-            // Usamos text_input con formato de fecha.
-            let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-                data.escribir(&var_name, ValorGUI::Texto(new_val));
-            }).placeholder("YYYY-MM-DD");
-
-            Box::new(view::flex(Axis::Horizontal, (
-                view::label("📅 ").text_size(16.0).color(scheme.on_surface_variant.into()),
-                view::sized_box(ti)
-                    .background(Background::Color(bg))
-                    .border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(4.0),
-            )).gap(Length::px(4.0)))
+            crate::pickers::date_picker_view(variable, data, &theme.scheme, theme)
         }
 
         // ─── MaterialTimePicker ────────────────────────────────────────
         Layout::MaterialTimePicker { variable } => {
-            let scheme = &theme.scheme;
-            let var_name = variable.clone();
-            let val = data.leer(variable).to_string();
-            let border: Color = scheme.outline.into();
-            let bg: Color = scheme.surface_variant.into();
+            crate::pickers::time_picker_view(variable, data, &theme.scheme)
+        }
 
-            let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-                data.escribir(&var_name, ValorGUI::Texto(new_val));
-            }).placeholder("HH:MM");
-
-            Box::new(view::flex(Axis::Horizontal, (
-                view::label("🕐 ").text_size(16.0).color(scheme.on_surface_variant.into()),
-                view::sized_box(ti)
-                    .background(Background::Color(bg))
-                    .border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(4.0),
-            )).gap(Length::px(4.0)))
+        // ─── ColorPicker ───────────────────────────────────────────────
+        Layout::ColorPicker { variable } => {
+            crate::pickers::color_picker_view(variable, data, &theme.scheme)
         }
 
         // AspectRatioBox: caja con relación de aspecto fija
@@ -4496,18 +4533,28 @@ fn layout_a_view<'a>(
         // ═══════════════════════════════════════════════════════════════
 
         // ─── DialogOverlay ───────────────────────────────────────────
-        // Diálogo superpuesto con overlay semitransparente
+        // Diálogo superpuesto con overlay semitransparente + fade+scale animado
         Layout::DialogOverlay { dialog, visible } => {
             let show = data.leer(visible).to_string() == "true";
-            if show {
+            // Detectar cambio y animar progreso
+            data.anim_visibility_changed(visible, show);
+            let progress = data.anim_progress(visible, 200.0);
+            let eased = EASE_EMPHASIZED.apply(progress);
+            
+            if show || progress > 0.0 {
                 let inner = layout_a_view(dialog, data, _prog, theme);
-                let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(0.32);
-                // ZStack: overlay semitransparente + contenido del diálogo centrado
+                // Overlay con opacidad animada (0 → 0.32)
+                let overlay_alpha = eased * 0.32;
+                let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                // Diálogo con escala animada (0.95 → 1.0)
+                let dialog_scale = 0.95 + eased * 0.05;
+                
                 Box::new(view::zstack((
                     view::sized_box(view::label(String::new()))
                         .background(Background::Color(overlay_color)),
-                    view::sized_box(inner)
-                        .width(Length::px(312.0)),
+                    view::transformed(view::sized_box(inner)
+                        .width(Length::px(312.0)))
+                        .scale_non_uniform(dialog_scale, dialog_scale),
                 )))
             } else {
                 Box::new(view::sized_box(view::label(String::new())))
@@ -4657,31 +4704,43 @@ fn layout_a_view<'a>(
 
         // ─── BottomSheet ─────────────────────────────────────────────
         // Panel que emerge desde abajo (Standard, Modal, Expanded)
+        // Animación: slide-up con fade del overlay
         Layout::BottomSheet { child, variant, visible, on_dismiss: _ } => {
             let show = data.leer(visible).to_string() == "true";
-            if show {
+            // Detectar cambio y animar
+            data.anim_visibility_changed(visible, show);
+            let progress = data.anim_progress(visible, 250.0);
+            let eased = EASE_EMPHASIZED.apply(progress);
+            
+            if show || progress > 0.0 {
                 let scheme = &theme.scheme;
                 let inner = layout_a_view(child, data, _prog, theme);
                 let sheet_bg: Color = scheme.surface.into();
-
+                // Slide-up: offset_y desde 300px hasta 0
+                let sheet_offset_y = 300.0 * (1.0 - eased);
+                
                 match variant {
                     SheetVariant::Standard => {
-                        // Sin overlay, solo panel con esquinas redondeadas arriba
-                        let sheet = view::sized_box(inner)
-                            .background(Background::Color(sheet_bg))
-                            .corner_radius(16.0);
-                        // En un ZStack para que aparezca sobre el contenido
+                        // Sin overlay, solo panel con slide-up
+                        let sheet = view::transformed(
+                            view::sized_box(inner)
+                                .background(Background::Color(sheet_bg))
+                                .corner_radius(16.0)
+                        ).translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
                             view::sized_box(view::label(String::new())),
                             Box::new(sheet) as Box<AnyWidgetView<AppStateNativo>>,
                         )))
                     }
                     SheetVariant::Modal => {
-                        // Overlay semitransparente + panel
-                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(0.32);
-                        let sheet = view::sized_box(inner)
-                            .background(Background::Color(sheet_bg))
-                            .corner_radius(16.0);
+                        // Overlay con fade + panel con slide-up
+                        let overlay_alpha = eased * 0.32;
+                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                        let sheet = view::transformed(
+                            view::sized_box(inner)
+                                .background(Background::Color(sheet_bg))
+                                .corner_radius(16.0)
+                        ).translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
                             view::sized_box(view::label(String::new()))
                                 .background(Background::Color(overlay_color)),
@@ -4689,11 +4748,14 @@ fn layout_a_view<'a>(
                         )))
                     }
                     SheetVariant::Expanded => {
-                        // Overlay + panel que ocupa ~90% de altura
-                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(0.32);
-                        let sheet = view::sized_box(inner)
-                            .background(Background::Color(sheet_bg))
-                            .corner_radius(16.0);
+                        // Overlay con fade + panel expandido con slide-up
+                        let overlay_alpha = eased * 0.32;
+                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                        let sheet = view::transformed(
+                            view::sized_box(inner)
+                                .background(Background::Color(sheet_bg))
+                                .corner_radius(16.0)
+                        ).translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
                             view::sized_box(view::label(String::new()))
                                 .background(Background::Color(overlay_color)),
@@ -5538,12 +5600,35 @@ fn layout_a_view<'a>(
         // ═══════════════════════════════════════════════════════════════
 
         // ─── FadeTransition ──────────────────────────────────────────
-        Layout::FadeTransition { child, visible, duracion: _ } => {
+        // Fundido de entrada/salida con opacidad animada
+        Layout::FadeTransition { child, visible, duracion } => {
             let show = data.leer(visible).to_string() == "true";
-            if show { layout_a_view(child, data, _prog, theme) } else { Box::new(view::sized_box(view::label(String::new()))) }
+            data.anim_visibility_changed(visible, show);
+            let d = if *duracion > 0.0 { *duracion } else { 200.0 };
+            let progress = data.anim_progress(visible, d);
+            let eased = EASE_STANDARD.apply(progress);
+            
+            if show || progress > 0.0 {
+                let inner = layout_a_view(child, data, _prog, theme);
+                // Fade mediante opacidad del overlay
+                let overlay_alpha = 1.0 - eased;
+                if overlay_alpha < 0.01 {
+                    inner
+                } else {
+                    Box::new(view::sized_box(inner).background(
+                        Background::Color(RgbColor(0, 0, 0).with_alpha(overlay_alpha))
+                    ))
+                }
+            } else {
+                Box::new(view::sized_box(view::label(String::new())))
+            }
         }
 
         // ─── RippleEffect ───────────────────────────────────────────
+        // Efecto de onda expansiva Material Design
+        // NOTA: La integración completa requiere un View Xilem personalizado.
+        // El RippleWidget de animated_widgets estará disponible para uso
+        // directo con Pod cuando se requiera desde código Masonry nativo.
         Layout::RippleEffect { child, color: _ } => {
             let inner = layout_a_view(child, data, _prog, theme);
             Box::new(view::sized_box(inner).corner_radius(4.0))
@@ -5556,36 +5641,22 @@ fn layout_a_view<'a>(
             let cb = callback.clone();
             let ref_var = refreshing.clone();
 
-            // Botón de recargar en la parte superior
-            let scheme = &theme.scheme;
-            let label_style = get_text_style(&theme.typography, "label_medium");
-            let fg: Color = scheme.primary.into();
-            let refresh_label = if is_refreshing {
-                view::label("🔄 Actualizando...")
-                    .text_size(label_style.font_size as f32)
-                    .color(fg)
-            } else {
-                view::label("⬇️ Tira para recargar")
-                    .text_size(label_style.font_size as f32)
-                    .color(fg)
-            };
-
-            let btn = view::button(refresh_label, move |data: &mut AppStateNativo| {
-                if !cb.is_empty() {
-                    data.escribir(&ref_var, ValorGUI::Booleano(true));
-                    ejecutar_callback_y_actualizar(&cb, data, &prog);
-                }
-            });
-            let header = Box::new(view::sized_box(btn).padding(8.0)) as Box<AnyWidgetView<AppStateNativo>>;
-
             let inner = layout_a_view(child, data, _prog, theme);
 
-            // TODO xilem 0.4: cuando soporte gesture detection, reemplazar por drag-down gesture.
-            // Por ahora usamos un botón como activador manual.
-            let mut column_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            column_children.push(header);
-            column_children.push(inner);
-            Box::new(view::portal(view::flex(Axis::Vertical, (column_children,)).gap(Length::px(4.0))))
+            if is_refreshing {
+                // Si está refrescando, mostrar spinner
+                let refresh_label = view::label("🔄 Actualizando...");
+                let header = Box::new(view::sized_box(refresh_label).padding(8.0))
+                    as Box<AnyWidgetView<AppStateNativo>>;
+                let mut column_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+                column_children.push(header);
+                column_children.push(inner);
+                Box::new(view::portal(view::flex(Axis::Vertical, (column_children,)).gap(Length::px(4.0))))
+            } else {
+                // Envolver en PullToRefreshView con detección de gesto real
+                let view = PullToRefreshView::new(inner, cb, ref_var, prog);
+                Box::new(view)
+            }
         }
 
         // ─── SwipeToDismiss ───────────────────────────────────────────
@@ -5622,142 +5693,87 @@ fn layout_a_view<'a>(
                     view::flex(Axis::Horizontal, (row_children,)).gap(Length::px(4.0))
                 ).padding(12.0).corner_radius(8.0))
             } else {
-                // Mostrar contenido + botón de descartar
+                // Mostrar contenido envuelto en SwipeToDismissView con gesto real
                 let inner = layout_a_view(child, data, _prog, theme);
-                let scheme = &theme.scheme;
-                let dismiss_fg: Color = scheme.error.into();
-                let prog_clone = prog.clone();
-                let cb_clone = cb.clone();
-                let dismiss_var_clone = dismiss_var.clone();
-
-                let action_btn = view::button(
-                    view::label("✕")
-                        .text_size(18.0)
-                        .weight(FontWeight::BOLD)
-                        .color(dismiss_fg),
-                    move |data: &mut AppStateNativo| {
-                        data.escribir(&dismiss_var_clone, ValorGUI::Booleano(true));
-                        if !cb_clone.is_empty() {
-                            ejecutar_callback_y_actualizar(&cb_clone, data, &prog_clone);
-                        }
-                    },
-                );
-                let dismiss_btn = Box::new(view::sized_box(action_btn).padding(8.0))
-                    as Box<AnyWidgetView<AppStateNativo>>;
-
-                let mut swipe_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-                swipe_children.push(inner);
-                swipe_children.push(dismiss_btn);
-
-                // TODO xilem 0.4: cuando soporte gestos de deslizamiento, reemplazar por swipe gesture.
-                // Por ahora usamos un botón ✕ como activador manual.
-                Box::new(view::flex(Axis::Horizontal, (swipe_children,)).gap(Length::px(4.0)))
+                let view = SwipeToDismissView::new(inner, cb, dismiss_var, action_text, prog);
+                Box::new(view)
             }
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // GRÁFICOS (Fase 9)
+        // GRÁFICOS VECTORIALES (Fase 9) — Vello Scene
         // ═══════════════════════════════════════════════════════════════
-
-        // ─── Constante de colores para gráficos ─────────────────────
-        // Usamos los colores del tema en lugar de constantes fijas
+        //
+        // Reemplaza la emulación anterior (barras flex, puntos Unicode,
+        // leyendas de texto) por dibujo vectorial real con Vello Scene.
+        // Usa widgets Masonry personalizados de chart_widgets.rs.
 
         // ─── LineChart ────────────────────────────────────────────────
         Layout::LineChart { datos, color, etiquetas } => {
-            let scheme = &theme.scheme;
-            let max = datos.iter().cloned().fold(0.0_f64, f64::max);
-            let bar_color: Color = get_color_role(&theme.scheme, color).into();
-            let child_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = datos.iter().enumerate().map(|(i, &v)| {
-                let altura = if max > 0.0 { (v / max) * 80.0 } else { 0.0 };
-                let label_txt = etiquetas.get(i).cloned().unwrap_or_default();
-                let col = if max > 0.0 {
-                    let bar = view::sized_box(view::label(String::new()))
-                        .height(Length::px(altura.max(2.0)))
-                        .width(Length::px(24.0))
-                        .background(Background::Color(bar_color))
-                        .corner_radius(4.0);
-                    Box::new(view::flex(Axis::Vertical, (bar,)).gap(Length::px(2.0)).cross_axis_alignment(CrossAxisAlignment::Center)) as Box<AnyWidgetView<AppStateNativo>>
-                } else {
-                    Box::new(view::sized_box(view::label(String::new())).height(Length::px(2.0)).width(Length::px(24.0))) as Box<AnyWidgetView<AppStateNativo>>
-                };
-                if !label_txt.is_empty() {
-                    let lbl = view::label(label_txt).text_size(10.0).color(scheme.on_surface.into());
-                    Box::new(view::flex(Axis::Vertical, (col, Box::new(lbl) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(4.0)).cross_axis_alignment(CrossAxisAlignment::Center)) as Box<AnyWidgetView<AppStateNativo>>
-                } else { col }
+            let c = color_role_to_alpha(&theme.scheme, color);
+            let puntos: Vec<ChartDataPoint> = datos.iter().enumerate().map(|(i, &v)| {
+                let label = etiquetas.get(i).cloned().unwrap_or_default();
+                ChartDataPoint::new(&label, v, c)
             }).collect();
-            Box::new(view::flex(Axis::Horizontal, (child_widgets,)).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::End))
+            Box::new(Pod::new(LineChartWidget::new(puntos)))
         }
 
         // ─── BarChart ────────────────────────────────────────────────
-        Layout::BarChart { datos, colores, etiquetas, apilado: _ } => {
-            let scheme = &theme.scheme;
-            let max = datos.iter().cloned().fold(0.0_f64, f64::max);
-            let child_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = datos.iter().enumerate().map(|(i, &v)| {
-                let altura = if max > 0.0 { (v / max) * 100.0 } else { 0.0 };
-                let c = colores.get(i).cloned().unwrap_or_else(|| "primary".to_string());
-                let bar_color: Color = get_color_role(&theme.scheme, &c).into();
-                let label_txt = etiquetas.get(i).cloned().unwrap_or_default();
-                let bar = view::sized_box(view::label(format!("{:.0}", v)).text_size(9.0).color(scheme.on_primary.into()))
-                    .height(Length::px(altura.max(2.0)))
-                    .width(Length::px(40.0))
-                    .background(Background::Color(bar_color))
-                    .corner_radius(4.0);
-                let lbl = view::label(label_txt).text_size(10.0).color(scheme.on_surface.into());
-                Box::new(view::flex(Axis::Vertical, (Box::new(bar) as Box<AnyWidgetView<AppStateNativo>>, Box::new(lbl) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(4.0)).cross_axis_alignment(CrossAxisAlignment::Center)) as Box<AnyWidgetView<AppStateNativo>>
+        Layout::BarChart { datos, colores, etiquetas, apilado } => {
+            let colores_ciclo = [
+                theme.scheme.primary, theme.scheme.secondary, theme.scheme.tertiary,
+                theme.scheme.error, theme.scheme.primary_container,
+                theme.scheme.secondary_container,
+            ];
+            let puntos: Vec<ChartDataPoint> = datos.iter().enumerate().map(|(i, &v)| {
+                let c_str = colores.get(i).cloned().unwrap_or_default();
+                let c = if c_str.is_empty() {
+                    let rgb = colores_ciclo[i % colores_ciclo.len()];
+                    AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255)
+                } else {
+                    color_role_to_alpha(&theme.scheme, &c_str)
+                };
+                let label = etiquetas.get(i).cloned().unwrap_or_default();
+                ChartDataPoint::new(&label, v, c)
             }).collect();
-            Box::new(view::flex(Axis::Horizontal, (child_widgets,)).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::End))
+            Box::new(Pod::new(BarChartWidget::new(puntos, *apilado)))
         }
 
         // ─── PieChart / Donut ─────────────────────────────────────────
         Layout::PieChart { datos, etiquetas, donut } => {
-            let scheme = &theme.scheme;
-            let colores_graficos = [
-                scheme.primary, scheme.secondary, scheme.tertiary,
-                scheme.error, scheme.primary_container, scheme.secondary_container,
-                scheme.tertiary_container, scheme.error_container,
+            let colores_pie = [
+                theme.scheme.primary, theme.scheme.secondary, theme.scheme.tertiary,
+                theme.scheme.error, theme.scheme.primary_container,
+                theme.scheme.secondary_container, theme.scheme.tertiary_container,
+                theme.scheme.error_container,
             ];
-            let total: f64 = datos.iter().sum();
-            let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = datos.iter().enumerate().map(|(i, &v)| {
-                let pct = if total > 0.0 { (v / total) * 100.0 } else { 0.0 };
-                let c: Color = colores_graficos[i % colores_graficos.len()].into();
-                let dot = view::sized_box(view::label(String::new())).width(Length::px(12.0)).height(Length::px(12.0)).corner_radius(6.0).background(Background::Color(c));
-                let lbl = view::label(format!("{}: {:.1}%", etiquetas.get(i).cloned().unwrap_or_default(), pct)).text_size(13.0).color(scheme.on_surface.into());
-                Box::new(view::flex(Axis::Horizontal, (Box::new(dot) as Box<AnyWidgetView<AppStateNativo>>, Box::new(lbl) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::Center)) as Box<AnyWidgetView<AppStateNativo>>
+            let puntos: Vec<ChartDataPoint> = datos.iter().enumerate().map(|(i, &v)| {
+                let rgb = colores_pie[i % colores_pie.len()];
+                let c = AlphaColor::from_rgba8(rgb.0, rgb.1, rgb.2, 255);
+                let label = etiquetas.get(i).cloned().unwrap_or_default();
+                ChartDataPoint::new(&label, v, c)
             }).collect();
-            let inner = view::flex(Axis::Vertical, (children,)).gap(Length::px(6.0));
+            let mut pie = PieChartWidget::new(puntos);
             if *donut {
-                let center = view::label("◯").text_size(32.0).color(scheme.primary.into());
-                Box::new(view::flex(Axis::Horizontal, (Box::new(inner) as Box<AnyWidgetView<AppStateNativo>>, Box::new(center) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(12.0)).cross_axis_alignment(CrossAxisAlignment::Center))
-            } else {
-                Box::new(inner)
+                pie.set_donut(0.5);
             }
+            Box::new(Pod::new(pie))
         }
 
         // ─── GaugeChart ──────────────────────────────────────────────
-        Layout::GaugeChart { valor, min, max, color } => {
-            let scheme = &theme.scheme;
-            let gauge_color: Color = get_color_role(&theme.scheme, color).into();
-            let rango = if max > min { max - min } else { 1.0 };
-            let pct = ((valor - min) / rango).clamp(0.0, 1.0);
-            let ancho_barra = 200.0;
-            let track = view::sized_box(view::label(String::new())).width(Length::px(ancho_barra)).height(Length::px(12.0)).background(Background::Color(scheme.surface_variant.into())).corner_radius(6.0);
-            let fill = view::sized_box(view::label(String::new())).width(Length::px(ancho_barra * pct)).height(Length::px(12.0)).background(Background::Color(gauge_color)).corner_radius(6.0);
-            let bar = view::zstack((Box::new(track) as Box<AnyWidgetView<AppStateNativo>>, Box::new(fill) as Box<AnyWidgetView<AppStateNativo>>));
-            let txt = view::label(format!("{:.0} / {:.0}", valor, max)).text_size(14.0).weight(FontWeight::BOLD).color(scheme.on_surface.into());
-            Box::new(view::flex(Axis::Vertical, (Box::new(bar) as Box<AnyWidgetView<AppStateNativo>>, Box::new(txt) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::Center))
+        Layout::GaugeChart { valor, min, max, color: _ } => {
+            let threshold = *max * 0.75; // umbral por defecto al 75%
+            let mut gauge = GaugeChartWidget::new(*valor, *max, threshold);
+            let verde = AlphaColor::from_rgba8(0x4C, 0xAF, 0x50, 0xFF);
+            let rojo = AlphaColor::from_rgba8(0xF4, 0x43, 0x36, 0xFF);
+            gauge = gauge.with_colors(verde, rojo);
+            Box::new(Pod::new(gauge))
         }
 
         // ─── Sparkline ───────────────────────────────────────────────
         Layout::Sparkline { datos, color } => {
-            let scheme = &theme.scheme;
-            let spark_color: Color = get_color_role(scheme, color).into();
-            let max = datos.iter().cloned().fold(0.0_f64, f64::max).max(1.0);
-            let ancho_bar = if !datos.is_empty() { 20.0 / datos.len() as f64 } else { 4.0 };
-            let bars: Vec<Box<AnyWidgetView<AppStateNativo>>> = datos.iter().map(|&v| {
-                let h = (v / max) * 24.0;
-                Box::new(view::sized_box(view::label(String::new())).width(Length::px(ancho_bar.max(2.0))).height(Length::px(h.max(2.0))).background(Background::Color(spark_color)).corner_radius(1.0)) as Box<AnyWidgetView<AppStateNativo>>
-            }).collect();
-            Box::new(view::flex(Axis::Horizontal, (bars,)).gap(Length::px(1.0)).cross_axis_alignment(CrossAxisAlignment::End))
+            let c = color_role_to_alpha(&theme.scheme, color);
+            Box::new(Pod::new(SparklineWidget::new(datos.clone(), c)))
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -5833,50 +5849,130 @@ fn layout_a_view<'a>(
             Box::new(view::flex(Axis::Horizontal, (crumbs,)).gap(Length::px(4.0)).cross_axis_alignment(CrossAxisAlignment::Center))
         }
 
-        // ─── Calendar ────────────────────────────────────────────────
-        Layout::Calendar { mes, año, seleccionado: _, callback } => {
+        // ─── Calendar (con chrono) ──────────────────────────────────────
+        Layout::Calendar { mes, año, seleccionado, callback } => {
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
-            let cb = callback.clone();
-            // Copiar valores para el closure (evita capturar referencias al layout)
+            let cb_name = callback.clone();
             let mes_val = *mes;
             let año_val = *año;
-            let dias_semana = vec!["L", "M", "M", "J", "V", "S", "D"];
+            let fecha_sel = seleccionado.clone().unwrap_or_default();
+
+            // Usar chrono para calcular datos reales del mes
+            let first_date = chrono::NaiveDate::from_ymd_opt(año_val, mes_val as u32, 1)
+                .unwrap_or_else(|| {
+                    let today = chrono::Local::now().naive_local().date();
+                    chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap()
+                });
+            let days_in_month = if mes_val == 12 {
+                chrono::NaiveDate::from_ymd_opt(año_val + 1, 1, 1)
+                    .and_then(|d| d.pred_opt())
+                    .map(|d| d.day())
+                    .unwrap_or(31)
+            } else {
+                chrono::NaiveDate::from_ymd_opt(año_val, mes_val as u32 + 1, 1)
+                    .and_then(|d| d.pred_opt())
+                    .map(|d| d.day())
+                    .unwrap_or(30)
+            };
+            let first_weekday = first_date.weekday().num_days_from_monday() as usize; // 0=Lun, 6=Dom
+            let num_dias = days_in_month as usize;
+
+            // Nombres de meses
+            let nombres_mes = [
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+            ];
+            let mes_nombre = nombres_mes.get(mes_val as usize - 1).unwrap_or(&"");
+            let title = view::label(format!("{} {}", mes_nombre, año_val))
+                .text_size(16.0).weight(FontWeight::BOLD).color(scheme.on_surface.into());
+
+            // Botones de navegación de meses
+            let _prev_cb = cb_name.clone();
+            let _prog_prev = prog.clone();
+            let prev_btn = view::button(
+                view::label("◀").text_size(14.0).color(scheme.primary.into()),
+                move |data: &mut AppStateNativo| {
+                    // La navegación requiere reconstruir la vista; se maneja
+                    // cambiando las variables de estado. Por ahora placeholder.
+                    data.escribir("calendar_accion", ValorGUI::Texto("prev".to_string()));
+                },
+            );
+            let _next_cb = cb_name.clone();
+            let _prog_next = prog.clone();
+            let next_btn = view::button(
+                view::label("▶").text_size(14.0).color(scheme.primary.into()),
+                move |data: &mut AppStateNativo| {
+                    data.escribir("calendar_accion", ValorGUI::Texto("next".to_string()));
+                },
+            );
+            let header_row = view::flex(Axis::Horizontal, (
+                Box::new(prev_btn) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(title) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(next_btn) as Box<AnyWidgetView<AppStateNativo>>,
+            )).gap(Length::px(12.0)).cross_axis_alignment(CrossAxisAlignment::Center);
+
+            // Días de la semana header (L M M J V S D)
+            let dias_semana = ["L", "M", "M", "J", "V", "S", "D"];
             let header_dias: Vec<Box<AnyWidgetView<AppStateNativo>>> = dias_semana.iter().map(|d| {
-                Box::new(view::sized_box(view::label(d.to_string()).text_size(11.0).weight(FontWeight::BOLD).color(scheme.on_surface_variant.into())).width(Length::px(36.0)).height(Length::px(36.0))) as Box<AnyWidgetView<AppStateNativo>>
+                Box::new(view::sized_box(
+                    view::label(d.to_string()).text_size(11.0).weight(FontWeight::BOLD).color(scheme.on_surface_variant.into())
+                ).width(Length::px(36.0)).height(Length::px(36.0))) as Box<AnyWidgetView<AppStateNativo>>
             }).collect();
-            let header = view::flex(Axis::Horizontal, (header_dias,)).gap(Length::px(2.0));
-            let title = view::label(format!("{}/{}", mes_val, año_val)).text_size(16.0).weight(FontWeight::BOLD).color(scheme.on_surface.into());
-            // Generar algunos días del mes (simplificado: 28 días)
-            let mut day_rows: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            for semana in 0..4 {
-                let mut dias_fila: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-                for dia in 0..7 {
-                    let dia_num = semana * 7 + dia + 1;
-                    if dia_num <= 28 {
-                        let cb_name = cb.clone();
-                        let p = prog.clone();
-                        let dia_btn = view::button(
-                            view::label(dia_num.to_string()).text_size(12.0).color(scheme.on_surface.into()),
-                            move |data: &mut AppStateNativo| {
-                                data.escribir("fecha", ValorGUI::Texto(format!("{}/{}/{}", dia_num, mes_val, año_val)));
-                                if !cb_name.is_empty() {
-                                    ejecutar_callback_y_actualizar(&cb_name, data, &p);
-                                }
-                            },
-                        );
-                        dias_fila.push(Box::new(view::sized_box(dia_btn).width(Length::px(36.0)).height(Length::px(36.0))) as Box<AnyWidgetView<AppStateNativo>>);
+            let day_header = view::flex(Axis::Horizontal, (header_dias,)).gap(Length::px(2.0));
+
+            // Generar grilla de días con datos reales
+            let total_cells = first_weekday + num_dias;
+            let num_rows = (total_cells + 6) / 7;
+            let mut all_rows: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+            all_rows.push(Box::new(header_row) as Box<AnyWidgetView<AppStateNativo>>);
+            all_rows.push(Box::new(day_header) as Box<AnyWidgetView<AppStateNativo>>);
+
+            for row in 0..num_rows {
+                let mut day_cells: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+                for col in 0..7 {
+                    let cell_idx = row * 7 + col;
+                    if cell_idx < first_weekday || cell_idx >= first_weekday + num_dias {
+                        day_cells.push(Box::new(
+                            view::sized_box(view::label(String::new())).width(Length::px(36.0)).height(Length::px(36.0))
+                        ) as Box<AnyWidgetView<AppStateNativo>>);
                     } else {
-                        dias_fila.push(Box::new(view::sized_box(view::label(String::new())).width(Length::px(36.0)).height(Length::px(36.0))) as Box<AnyWidgetView<AppStateNativo>>);
+                        let dia = (cell_idx - first_weekday + 1) as u32;
+                        let cb = cb_name.clone();
+                        let p = prog.clone();
+                        let fecha_str = format!("{:04}-{:02}-{:02}", año_val, mes_val, dia);
+                        let is_selected = fecha_sel == fecha_str;
+
+                        if is_selected {
+                            let lbl = view::label(dia.to_string()).text_size(12.0).weight(FontWeight::BOLD).color(scheme.on_surface.into());
+                            day_cells.push(Box::new(
+                                view::sized_box(lbl)
+                                    .width(Length::px(36.0)).height(Length::px(36.0))
+                                    .background(Background::Color(scheme.primary_container.into()))
+                                    .corner_radius(18.0)
+                            ) as Box<AnyWidgetView<AppStateNativo>>);
+                        } else {
+                            let btn = view::button(
+                                view::label(dia.to_string()).text_size(12.0).color(scheme.on_surface.into()),
+                                move |data: &mut AppStateNativo| {
+                                    data.escribir("fecha", ValorGUI::Texto(fecha_str.clone()));
+                                    if !cb.is_empty() {
+                                        ejecutar_callback_y_actualizar(&cb, data, &p);
+                                    }
+                                },
+                            );
+                            day_cells.push(Box::new(
+                                view::sized_box(btn).width(Length::px(36.0)).height(Length::px(36.0))
+                            ) as Box<AnyWidgetView<AppStateNativo>>);
+                        }
                     }
                 }
-                day_rows.push(Box::new(view::flex(Axis::Horizontal, (dias_fila,)).gap(Length::px(2.0))) as Box<AnyWidgetView<AppStateNativo>>);
+                all_rows.push(Box::new(
+                    view::flex(Axis::Horizontal, (day_cells,)).gap(Length::px(2.0))
+                ) as Box<AnyWidgetView<AppStateNativo>>);
             }
-            let mut all: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            all.push(Box::new(title) as Box<AnyWidgetView<AppStateNativo>>);
-            all.push(Box::new(header) as Box<AnyWidgetView<AppStateNativo>>);
-            for row in day_rows { all.push(row); }
-            Box::new(view::flex(Axis::Vertical, (all,)).gap(Length::px(4.0)).cross_axis_alignment(CrossAxisAlignment::Center))
+
+            Box::new(view::flex(Axis::Vertical, (all_rows,)).gap(Length::px(4.0)).cross_axis_alignment(CrossAxisAlignment::Center))
         }
 
         // ─── MarkdownViewer ──────────────────────────────────────────
@@ -5910,31 +6006,46 @@ fn layout_a_view<'a>(
             Box::new(view::flex(Axis::Vertical, (children,)).gap(Length::px(4.0)))
         }
 
-        // ─── QRCode ──────────────────────────────────────────────────
+        // ─── QRCode (real) ───────────────────────────────────────────
         Layout::QRCode { texto, tamaño } => {
-            let scheme = &theme.scheme;
             let t = *tamaño;
-            // Representación visual simplificada: muestra un marco con texto
-            let fg: Color = scheme.primary.into();
-            let bg: Color = scheme.surface.into();
-            let content = if texto.len() > 20 { format!("{}…", &texto[..20]) } else { texto.clone() };
-            let qr_art = view::sized_box(view::label("▄▄▄▄▄▄▄▄\n█  █  █\n█ ▀▀█ █\n█  █  █\n▀▀▀▀▀▀▀▀").text_size(8.0).color(fg)).width(Length::px(t)).height(Length::px(t)).background(Background::Color(bg)).corner_radius(8.0).border_color(fg).border_width(2.0);
-            let lbl = view::label(content).text_size(10.0).color(scheme.on_surface.into());
-            Box::new(view::flex(Axis::Vertical, (Box::new(qr_art) as Box<AnyWidgetView<AppStateNativo>>, Box::new(lbl) as Box<AnyWidgetView<AppStateNativo>>)).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::Center))
+            let content = if texto.len() > 30 { format!("{}…", &texto[..30]) } else { texto.clone() };
+            // Usar QRView/widget real con qrcode crate + Vello
+            let qr = crate::qr_widget::qr_view::<AppStateNativo>(texto, t);
+            let lbl = view::label(content).text_size(10.0).color(theme.scheme.on_surface.into());
+            Box::new(view::flex(Axis::Vertical, (
+                Box::new(qr) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(lbl) as Box<AnyWidgetView<AppStateNativo>>,
+            )).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::Center))
         }
 
-        // ─── FilePicker ──────────────────────────────────────────────
-        Layout::FilePicker { tipos: _, multiple: _, callback } => {
+        // ─── FilePicker (con rfd) ─────────────────────────────────────
+        Layout::FilePicker { tipos, multiple: _, callback } => {
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
             let cb = callback.clone();
+            let tipos_filtro = tipos.clone();
             let btn = view::button(
                 view::flex(Axis::Horizontal, (
                     Box::new(view::label("📁").text_size(18.0)) as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(view::label("Seleccionar archivo").text_size(14.0).weight(FontWeight::MEDIUM)) as Box<AnyWidgetView<AppStateNativo>>,
                 )).gap(Length::px(8.0)).cross_axis_alignment(CrossAxisAlignment::Center),
                 move |data: &mut AppStateNativo| {
-                    data.escribir("archivo", ValorGUI::Texto("archivo_seleccionado.txt".to_string()));
+                    // Usar rfd para diálogo nativo de selección de archivos
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        let mut dialog = rfd::FileDialog::new();
+                        if !tipos_filtro.is_empty() {
+                            dialog = dialog.add_filter("Archivos", &tipos_filtro.iter().map(|s| s.as_str()).collect::<Vec<&str>>());
+                        }
+                        if let Some(path) = dialog.set_directory(".").pick_file() {
+                            data.escribir("archivo", ValorGUI::Texto(path.to_string_lossy().to_string()));
+                        }
+                    }
+                    #[cfg(target_os = "android")]
+                    {
+                        data.escribir("archivo", ValorGUI::Texto("archivo_seleccionado.txt".to_string()));
+                    }
                     if !cb.is_empty() {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     }
@@ -5965,19 +6076,51 @@ fn layout_a_view<'a>(
         }
 
         // ─── GradientBox ─────────────────────────────────────────────
-        Layout::GradientBox { child, colores, direccion: _ } => {
+        Layout::GradientBox { child, colores, direccion } => {
             let scheme = &theme.scheme;
             let inner = layout_a_view(child, data, _prog, theme);
-            // Gradiente simulado: usar el primer color como fondo sólido
-            let color = if !colores.is_empty() {
+            // Gradiente real con Background::Gradient de Masonry
+            let gradient = if colores.len() >= 2 {
+                // Convertir colores a xilem::Color (AlphaColor<Srgb>)
+                let color_vec: Vec<Color> = colores.iter()
+                    .map(|c| {
+                        let rgb = parse_color(c).unwrap_or(scheme.primary);
+                        rgb.into()
+                    })
+                    .collect();
+                // Crear color stops equiespaciados: [(0.0, c1), (1.0, c2), ...]
+                let total = color_vec.len();
+                let stops: Vec<(f32, Color)> = color_vec.into_iter().enumerate()
+                    .map(|(i, clr)| {
+                        let offset = if total > 1 { i as f32 / (total - 1) as f32 } else { 0.0 };
+                        (offset, clr)
+                    })
+                    .collect();
+                match direccion.to_lowercase().as_str() {
+                    "radial" => xilem::style::Gradient::new_radial(
+                        xilem::masonry::properties::types::UnitPoint::CENTER
+                    ).with_stops(stops.as_slice()),
+                    "sweep" => xilem::style::Gradient::new_full_sweep(
+                        xilem::masonry::properties::types::UnitPoint::CENTER,
+                        0.0
+                    ).with_stops(stops.as_slice()),
+                    _ => xilem::style::Gradient::new_linear(std::f64::consts::FRAC_PI_4)
+                        .with_stops(stops.as_slice()),
+                }
+            } else if colores.len() == 1 {
                 let c = parse_color(&colores[0]).unwrap_or(scheme.primary);
-                c.into()
+                let color: Color = c.into();
+                // Gradiente lineal simple con un solo color (fondo sólido)
+                xilem::style::Gradient::new_linear(0.0)
+                    .with_stops([(0.0, color), (1.0, color)].as_slice())
             } else {
-                scheme.primary.into()
+                let c: Color = scheme.primary.into();
+                xilem::style::Gradient::new_linear(0.0)
+                    .with_stops([(0.0, c), (1.0, c)].as_slice())
             };
             Box::new(
                 view::sized_box(inner)
-                    .background(Background::Color(color))
+                    .background(Background::Gradient(gradient))
                     .corner_radius(12.0)
             )
         }
@@ -6037,28 +6180,20 @@ fn layout_a_view<'a>(
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // ICONOS MATERIAL DESIGN — renderizado
+        // ICONOS MATERIAL DESIGN — renderizado SVG con Vello
         // ═══════════════════════════════════════════════════════════════════
 
-        // MaterialIconLayout: icono vectorial con tamaño y color
-        // Por ahora renderiza como emoji con tamaño y color (Xilem 0.4 no tiene SVG)
-        // Cuando Xilem soporte SVG nativo, aquí se renderizarán los paths reales.
-        Layout::MaterialIconLayout { nombre, tamaño, color, estilo: _ } => {
+        // MaterialIconLayout: icono vectorial con tamaño, color y estilo
+        // Renderiza paths SVG de Material Design directamente en el Scene de Vello,
+        // usando el view wrapper SvgIconView.
+        Layout::MaterialIconLayout { nombre, tamaño, color, estilo } => {
             let scheme = &theme.scheme;
             let icon_color: RgbColor = parse_color(color).unwrap_or(scheme.primary);
             let icon_size = *tamaño;
+            let icon_estilo = IconStyle::from_str(estilo);
 
-            // Obtener el emoji de fallback para el nombre del icono
-            let emoji = icons::catalog::fallback_emoji(nombre);
-
-            // Convertir color a Color de xilem (accesible vía crate re-export)
-            let xilem_color: Color = icon_color.into();
-
-            // Renderizar como label con emoji, tamaño y color
-            // (Xilem 0.4 no tiene renderizado SVG nativo)
-            Box::new(view::label(emoji)
-                .text_size(icon_size as f32)
-                .color(xilem_color))
+            // Crear el view wrapper del icono SVG (renderiza paths reales de Vello)
+            Box::new(svg_icon::<AppStateNativo>(nombre, icon_size, icon_color, icon_estilo))
         }
 
     }
@@ -6178,7 +6313,7 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx> for WidthObs
     type Element = Pod<WindowWidthProbe>;
     type ViewState = V::ViewState;
 
-    fn build(&self, ctx: &mut ViewCtx, app_state: &mut State) -> (Self::Element, Self::ViewState) {
+    fn build(&self, ctx: &mut ViewCtx, app_state: &mut State) -> (Pod<WindowWidthProbe>, V::ViewState) {
         let (child, child_state) = self.inner.build(ctx, app_state);
         let widget = WindowWidthProbe::new(child.new_widget);
         (ctx.create_pod(widget), child_state)
@@ -6187,9 +6322,9 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx> for WidthObs
     fn rebuild(
         &self,
         prev: &Self,
-        view_state: &mut Self::ViewState,
+        view_state: &mut V::ViewState,
         ctx: &mut ViewCtx,
-        mut element: Mut<'_, Self::Element>,
+        mut element: Mut<'_, Pod<WindowWidthProbe>>,
         app_state: &mut State,
     ) {
         let mut child = WindowWidthProbe::child_mut(&mut element);
@@ -6199,9 +6334,9 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx> for WidthObs
 
     fn teardown(
         &self,
-        view_state: &mut Self::ViewState,
+        view_state: &mut V::ViewState,
         ctx: &mut ViewCtx,
-        mut element: Mut<'_, Self::Element>,
+        mut element: Mut<'_, Pod<WindowWidthProbe>>,
     ) {
         let mut child = WindowWidthProbe::child_mut(&mut element);
         self.inner.teardown(view_state, ctx, child.downcast());
@@ -6209,9 +6344,9 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx> for WidthObs
 
     fn message(
         &self,
-        view_state: &mut Self::ViewState,
+        view_state: &mut V::ViewState,
         message: &mut MessageContext,
-        mut element: Mut<'_, Self::Element>,
+        mut element: Mut<'_, Pod<WindowWidthProbe>>,
         app_state: &mut State,
     ) -> MessageResult<()> {
         let mut child = WindowWidthProbe::child_mut(&mut element);
@@ -6283,173 +6418,358 @@ pub fn build_and_run(
         .map_err(|e| format!("Error en GUI: {}", e))
 }
 
-// ─── Callback: ejecutar funciones Forja ──────────────────────────
+#[cfg(target_os = "android")]
+pub fn build_and_run_android(
+    programa: &Programa,
+    theme: Option<MaterialTheme>,
+    auto_theme: bool,
+    android_app: winit::platform::android::activity::AndroidApp,
+) -> Result<(), String> {
+    use winit::platform::android::EventLoopBuilderExtAndroid;
 
-/// Busca una función en el AST y retorna (parametros, cuerpo)
-fn buscar_funcion<'a>(decls: &'a [Declaracion], nombre: &str) -> Option<(&'a [Parametro], &'a [Declaracion])> {
-    for decl in decls {
-        if let Declaracion::Funcion { nombre: n, parametros, cuerpo, .. } = decl {
-            if n == nombre {
-                return Some((parametros, cuerpo));
-            }
-        }
-    }
-    None
+    let theme = if auto_theme {
+        MaterialTheme::system("#6750A4")
+    } else {
+        theme.unwrap_or_else(MaterialTheme::light)
+    };
+
+    let mut state = AppStateNativo::new();
+    inicializar_estado(&programa.declaraciones, &mut state);
+    let layout = extraer_layout(&programa.declaraciones);
+    let prog = programa.declaraciones.clone();
+
+    let initial_width: f64 = 1200.0;
+    state.update_window_size(initial_width);
+    WINDOW_WIDTH_TL.with(|w| w.set(initial_width));
+
+    let app = Xilem::new_simple(
+        state,
+        move |data: &mut AppStateNativo| -> Box<AnyWidgetView<AppStateNativo>> {
+            let current_width = current_window_width();
+            data.update_window_size(current_width);
+            let root_view = layout_a_view(&layout, data, &prog, &theme);
+            let root_bg = theme.scheme.surface.into();
+            let root_with_bg = view::sized_box(root_view).background(Background::Color(root_bg));
+            Box::new(observe_width(root_with_bg))
+        },
+        WindowOptions::new("Forja GUI - Material You")
+            .with_initial_inner_size(LogicalSize::new(initial_width, 800.0)),
+    );
+
+    let mut event_loop = EventLoop::with_user_event();
+    event_loop.with_android_app(android_app);
+
+    app.run_in(event_loop)
+        .map_err(|e| format!("Error en GUI Android: {}", e))
 }
 
-/// Ejecuta una función Forja inline evaluando el AST (para callbacks de botones)
-/// Soporta: si, retornar, comparación ==, string concat +, variables de estado
+
+// ─── Callback: ejecutar funciones Forja (delegado al evaluador) ──
+
+/// Ejecuta una función Forja usando el evaluador tree-walking completo.
+/// Retorna el valor de retorno de la función o un mensaje de error.
 pub fn ejecutar_callback_forja(
     nombre_fn: &str,
     state: &AppStateNativo,
     programa: &[Declaracion],
 ) -> ValorGUI {
-    // Buscar la función
-    let (params, cuerpo) = match buscar_funcion(programa, nombre_fn) {
-        Some(p) => p,
-        None => return ValorGUI::Texto(format!("Error: función '{}' no encontrada", nombre_fn)),
-    };
-
-    // Crear scope local: parámetros se obtienen de state
-    let mut locals: HashMap<String, ValorGUI> = HashMap::new();
-    for param in params {
-        let val = state.leer(&param.nombre);
-        locals.insert(param.nombre.clone(), val);
-    }
-
-    // Evaluar el cuerpo
-    evaluar_bloque(cuerpo, &mut locals, state, programa)
-}
-
-/// Evalúa un bloque de declaraciones y retorna el valor de retorno
-fn evaluar_bloque(
-    decls: &[Declaracion],
-    locals: &mut HashMap<String, ValorGUI>,
-    state: &AppStateNativo,
-    programa: &[Declaracion],
-) -> ValorGUI {
-    for decl in decls {
-        match decl {
-            Declaracion::Retornar { valor, .. } => {
-                if let Some(expr) = valor {
-                    return evaluar_expresion(expr, locals, state, programa);
-                }
-                return ValorGUI::Nulo;
-            }
-            Declaracion::Si { condicion, bloque_verdadero, bloque_falso } => {
-                let cond_val = evaluar_expresion(condicion, locals, state, programa);
-                if cond_val.to_string() == "verdadero" || cond_val.to_string() == "true" {
-                    let result = evaluar_bloque(bloque_verdadero, locals, state, programa);
-                    if !matches!(result, ValorGUI::Nulo) {
-                        return result;
-                    }
-                } else if let Some(bloque_falso) = bloque_falso {
-                    let result = evaluar_bloque(bloque_falso, locals, state, programa);
-                    if !matches!(result, ValorGUI::Nulo) {
-                        return result;
-                    }
-                }
-            }
-            Declaracion::LlamadaFuncion { .. } => {
-                // Ignorar llamadas a funciones _ (efectos secundarios)
-            }
-            _ => {}
-        }
-    }
-    ValorGUI::Nulo
-}
-
-/// Evalúa una expresión Forja y retorna su valor
-fn evaluar_expresion(
-    expr: &Expresion,
-    locals: &HashMap<String, ValorGUI>,
-    state: &AppStateNativo,
-    programa: &[Declaracion],
-) -> ValorGUI {
-    match expr {
-        Expresion::LiteralTexto(s) => ValorGUI::Texto(s.clone()),
-        Expresion::LiteralNumero(n) => ValorGUI::Entero(*n),
-        Expresion::LiteralBooleano(b) => ValorGUI::Texto(if *b { "verdadero".to_string() } else { "falso".to_string() }),
-        Expresion::LiteralExacto(coeff, scale) => {
-            ValorGUI::Decimal(*coeff as f64 / (10f64).powi(*scale as i32))
-        }
-        Expresion::LiteralNulo => ValorGUI::Nulo,
-        Expresion::Identificador(v, ..) => {
-            // Buscar en locales primero, luego en state
-            locals.get(v)
-                .cloned()
-                .or_else(|| {
-                    // Buscar en variables de función (ámbito global de Forja)
-                    for decl in programa {
-                        if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
-                            if nombre == "main" {
-                                for d in cuerpo {
-                                    if let Declaracion::Variable { nombre: n, valor: _, .. } = d {
-                                        if n == v {
-                                            return Some(state.leer(v));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    None
-                })
-                .unwrap_or(ValorGUI::Texto(v.clone()))
-        }
-        Expresion::Binaria { izquierda, operador, derecha } => {
-            let izq = evaluar_expresion(izquierda, locals, state, programa);
-            let der = evaluar_expresion(derecha, locals, state, programa);
-            match operador {
-                Operador::Suma => {
-                    // Concat: "a" + "b" → "ab"
-                    ValorGUI::Texto(izq.to_string() + &der.to_string())
-                }
-                Operador::IgualIgual => {
-                    let result = izq.to_string() == der.to_string();
-                    ValorGUI::Texto(if result { "verdadero" } else { "falso" }.to_string())
-                }
-                Operador::Diferente => {
-                    let result = izq.to_string() != der.to_string();
-                    ValorGUI::Texto(if result { "verdadero" } else { "falso" }.to_string())
-                }
-                _ => ValorGUI::Texto(izq.to_string()),
-            }
-        }
-        _ => ValorGUI::Texto("?".to_string()),
+    let mut store = state.store.clone();
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut store) {
+        Ok(val) => val,
+        Err(e) => ValorGUI::Texto(format!("Error: {}", e)),
     }
 }
 
-/// Actualiza el state con el resultado de un callback
+/// Actualiza el state con el resultado de un callback.
+/// Usa el evaluador tree-walking completo con acceso mutable al store.
 pub fn ejecutar_callback_y_actualizar(
     nombre_fn: &str,
     state: &mut AppStateNativo,
     programa: &[Declaracion],
 ) {
-    let resultado = ejecutar_callback_forja(nombre_fn, state, programa);
-    // Guardar en la variable 'resultado' por convención
-    state.escribir("resultado", resultado);
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut state.store) {
+        Ok(valor) => {
+            state.store.set("resultado", valor.to_json_value());
+        }
+        Err(e) => {
+            eprintln!("Error ejecutando callback '{}': {}", nombre_fn, e);
+            state.store.set("resultado", serde_json::Value::String(format!("Error: {}", e)));
+        }
+    }
 }
 
-fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
-    for decl in decls {
-        if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
-            if nombre == "main" {
-                for d in cuerpo {
-                    if let Declaracion::Variable { nombre, valor, .. } = d {
-                        let v = match valor {
-                            Some(Expresion::LiteralTexto(s)) => ValorGUI::Texto(s.clone()),
-                            Some(Expresion::LiteralNumero(n)) => ValorGUI::Entero(*n),
-                            Some(Expresion::LiteralExacto(coeff, scale)) => {
-                                ValorGUI::Decimal(*coeff as f64 / (10f64).powi(*scale as i32))
-                            }
-                            _ => ValorGUI::Texto(String::new()),
-                        };
-                        state.escribir(nombre, v);
-                    }
-                }
-                return;
+/// Inicializa el estado de la GUI evaluando las variables de la función `main`.
+pub fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
+    crate::evaluador::inicializar_estado(decls, &mut state.store);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// View wrappers para gestos (PullToRefreshView, SwipeToDismissView)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Estos wrappers permiten usar los widgets Masonry de gestos (de
+// gesture_widgets.rs) como vistas Xilem, siguiendo el mismo patrón
+// que el Button view de xilem.
+
+use crate::GestureResult as GestureAction;
+use crate::SwipeWidget as SwipeGestureWidget;
+use crate::PullToRefreshWidget as PullRefreshWidget;
+use crate::{Pod, ViewCtx, WidgetView};
+use xilem::core::{MessageContext, Mut, View, ViewId, ViewMarker, ViewPathTracker};
+
+// ─── ViewId para child routing ──────────────────────────────────
+const GESTURE_CHILD_VIEW_ID: ViewId = ViewId::new(0);
+
+// ═══════════════════════════════════════════════════════════════════
+// PullToRefreshView
+// ═══════════════════════════════════════════════════════════════════
+
+/// View de Xilem que envuelve un hijo en un PullToRefreshWidget.
+/// Detecta gesto de tirar hacia abajo y ejecuta un callback Forja.
+pub struct PullToRefreshView<V> {
+    child: V,
+    callback: String,
+    refreshing: String,
+    program: Vec<Declaracion>,
+}
+
+impl<V> PullToRefreshView<V> {
+    pub fn new(
+        child: V,
+        callback: String,
+        refreshing: String,
+        program: Vec<Declaracion>,
+    ) -> Self {
+        Self {
+            child,
+            callback,
+            refreshing,
+            program,
+        }
+    }
+}
+
+impl<V> ViewMarker for PullToRefreshView<V> {}
+
+impl<V> View<AppStateNativo, (), ViewCtx> for PullToRefreshView<V>
+where
+    V: WidgetView<AppStateNativo, ()>,
+{
+    type Element = Pod<PullRefreshWidget>;
+    type ViewState = V::ViewState;
+
+    fn build(
+        &self,
+        ctx: &mut ViewCtx,
+        app_state: &mut AppStateNativo,
+    ) -> (Self::Element, Self::ViewState) {
+        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        });
+        let widget = PullRefreshWidget::new(child.new_widget);
+        (ctx.with_action_widget(|ctx| ctx.create_pod(widget)), child_state)
+    }
+
+    fn rebuild(
+        &self,
+        prev: &Self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::rebuild(
+                &self.child,
+                &prev.child,
+                view_state,
+                ctx,
+                PullRefreshWidget::child_mut(&mut element).downcast(),
+                app_state,
+            );
+        });
+    }
+
+    fn teardown(
+        &self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::teardown(
+                &self.child,
+                view_state,
+                ctx,
+                PullRefreshWidget::child_mut(&mut element).downcast(),
+            );
+        });
+        ctx.teardown_leaf(element);
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut Self::ViewState,
+        message: &mut MessageContext,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) -> crate::MessageResult<()> {
+        match message.take_first() {
+            Some(GESTURE_CHILD_VIEW_ID) => {
+                View::<AppStateNativo, (), _>::message(
+                    &self.child,
+                    _view_state,
+                    message,
+                    PullRefreshWidget::child_mut(&mut element).downcast(),
+                    app_state,
+                )
             }
+            None => {
+                match message.take_message::<GestureAction>() {
+                    Some(boxed) => match *boxed {
+                        GestureAction::PullToRefresh { .. } => {
+                            // Marcar como refrescando y ejecutar callback
+                            if !self.callback.is_empty() {
+                                app_state.escribir(&self.refreshing, ValorGUI::Booleano(true));
+                                ejecutar_callback_y_actualizar(&self.callback, app_state, &self.program);
+                            }
+                            crate::MessageResult::Nop
+                        }
+                        _ => crate::MessageResult::Stale,
+                    }
+                    None => crate::MessageResult::Stale,
+                }
+            }
+            _ => crate::MessageResult::Stale,
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SwipeToDismissView
+// ═══════════════════════════════════════════════════════════════════
+
+/// View de Xilem que envuelve un hijo en un SwipeWidget.
+/// Detecta swipe horizontal para descartar elementos.
+pub struct SwipeToDismissView<V> {
+    child: V,
+    on_dismiss: String,
+    dismissed: String,
+    label: String,
+    program: Vec<Declaracion>,
+}
+
+impl<V> SwipeToDismissView<V> {
+    pub fn new(
+        child: V,
+        on_dismiss: String,
+        dismissed: String,
+        label: String,
+        program: Vec<Declaracion>,
+    ) -> Self {
+        Self {
+            child,
+            on_dismiss,
+            dismissed,
+            label,
+            program,
+        }
+    }
+}
+
+impl<V> ViewMarker for SwipeToDismissView<V> {}
+
+impl<V> View<AppStateNativo, (), ViewCtx> for SwipeToDismissView<V>
+where
+    V: WidgetView<AppStateNativo, ()>,
+{
+    type Element = Pod<SwipeGestureWidget>;
+    type ViewState = V::ViewState;
+
+    fn build(
+        &self,
+        ctx: &mut ViewCtx,
+        app_state: &mut AppStateNativo,
+    ) -> (Self::Element, Self::ViewState) {
+        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        });
+        let widget = SwipeGestureWidget::new(child.new_widget)
+            .with_threshold(100.0);
+        (ctx.with_action_widget(|ctx| ctx.create_pod(widget)), child_state)
+    }
+
+    fn rebuild(
+        &self,
+        prev: &Self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::rebuild(
+                &self.child,
+                &prev.child,
+                view_state,
+                ctx,
+                SwipeGestureWidget::child_mut(&mut element).downcast(),
+                app_state,
+            );
+        });
+    }
+
+    fn teardown(
+        &self,
+        view_state: &mut Self::ViewState,
+        ctx: &mut ViewCtx,
+        mut element: Mut<'_, Self::Element>,
+    ) {
+        ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::teardown(
+                &self.child,
+                view_state,
+                ctx,
+                SwipeGestureWidget::child_mut(&mut element).downcast(),
+            );
+        });
+        ctx.teardown_leaf(element);
+    }
+
+    fn message(
+        &self,
+        _view_state: &mut Self::ViewState,
+        message: &mut MessageContext,
+        mut element: Mut<'_, Self::Element>,
+        app_state: &mut AppStateNativo,
+    ) -> crate::MessageResult<()> {
+        match message.take_first() {
+            Some(GESTURE_CHILD_VIEW_ID) => {
+                View::<AppStateNativo, (), _>::message(
+                    &self.child,
+                    _view_state,
+                    message,
+                    SwipeGestureWidget::child_mut(&mut element).downcast(),
+                    app_state,
+                )
+            }
+            None => {
+                match message.take_message::<GestureAction>() {
+                    Some(boxed) => match *boxed {
+                        GestureAction::Swipe { .. } => {
+                            // Marcar como descartado y ejecutar callback
+                            if !self.on_dismiss.is_empty() {
+                                app_state.escribir(&self.dismissed, ValorGUI::Booleano(true));
+                                ejecutar_callback_y_actualizar(&self.on_dismiss, app_state, &self.program);
+                            }
+                            crate::MessageResult::Nop
+                        }
+                        _ => crate::MessageResult::Stale,
+                    }
+                    None => crate::MessageResult::Stale,
+                }
+            }
+            _ => crate::MessageResult::Stale,
         }
     }
 }
