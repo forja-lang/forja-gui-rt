@@ -6103,7 +6103,7 @@ pub fn layout_a_view<'a>(
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
             let cb = callback.clone();
-            let tipos_filtro = tipos.clone();
+            let _tipos_filtro = tipos.clone();
             let btn = view::button(
                 view::flex(Axis::Horizontal, (
                     Box::new(view::label("📁").text_size(18.0)) as Box<AnyWidgetView<AppStateNativo>>,
