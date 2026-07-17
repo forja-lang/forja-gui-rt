@@ -527,7 +527,7 @@ fn evaluar_expresion(
         }
 
         // ── Identificador ──────────────────────────────────────
-        Expresion::Identificador { nombre: nombre, .. } => {
+        Expresion::Identificador { nombre, .. } => {
             if let Some(val) = ambito.obtener(nombre) {
                 Ok(val.clone())
             } else if let Some(json_val) = store.get(nombre) {

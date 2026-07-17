@@ -18,9 +18,9 @@ use crate::{
         peniko::color::AlphaColor,
         Scene,
     },
-    AccessCtx, AccessEvent, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx,
+    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx,
     NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PointerId,
-    PointerUpdate, PropertiesMut, PropertiesRef, RegisterCtx, TextEvent, Update, UpdateCtx,
+    PointerUpdate, PropertiesMut, PropertiesRef, RegisterCtx,
     Widget, WidgetPod,
 };
 
