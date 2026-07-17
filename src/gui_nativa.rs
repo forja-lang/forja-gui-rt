@@ -202,6 +202,23 @@ impl AppStateNativo {
         let json_val: serde_json::Value = valor.into();
         self.store.set(nombre, json_val);
     }
+
+    /// Serializa todas las variables de estado a JSON.
+    /// Usado por hot reload para preservar estado entre reinicios.
+    pub fn guardar_estado(&self) -> String {
+        let snapshot = self.store.snapshot();
+        serde_json::to_string(&snapshot).unwrap_or_default()
+    }
+
+    /// Carga estado desde un JSON, restaurando las variables guardadas.
+    /// Usado por hot reload para restaurar estado tras recompilar.
+    pub fn cargar_estado(&mut self, json: &str) {
+        if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(json) {
+            for (key, value) in map {
+                self.store.set(&key, value);
+            }
+        }
+    }
 }
 
 impl Default for AppStateNativo {
@@ -6451,9 +6468,12 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx> for WidthObs
 /// En cada render, se lee el ancho real desde el widget WindowWidthProbe
 /// para actualizar `window_size` dinámicamente según el resize.
 ///
-/// `auto_theme`: si es `true`, detecta automáticamente el tema del sistema
+/// `auto_theme`: si es `true`, detecta automáticamente el tema del sistema.
+/// `load_state`: estado serializado opcional para restaurar variables
+///   (usado por hot reload para preservar estado entre reinicios).
 pub fn build_and_run(
     programa: &Programa,
+    load_state: Option<&str>,
     theme: Option<MaterialTheme>,
     auto_theme: bool,
 ) -> Result<(), String> {
@@ -6465,6 +6485,10 @@ pub fn build_and_run(
 
     let mut state = AppStateNativo::new();
     inicializar_estado(&programa.declaraciones, &mut state);
+    // Restaurar estado guardado (hot reload) si se proporcionó
+    if let Some(json) = load_state {
+        state.cargar_estado(json);
+    }
     let layout = extraer_layout(&programa.declaraciones);
     let prog = programa.declaraciones.clone();
 
@@ -6504,6 +6528,7 @@ pub fn build_and_run(
 #[cfg(target_os = "android")]
 pub fn build_and_run_android(
     programa: &Programa,
+    load_state: Option<&str>,
     theme: Option<MaterialTheme>,
     auto_theme: bool,
     android_app: winit::platform::android::activity::AndroidApp,
@@ -6518,6 +6543,10 @@ pub fn build_and_run_android(
 
     let mut state = AppStateNativo::new();
     inicializar_estado(&programa.declaraciones, &mut state);
+    // Restaurar estado guardado (hot reload) si se proporcionó
+    if let Some(json) = load_state {
+        state.cargar_estado(json);
+    }
     let layout = extraer_layout(&programa.declaraciones);
     let prog = programa.declaraciones.clone();
 

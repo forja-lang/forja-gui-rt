@@ -176,3 +176,14 @@ pub use gui_nativa::{
 pub fn layout_from_expr(expr: &Expresion) -> Option<Layout> {
     gui_nativa::expr_a_layout(expr)
 }
+
+/// Extrae el flag `--load-state=<json>` de los argumentos de línea de comandos.
+/// Usado por el código generado por el transpiler para soportar hot reload.
+pub fn initialize_from_args(args: &[String]) -> Option<String> {
+    for arg in args {
+        if let Some(state) = arg.strip_prefix("--load-state=") {
+            return Some(state.to_string());
+        }
+    }
+    None
+}
