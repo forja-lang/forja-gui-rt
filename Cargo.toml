@@ -10,9 +10,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 forja = { path = "../.." }
 chrono = "0.4"
-rfd = "0.15"
 qrcode = "0.14"
 image = "0.25"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = "0.15"
 
 [target.'cfg(target_os = "android")'.dependencies.winit]
 version = "0.30.13"
