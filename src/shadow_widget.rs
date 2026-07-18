@@ -23,8 +23,7 @@ pub fn shadow_to_box_shadow(shadow: &Shadow) -> BoxShadow {
         shadow.color.2,
         shadow.color.3,
     );
-    BoxShadow::new(color, Point::new(shadow.offset_x, shadow.offset_y))
-        .blur(shadow.blur_radius)
+    BoxShadow::new(color, Point::new(shadow.offset_x, shadow.offset_y)).blur(shadow.blur_radius)
 }
 
 /// Versión simplificada que crea un BoxShadow solo con blur y color,

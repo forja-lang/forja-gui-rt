@@ -4,7 +4,10 @@ use std::time::Instant;
 
 use crate::{
     accesskit::{Node, Role},
-    vello::{Scene, kurbo::{Point, Size}},
+    vello::{
+        kurbo::{Point, Size},
+        Scene,
+    },
     AccessCtx, BoxConstraints, ChildrenIds, LayoutCtx, NewWidget, NoAction, PaintCtx,
     PropertiesMut, PropertiesRef, RegisterCtx, Widget, WidgetPod,
 };

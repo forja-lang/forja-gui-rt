@@ -12,8 +12,8 @@ use crate::vello::kurbo::{Affine, BezPath, Circle, Line, Point, Rect, Size, Stro
 use crate::vello::peniko::{self, Brush, Fill};
 use crate::vello::Scene;
 use crate::{
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx,
-    PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
+    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx, PointerEvent,
+    PropertiesMut, PropertiesRef, RegisterCtx,
 };
 use crate::{MessageContext, MessageResult, Mut, Pod, View, ViewCtx, ViewMarker};
 use std::f64::consts::PI;
@@ -39,7 +39,6 @@ impl Rgba {
         Brush::Solid(self.to_peniko_color())
     }
 }
-
 
 /// Un punto individual de datos para cualquier chart
 #[derive(Debug, Clone)]
@@ -150,7 +149,15 @@ fn draw_thick_arc(
     let x0_outer = cx + start_angle.cos() * outer_r;
     let y0_outer = cy + start_angle.sin() * outer_r;
     path.move_to(Point::new(x0_outer, y0_outer));
-    add_arc_to_path(&mut path, cx, cy, outer_r, start_angle, sweep_angle, num_seg);
+    add_arc_to_path(
+        &mut path,
+        cx,
+        cy,
+        outer_r,
+        start_angle,
+        sweep_angle,
+        num_seg,
+    );
 
     // Línea hacia el interior
     let x1_inner = cx + end_angle.cos() * inner_r;
@@ -241,7 +248,12 @@ impl crate::Widget for LineChartWidget {
             return;
         }
 
-        let max_val = self.data.iter().map(|d| d.value).fold(0.0_f64, f64::max).max(1.0);
+        let max_val = self
+            .data
+            .iter()
+            .map(|d| d.value)
+            .fold(0.0_f64, f64::max)
+            .max(1.0);
         let count = self.data.len();
         let step_x = if count > 1 {
             chart_w / (count - 1) as f64
@@ -255,7 +267,13 @@ impl crate::Widget for LineChartWidget {
             for i in 0..=4 {
                 let y = padding + chart_h * (1.0 - i as f64 / 4.0);
                 let line = Line::new(Point::new(padding, y), Point::new(padding + chart_w, y));
-                scene.stroke(&Stroke::new(1.0), Affine::IDENTITY, &grid_brush, None, &line);
+                scene.stroke(
+                    &Stroke::new(1.0),
+                    Affine::IDENTITY,
+                    &grid_brush,
+                    None,
+                    &line,
+                );
             }
         }
 
@@ -382,14 +400,22 @@ impl crate::Widget for BarChartWidget {
             return;
         }
 
-        let max_val = self.data.iter().map(|d| d.value).fold(0.0_f64, f64::max).max(1.0);
+        let max_val = self
+            .data
+            .iter()
+            .map(|d| d.value)
+            .fold(0.0_f64, f64::max)
+            .max(1.0);
         let count = self.data.len();
         let step_x = chart_w / count as f64;
         let bar_w = (step_x * 0.7).min(self.bar_width).max(4.0);
 
         // Eje base
         let axis_y = padding + chart_h;
-        let axis = Line::new(Point::new(padding, axis_y), Point::new(padding + chart_w, axis_y));
+        let axis = Line::new(
+            Point::new(padding, axis_y),
+            Point::new(padding + chart_w, axis_y),
+        );
         scene.stroke(
             &Stroke::new(1.0),
             Affine::IDENTITY,
@@ -404,7 +430,13 @@ impl crate::Widget for BarChartWidget {
             let y = padding + chart_h - bar_height;
             let rect = Rect::new(x, y, x + bar_w, padding + chart_h);
 
-            scene.fill(Fill::NonZero, Affine::IDENTITY, &point.color.to_brush(), None, &rect);
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                &point.color.to_brush(),
+                None,
+                &rect,
+            );
 
             // Borde sutil
             scene.stroke(
@@ -503,7 +535,15 @@ impl crate::Widget for PieChartWidget {
 
         for point in &self.data {
             let sweep = (point.value / total) * 2.0 * PI;
-            draw_pie_segment(scene, cx, cy, radius, start_angle, sweep, &point.color.to_brush());
+            draw_pie_segment(
+                scene,
+                cx,
+                cy,
+                radius,
+                start_angle,
+                sweep,
+                &point.color.to_brush(),
+            );
             start_angle += sweep;
         }
 
@@ -664,10 +704,7 @@ impl crate::Widget for GaugeChartWidget {
         // Aguja
         let angle = gauge_start + gauge_sweep * progress;
         let needle_len = radius * 0.65;
-        let needle_end = Point::new(
-            cx + angle.cos() * needle_len,
-            cy + angle.sin() * needle_len,
-        );
+        let needle_end = Point::new(cx + angle.cos() * needle_len, cy + angle.sin() * needle_len);
         let needle = Line::new(Point::new(cx, cy), needle_end);
         scene.stroke(
             &Stroke::new(2.5),
@@ -722,7 +759,10 @@ impl crate::Widget for GaugeChartWidget {
         _props: &PropertiesRef<'_>,
         node: &mut Node,
     ) {
-        node.set_label(format!("Indicador: {:.0} de {:.0}", self.value, self.max_value));
+        node.set_label(format!(
+            "Indicador: {:.0} de {:.0}",
+            self.value, self.max_value
+        ));
     }
 
     fn children_ids(&self) -> ChildrenIds {
@@ -948,7 +988,10 @@ impl<State: 'static> View<State, (), ViewCtx> for BarChartView<State> {
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<BarChartWidget>, ()) {
-        (ctx.create_pod(BarChartWidget::new(self.data.clone(), self.apilado)), ())
+        (
+            ctx.create_pod(BarChartWidget::new(self.data.clone(), self.apilado)),
+            (),
+        )
     }
 
     fn rebuild(
@@ -1131,7 +1174,10 @@ impl<State: 'static> View<State, (), ViewCtx> for SparklineView<State> {
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<SparklineWidget>, ()) {
-        (ctx.create_pod(SparklineWidget::new(self.data.clone(), self.color)), ())
+        (
+            ctx.create_pod(SparklineWidget::new(self.data.clone(), self.color)),
+            (),
+        )
     }
 
     fn rebuild(

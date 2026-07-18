@@ -5,7 +5,7 @@
 //
 // El espacio HCT separa:
 // - Hue (tono): 0-360 grados
-// - Chroma (saturación): 0-150+  
+// - Chroma (saturación): 0-150+
 // - Tone (luminosidad): 0-100 (negro a blanco)
 
 use crate::theme::color::RgbColor;
@@ -77,9 +77,9 @@ impl Hct {
         let z = lab_f_inv(fz) * zn;
 
         // XYZ -> lineal -> sRGB
-        let rl =  3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
+        let rl = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
         let gl = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z;
-        let bl =  0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
+        let bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
 
         let r = linear_to_srgb(rl);
         let g = linear_to_srgb(gl);
@@ -123,7 +123,10 @@ impl Hct {
 
     /// Calcula la diferencia perceptible entre dos colores HCT
     pub fn distance(&self, other: &Hct) -> f64 {
-        let dh = (self.hue - other.hue).abs().min(360.0 - (self.hue - other.hue).abs()) / 360.0;
+        let dh = (self.hue - other.hue)
+            .abs()
+            .min(360.0 - (self.hue - other.hue).abs())
+            / 360.0;
         let dc = (self.chroma - other.chroma).abs() / 150.0;
         let dt = (self.tone - other.tone).abs() / 100.0;
         (dh * dh + dc * dc + dt * dt).sqrt()
@@ -132,7 +135,11 @@ impl Hct {
 
 impl std::fmt::Display for Hct {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Hct({:.1}°, {:.1}, {:.1})", self.hue, self.chroma, self.tone)
+        write!(
+            f,
+            "Hct({:.1}°, {:.1}, {:.1})",
+            self.hue, self.chroma, self.tone
+        )
     }
 }
 
@@ -184,8 +191,10 @@ pub fn harmonize(design_color: &RgbColor, source_color: &RgbColor) -> RgbColor {
     let source_hct = Hct::from_rgb(source_color);
 
     // Mezcla los hues manteniendo el chroma y tone del design
-    let h_diff = (design_hct.hue - source_hct.hue).abs().min(360.0 - (design_hct.hue - source_hct.hue).abs());
-    
+    let h_diff = (design_hct.hue - source_hct.hue)
+        .abs()
+        .min(360.0 - (design_hct.hue - source_hct.hue).abs());
+
     let harmonized_hue = if h_diff > 60.0 {
         // Desplazar el hue hacia el source
         let direction = if (design_hct.hue - source_hct.hue + 360.0).rem_euclid(360.0) > 180.0 {
@@ -215,7 +224,11 @@ mod tests {
         let rgb = RgbColor(103, 80, 164); // #6750A4 (púrpura)
         let hct = Hct::from_rgb(&rgb);
         // El hue simplificado puede variar; verificamos que esté en rango violeta/púrpura
-        assert!(hct.hue > 270.0 && hct.hue < 340.0, "hue = {} (esperado ~270-340)", hct.hue);
+        assert!(
+            hct.hue > 270.0 && hct.hue < 340.0,
+            "hue = {} (esperado ~270-340)",
+            hct.hue
+        );
         assert!(hct.tone > 30.0 && hct.tone < 60.0, "tone = {}", hct.tone);
     }
 

@@ -294,6 +294,9 @@ mod tests {
         let base = scheme.surface;
         let elevated = scheme.surface_at_elevation(3, true);
         // Con elevación, la superficie debe aclararse (mezclarse con primary)
-        assert_ne!(base, elevated, "La superficie con elevación debe diferir de la base en dark mode");
+        assert_ne!(
+            base, elevated,
+            "La superficie con elevación debe diferir de la base en dark mode"
+        );
     }
 }

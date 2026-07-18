@@ -6,11 +6,11 @@
 /// Peso de fuente tipográfica
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FontWeight {
-    Thin,       // 100
-    Light,      // 300
-    Regular,    // 400
-    Medium,     // 500
-    Bold,       // 700
+    Thin,    // 100
+    Light,   // 300
+    Regular, // 400
+    Medium,  // 500
+    Bold,    // 700
 }
 
 impl FontWeight {
@@ -53,7 +53,12 @@ pub struct TextStyle {
 impl TextStyle {
     /// Crea un nuevo estilo de texto
     pub const fn new(font_size: f64, line_height: f64, tracking: f64, weight: FontWeight) -> Self {
-        TextStyle { font_size, line_height, tracking, weight }
+        TextStyle {
+            font_size,
+            line_height,
+            tracking,
+            weight,
+        }
     }
 }
 
@@ -134,19 +139,32 @@ impl TypeScale {
     /// Lista todos los nombres de estilos disponibles
     pub fn style_names() -> &'static [&'static str] {
         &[
-            "display_large", "display_medium", "display_small",
-            "headline_large", "headline_medium", "headline_small",
-            "title_large", "title_medium", "title_small",
-            "body_large", "body_medium", "body_small",
-            "label_large", "label_medium", "label_small",
+            "display_large",
+            "display_medium",
+            "display_small",
+            "headline_large",
+            "headline_medium",
+            "headline_small",
+            "title_large",
+            "title_medium",
+            "title_small",
+            "body_large",
+            "body_medium",
+            "body_small",
+            "label_large",
+            "label_medium",
+            "label_small",
         ]
     }
 }
 
 impl std::fmt::Display for TypeScale {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TypeScale(display_large={}sp, body_medium={}sp)",
-            self.display_large.font_size, self.body_medium.font_size)
+        write!(
+            f,
+            "TypeScale(display_large={}sp, body_medium={}sp)",
+            self.display_large.font_size, self.body_medium.font_size
+        )
     }
 }
 

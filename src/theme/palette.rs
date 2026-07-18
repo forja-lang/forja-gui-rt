@@ -51,7 +51,11 @@ impl TonalPalette {
 
 impl std::fmt::Display for TonalPalette {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TonalPalette(hue={:.1}°, chroma={:.1})", self.hue, self.chroma)
+        write!(
+            f,
+            "TonalPalette(hue={:.1}°, chroma={:.1})",
+            self.hue, self.chroma
+        )
     }
 }
 
@@ -117,8 +121,11 @@ impl Palettes {
 
 impl std::fmt::Display for Palettes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Palettes(primary={}, secondary={}, tertiary={})",
-            self.primary, self.secondary, self.tertiary)
+        write!(
+            f,
+            "Palettes(primary={}, secondary={}, tertiary={})",
+            self.primary, self.secondary, self.tertiary
+        )
     }
 }
 
@@ -139,7 +146,11 @@ mod tests {
         let white_tone = palette.tone(100);
         // El brillo percibido debe ser alto
         let brightness = (white_tone.0 as u16 + white_tone.1 as u16 + white_tone.2 as u16) / 3;
-        assert!(brightness > 200, "brightness = {} para tone 100", brightness);
+        assert!(
+            brightness > 200,
+            "brightness = {} para tone 100",
+            brightness
+        );
 
         // Tone 0 debe ser muy oscuro (casi negro)
         let black_tone = palette.tone(0);

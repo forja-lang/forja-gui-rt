@@ -99,7 +99,10 @@ impl<T: PartialEq> Signal<T> {
     /// Escribe solo si el nuevo valor es diferente al actual.
     /// Retorna `true` si hubo cambio (y se incrementó la generación).
     pub fn write_if_changed(&self, value: T) -> bool {
-        let mut guard = self.inner.write().expect("Signal::write_if_changed lock poisoned");
+        let mut guard = self
+            .inner
+            .write()
+            .expect("Signal::write_if_changed lock poisoned");
         if guard.value != value {
             guard.value = value;
             guard.generation += 1;
@@ -283,7 +286,10 @@ impl VariableStore {
 
     /// Obtiene o crea la señal para una variable.
     fn ensure_signal(&self, name: &str) -> Signal<serde_json::Value> {
-        let mut map = self.signals.write().expect("VariableStore::ensure_signal lock poisoned");
+        let mut map = self
+            .signals
+            .write()
+            .expect("VariableStore::ensure_signal lock poisoned");
         map.entry(name.to_string())
             .or_insert_with(|| Signal::new(serde_json::Value::Null))
             .clone()
@@ -291,7 +297,10 @@ impl VariableStore {
 
     /// Obtiene la señal para una variable, si existe.
     fn get_signal(&self, name: &str) -> Option<Signal<serde_json::Value>> {
-        let map = self.signals.read().expect("VariableStore::get_signal lock poisoned");
+        let map = self
+            .signals
+            .read()
+            .expect("VariableStore::get_signal lock poisoned");
         map.get(name).cloned()
     }
 
@@ -325,13 +334,19 @@ impl VariableStore {
 
     /// Verifica si una variable existe.
     pub fn contains(&self, name: &str) -> bool {
-        let map = self.signals.read().expect("VariableStore::contains lock poisoned");
+        let map = self
+            .signals
+            .read()
+            .expect("VariableStore::contains lock poisoned");
         map.contains_key(name)
     }
 
     /// Obtiene el número de variables almacenadas.
     pub fn len(&self) -> usize {
-        let map = self.signals.read().expect("VariableStore::len lock poisoned");
+        let map = self
+            .signals
+            .read()
+            .expect("VariableStore::len lock poisoned");
         map.len()
     }
 
@@ -342,7 +357,10 @@ impl VariableStore {
 
     /// Obtiene un snapshot de todas las variables (para depuración).
     pub fn snapshot(&self) -> HashMap<String, serde_json::Value> {
-        let map = self.signals.read().expect("VariableStore::snapshot lock poisoned");
+        let map = self
+            .signals
+            .read()
+            .expect("VariableStore::snapshot lock poisoned");
         map.iter()
             .map(|(k, sig)| (k.clone(), sig.get().0))
             .collect()
@@ -350,7 +368,10 @@ impl VariableStore {
 
     /// Inicializa múltiples variables desde un iterador.
     pub fn init_from<I: IntoIterator<Item = (String, serde_json::Value)>>(&self, iter: I) {
-        let mut map = self.signals.write().expect("VariableStore::init_from lock poisoned");
+        let mut map = self
+            .signals
+            .write()
+            .expect("VariableStore::init_from lock poisoned");
         for (name, value) in iter {
             let entry = map
                 .entry(name)
@@ -420,7 +441,11 @@ impl Default for ReactiveCtx {
 // ─── Reactive Operations (helpers para widgets) ─────────────────────
 //
 /// Lee un valor reactivo con tracking de dependencia.
-pub fn read_var(store: &VariableStore, name: &str, _ctx: Option<&ReactiveCtx>) -> Option<serde_json::Value> {
+pub fn read_var(
+    store: &VariableStore,
+    name: &str,
+    _ctx: Option<&ReactiveCtx>,
+) -> Option<serde_json::Value> {
     if let Some(ctx) = _ctx {
         ctx.track_dependency(name);
     }

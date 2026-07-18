@@ -7,8 +7,8 @@
 // - Anuncios de accesibilidad (TalkBack-style)
 // - Gestión de foco
 
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 
 use xilem::masonry::accesskit::Role;
 
@@ -98,15 +98,27 @@ pub fn descripcion_accesible(tipo: &str, label: &str, valor: &str, estado: &str)
 
 /// Estados accesibles comunes
 pub fn estado_checkbox(checked: bool) -> &'static str {
-    if checked { "Seleccionado" } else { "No seleccionado" }
+    if checked {
+        "Seleccionado"
+    } else {
+        "No seleccionado"
+    }
 }
 
 pub fn estado_switch(encendido: bool) -> &'static str {
-    if encendido { "Activado" } else { "Desactivado" }
+    if encendido {
+        "Activado"
+    } else {
+        "Desactivado"
+    }
 }
 
 pub fn estado_seleccion(seleccionado: bool) -> &'static str {
-    if seleccionado { "Seleccionado" } else { "No seleccionado" }
+    if seleccionado {
+        "Seleccionado"
+    } else {
+        "No seleccionado"
+    }
 }
 
 // ─── Anuncios de accesibilidad (TalkBack-style) ─────────────────
@@ -116,8 +128,8 @@ pub fn estado_seleccion(seleccionado: bool) -> &'static str {
 pub enum PrioridadAnuncio {
     Baja,
     Normal,
-    Alta,       // Interrupción
-    Urgente,    // Inmediato
+    Alta,    // Interrupción
+    Urgente, // Inmediato
 }
 
 /// Un anuncio de accesibilidad (equivalente a un mensaje TalkBack)

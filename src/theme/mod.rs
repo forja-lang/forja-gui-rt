@@ -27,7 +27,6 @@ pub use state::*;
 pub use system_theme::*;
 pub use typography::*;
 
-
 /// Tema Material You completo con todos los subsistemas
 #[derive(Clone, Debug)]
 pub struct MaterialTheme {
@@ -135,7 +134,11 @@ impl Default for MaterialTheme {
 
 impl std::fmt::Display for MaterialTheme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MaterialTheme(seed={}, dark={})", self.seed_color, self.is_dark)
+        write!(
+            f,
+            "MaterialTheme(seed={}, dark={})",
+            self.seed_color, self.is_dark
+        )
     }
 }
 

@@ -10,9 +10,9 @@
 // El sistema está preparado para migrar a SVG real cuando Xilem lo soporte.
 
 use crate::theme::RgbColor;
+use xilem::style::Style;
 use xilem::view;
 use xilem::{AnyWidgetView, Color};
-use xilem::style::Style;
 
 // ─── Estilo de icono ─────────────────────────────────────────────────
 
@@ -59,15 +59,19 @@ impl IconStyle {
 /// renderizado SVG nativo.
 #[derive(Clone, Copy, Debug)]
 pub struct MaterialIcon {
-    pub name: &'static str,      // nombre en inglés: "home", "favorite"
-    pub svg_path: &'static str,  // path SVG del icono (Material Design)
+    pub name: &'static str,     // nombre en inglés: "home", "favorite"
+    pub svg_path: &'static str, // path SVG del icono (Material Design)
     pub style: IconStyle,
 }
 
 impl MaterialIcon {
     /// Crea un nuevo icono Material con estilo Filled por defecto
     pub const fn new(name: &'static str, svg_path: &'static str) -> Self {
-        Self { name, svg_path, style: IconStyle::Filled }
+        Self {
+            name,
+            svg_path,
+            style: IconStyle::Filled,
+        }
     }
 
     /// Cambia el estilo del icono
@@ -83,15 +87,16 @@ impl MaterialIcon {
     pub fn to_widget(&self, size: f64, color: RgbColor) -> Box<AnyWidgetView<()>> {
         let emoji = catalog::fallback_emoji(self.name);
         let xilem_color: Color = color.into();
-        Box::new(
-            view::label(emoji)
-                .text_size(size as f32)
-                .color(xilem_color)
-        )
+        Box::new(view::label(emoji).text_size(size as f32).color(xilem_color))
     }
 
     /// Renderiza con estilo específico
-    pub fn to_widget_styled(&self, size: f64, color: RgbColor, _style: IconStyle) -> Box<AnyWidgetView<()>> {
+    pub fn to_widget_styled(
+        &self,
+        size: f64,
+        color: RgbColor,
+        _style: IconStyle,
+    ) -> Box<AnyWidgetView<()>> {
         // Por ahora todas las variantes usan el mismo emoji
         // En el futuro se pueden mapear a diferentes SVGs según el estilo
         self.to_widget(size, color)
@@ -114,21 +119,39 @@ pub mod catalog {
     /// Settings / configuración
     pub const SETTINGS: MaterialIcon = MaterialIcon::new("settings", "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z");
     /// Menu hamburguesa
-    pub const MENU: MaterialIcon = MaterialIcon::new("menu", "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z");
+    pub const MENU: MaterialIcon =
+        MaterialIcon::new("menu", "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z");
     /// Arrow back / atrás
-    pub const ARROW_BACK: MaterialIcon = MaterialIcon::new("arrow_back", "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z");
+    pub const ARROW_BACK: MaterialIcon = MaterialIcon::new(
+        "arrow_back",
+        "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+    );
     /// Arrow forward / adelante
-    pub const ARROW_FORWARD: MaterialIcon = MaterialIcon::new("arrow_forward", "M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z");
+    pub const ARROW_FORWARD: MaterialIcon = MaterialIcon::new(
+        "arrow_forward",
+        "M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z",
+    );
     /// Arrow drop down / desplegable
-    pub const ARROW_DROP_DOWN: MaterialIcon = MaterialIcon::new("arrow_drop_down", "M7 10l5 5 5-5z");
+    pub const ARROW_DROP_DOWN: MaterialIcon =
+        MaterialIcon::new("arrow_drop_down", "M7 10l5 5 5-5z");
     /// Arrow up / arriba
-    pub const ARROW_UP: MaterialIcon = MaterialIcon::new("arrow_up", "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z");
+    pub const ARROW_UP: MaterialIcon =
+        MaterialIcon::new("arrow_up", "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z");
     /// Arrow down / abajo
-    pub const ARROW_DOWN: MaterialIcon = MaterialIcon::new("arrow_down", "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z");
+    pub const ARROW_DOWN: MaterialIcon = MaterialIcon::new(
+        "arrow_down",
+        "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z",
+    );
     /// Chevron left
-    pub const CHEVRON_LEFT: MaterialIcon = MaterialIcon::new("chevron_left", "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z");
+    pub const CHEVRON_LEFT: MaterialIcon = MaterialIcon::new(
+        "chevron_left",
+        "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+    );
     /// Chevron right
-    pub const CHEVRON_RIGHT: MaterialIcon = MaterialIcon::new("chevron_right", "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z");
+    pub const CHEVRON_RIGHT: MaterialIcon = MaterialIcon::new(
+        "chevron_right",
+        "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+    );
     /// More vert / más opciones vertical
     pub const MORE_VERT: MaterialIcon = MaterialIcon::new("more_vert", "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z");
     /// Close / cerrar
@@ -145,7 +168,10 @@ pub mod catalog {
     /// Add circle / añadir círculo
     pub const ADD_CIRCLE: MaterialIcon = MaterialIcon::new("add_circle", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z");
     /// Delete / eliminar
-    pub const DELETE: MaterialIcon = MaterialIcon::new("delete", "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z");
+    pub const DELETE: MaterialIcon = MaterialIcon::new(
+        "delete",
+        "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+    );
     /// Edit / editar
     pub const EDIT: MaterialIcon = MaterialIcon::new("edit", "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z");
     /// Save / guardar
@@ -153,9 +179,11 @@ pub mod catalog {
     /// Copy / copiar
     pub const COPY: MaterialIcon = MaterialIcon::new("copy", "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z");
     /// Done / listo
-    pub const DONE: MaterialIcon = MaterialIcon::new("done", "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z");
+    pub const DONE: MaterialIcon =
+        MaterialIcon::new("done", "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z");
     /// Check / verificar
-    pub const CHECK: MaterialIcon = MaterialIcon::new("check", "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
+    pub const CHECK: MaterialIcon =
+        MaterialIcon::new("check", "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
     /// Check circle / círculo verificado
     pub const CHECK_CIRCLE: MaterialIcon = MaterialIcon::new("check_circle", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z");
     /// Cancel / cancelar
@@ -180,11 +208,14 @@ pub mod catalog {
     // ═══════════════════════════════════════════════════════════════════
 
     /// Filter / filtrar
-    pub const FILTER: MaterialIcon = MaterialIcon::new("filter", "M3 17h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V5H3z");
+    pub const FILTER: MaterialIcon =
+        MaterialIcon::new("filter", "M3 17h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V5H3z");
     /// Sort / ordenar
-    pub const SORT: MaterialIcon = MaterialIcon::new("sort", "M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z");
+    pub const SORT: MaterialIcon =
+        MaterialIcon::new("sort", "M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z");
     /// Send / enviar
-    pub const SEND: MaterialIcon = MaterialIcon::new("send", "M2.01 21L23 12 2.01 3 2 10l15 2-15 2z");
+    pub const SEND: MaterialIcon =
+        MaterialIcon::new("send", "M2.01 21L23 12 2.01 3 2 10l15 2-15 2z");
     /// Cloud / nube
     pub const CLOUD: MaterialIcon = MaterialIcon::new("cloud", "M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z");
     /// Cloud download / descarga de nube
@@ -194,7 +225,8 @@ pub mod catalog {
     /// Link / enlace
     pub const LINK: MaterialIcon = MaterialIcon::new("link", "M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z");
     /// Flag / bandera
-    pub const FLAG: MaterialIcon = MaterialIcon::new("flag", "M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z");
+    pub const FLAG: MaterialIcon =
+        MaterialIcon::new("flag", "M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z");
 
     // ═══════════════════════════════════════════════════════════════════
     // COMUNICACIÓN (Communication)
@@ -220,17 +252,26 @@ pub mod catalog {
     // ═══════════════════════════════════════════════════════════════════
 
     /// File / archivo
-    pub const FILE: MaterialIcon = MaterialIcon::new("file", "M6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6H6zm0 18V4h7v5h5v11H6z");
+    pub const FILE: MaterialIcon = MaterialIcon::new(
+        "file",
+        "M6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6H6zm0 18V4h7v5h5v11H6z",
+    );
     /// Folder / carpeta
-    pub const FOLDER: MaterialIcon = MaterialIcon::new("folder", "M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z");
+    pub const FOLDER: MaterialIcon = MaterialIcon::new(
+        "folder",
+        "M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
+    );
     /// Folder open / carpeta abierta
     pub const FOLDER_OPEN: MaterialIcon = MaterialIcon::new("folder_open", "M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z");
     /// Upload file / subir archivo
-    pub const FILE_UPLOAD: MaterialIcon = MaterialIcon::new("file_upload", "M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z");
+    pub const FILE_UPLOAD: MaterialIcon =
+        MaterialIcon::new("file_upload", "M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z");
     /// Download / descargar
-    pub const DOWNLOAD: MaterialIcon = MaterialIcon::new("download", "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z");
+    pub const DOWNLOAD: MaterialIcon =
+        MaterialIcon::new("download", "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z");
     /// Upload / subir
-    pub const UPLOAD: MaterialIcon = MaterialIcon::new("upload", "M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z");
+    pub const UPLOAD: MaterialIcon =
+        MaterialIcon::new("upload", "M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z");
     /// Attach file / adjuntar
     pub const ATTACH_FILE: MaterialIcon = MaterialIcon::new("attach_file", "M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z");
     /// Image / imagen
@@ -251,7 +292,8 @@ pub mod catalog {
     /// Battery full / batería llena
     pub const BATTERY_FULL: MaterialIcon = MaterialIcon::new("battery_full", "M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z");
     /// Signal / señal
-    pub const SIGNAL: MaterialIcon = MaterialIcon::new("signal", "M2 22h20V2L2 22zm18-2H6.83L20 6.83V20z");
+    pub const SIGNAL: MaterialIcon =
+        MaterialIcon::new("signal", "M2 22h20V2L2 22zm18-2H6.83L20 6.83V20z");
     /// Location / ubicación
     pub const LOCATION: MaterialIcon = MaterialIcon::new("location", "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z");
 
@@ -264,13 +306,22 @@ pub mod catalog {
     /// Format bold / negrita
     pub const FORMAT_BOLD: MaterialIcon = MaterialIcon::new("format_bold", "M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z");
     /// Format italic / cursiva
-    pub const FORMAT_ITALIC: MaterialIcon = MaterialIcon::new("format_italic", "M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z");
+    pub const FORMAT_ITALIC: MaterialIcon = MaterialIcon::new(
+        "format_italic",
+        "M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z",
+    );
     /// Format underline / subrayado
     pub const FORMAT_UNDERLINE: MaterialIcon = MaterialIcon::new("format_underline", "M12 17c3.31 0 6-2.69 6-6V3h-2.5v8c0 1.93-1.57 3.5-3.5 3.5S8.5 12.93 8.5 11V3H6v8c0 3.31 2.69 6 6 6zm-7 2v2h14v-2H5z");
     /// Format list / lista
-    pub const FORMAT_LIST: MaterialIcon = MaterialIcon::new("format_list", "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z");
+    pub const FORMAT_LIST: MaterialIcon = MaterialIcon::new(
+        "format_list",
+        "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+    );
     /// Format size / tamaño
-    pub const FORMAT_SIZE: MaterialIcon = MaterialIcon::new("format_size", "M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z");
+    pub const FORMAT_SIZE: MaterialIcon = MaterialIcon::new(
+        "format_size",
+        "M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z",
+    );
     /// Undo / deshacer
     pub const UNDO: MaterialIcon = MaterialIcon::new("undo", "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z");
     /// Redo / rehacer
@@ -328,11 +379,17 @@ pub mod catalog {
     /// Info / información
     pub const INFO: MaterialIcon = MaterialIcon::new("info", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z");
     /// Warning / advertencia
-    pub const WARNING: MaterialIcon = MaterialIcon::new("warning", "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z");
+    pub const WARNING: MaterialIcon = MaterialIcon::new(
+        "warning",
+        "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z",
+    );
     /// Error / error
     pub const ERROR: MaterialIcon = MaterialIcon::new("error", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z");
     /// Warning amber / advertencia ámbar
-    pub const WARNING_AMBER: MaterialIcon = MaterialIcon::new("warning_amber", "M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z");
+    pub const WARNING_AMBER: MaterialIcon = MaterialIcon::new(
+        "warning_amber",
+        "M12 5.99L19.53 19H4.47L12 5.99M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z",
+    );
     /// Feedback / retroalimentación
     pub const FEEDBACK: MaterialIcon = MaterialIcon::new("feedback", "M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM11 12h2v-2h-2v2zm0-4h2V6h-2v2z");
     /// Help / ayuda
@@ -349,7 +406,10 @@ pub mod catalog {
     /// Favorite outline / favorito borde
     pub const FAVORITE_OUTLINE: MaterialIcon = MaterialIcon::new("favorite_outline", "M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z");
     /// Star / estrella
-    pub const STAR: MaterialIcon = MaterialIcon::new("star", "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z");
+    pub const STAR: MaterialIcon = MaterialIcon::new(
+        "star",
+        "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z",
+    );
     /// Star half / estrella media
     pub const STAR_HALF: MaterialIcon = MaterialIcon::new("star_half", "M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4V6.1l1.71 4.08 4.38.38-3.32 2.88 1 4.28L12 15.4z");
     /// Star outline / estrella borde
@@ -368,7 +428,10 @@ pub mod catalog {
     /// Public / público
     pub const PUBLIC: MaterialIcon = MaterialIcon::new("public", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z");
     /// School / escuela
-    pub const SCHOOL: MaterialIcon = MaterialIcon::new("school", "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z");
+    pub const SCHOOL: MaterialIcon = MaterialIcon::new(
+        "school",
+        "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z",
+    );
     /// Work / trabajo
     pub const WORK: MaterialIcon = MaterialIcon::new("work", "M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z");
     /// Celebration / celebración
@@ -415,9 +478,15 @@ pub mod catalog {
     /// Account balance / saldo
     pub const ACCOUNT_BALANCE: MaterialIcon = MaterialIcon::new("account_balance", "M4 10h3v7H4v-7zm6.5 0h3v7h-3v-7zM2 19h20v3H2v-3zM21 10h-3v7h3v-7zM11 1.59L1.59 6.93 2 8h20l.41-1.07L11 1.59z");
     /// Store / tienda
-    pub const STORE: MaterialIcon = MaterialIcon::new("store", "M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z");
+    pub const STORE: MaterialIcon = MaterialIcon::new(
+        "store",
+        "M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z",
+    );
     /// Trending up / tendencia alza
-    pub const TRENDING_UP: MaterialIcon = MaterialIcon::new("trending_up", "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z");
+    pub const TRENDING_UP: MaterialIcon = MaterialIcon::new(
+        "trending_up",
+        "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+    );
 
     // ═══════════════════════════════════════════════════════════════════
     // SALUD / CIENCIA (Health/Science)
@@ -581,74 +650,122 @@ pub mod catalog {
     pub fn fallback_emoji(name: &str) -> &'static str {
         match name {
             // Navegación
-            "home" => "🏠", "search" | "buscar" => "🔍", "settings" | "configuracion" => "⚙️",
-            "menu" => "☰", "arrow_back" | "atras" => "◀️", "arrow_forward" | "adelante" => "▶️",
-            "arrow_up" | "arriba" => "⬆️", "arrow_down" | "abajo" => "⬇️",
-            "close" | "cerrar" => "✖️", "refresh" | "actualizar" => "🔄",
-            "more_vert" => "⋮", "chevron_left" => "◀", "chevron_right" => "▶",
+            "home" => "🏠",
+            "search" | "buscar" => "🔍",
+            "settings" | "configuracion" => "⚙️",
+            "menu" => "☰",
+            "arrow_back" | "atras" => "◀️",
+            "arrow_forward" | "adelante" => "▶️",
+            "arrow_up" | "arriba" => "⬆️",
+            "arrow_down" | "abajo" => "⬇️",
+            "close" | "cerrar" => "✖️",
+            "refresh" | "actualizar" => "🔄",
+            "more_vert" => "⋮",
+            "chevron_left" => "◀",
+            "chevron_right" => "▶",
             // Acción
-            "add" | "anadir" | "añadir" => "➕", "delete" | "eliminar" => "🗑️",
-            "edit" | "editar" => "✏️", "save" | "guardar" => "💾",
-            "copy" | "copiar" => "📋", "done" | "listo" => "✅",
-            "check" | "verificar" => "✅", "cancel" | "cancelar" => "❌",
-            "print" | "imprimir" => "🖨️", "share" | "compartir" => "📤",
-            "lock" | "bloquear" => "🔒", "lock_open" | "desbloquear" => "🔓",
-            "visibility" | "ver" => "👁️", "visibility_off" | "ocultar" => "👁️‍🗨️",
+            "add" | "anadir" | "añadir" => "➕",
+            "delete" | "eliminar" => "🗑️",
+            "edit" | "editar" => "✏️",
+            "save" | "guardar" => "💾",
+            "copy" | "copiar" => "📋",
+            "done" | "listo" => "✅",
+            "check" | "verificar" => "✅",
+            "cancel" | "cancelar" => "❌",
+            "print" | "imprimir" => "🖨️",
+            "share" | "compartir" => "📤",
+            "lock" | "bloquear" => "🔒",
+            "lock_open" | "desbloquear" => "🔓",
+            "visibility" | "ver" => "👁️",
+            "visibility_off" | "ocultar" => "👁️‍🗨️",
             // Contenido
-            "filter" | "filtrar" => "🔽", "sort" | "ordenar" => "↕️",
-            "send" | "enviar" => "📤", "cloud" | "nube" => "☁️",
-            "link" | "enlace" => "🔗", "flag" | "bandera" => "🚩",
+            "filter" | "filtrar" => "🔽",
+            "sort" | "ordenar" => "↕️",
+            "send" | "enviar" => "📤",
+            "cloud" | "nube" => "☁️",
+            "link" | "enlace" => "🔗",
+            "flag" | "bandera" => "🚩",
             // Comunicación
-            "email" | "correo" | "mail" => "✉️", "phone" | "telefono" => "📞",
-            "chat" => "💬", "notifications" | "notificaciones" => "🔔",
-            "person" | "persona" | "usuario" => "👤", "group" | "grupo" => "👥",
+            "email" | "correo" | "mail" => "✉️",
+            "phone" | "telefono" => "📞",
+            "chat" => "💬",
+            "notifications" | "notificaciones" => "🔔",
+            "person" | "persona" | "usuario" => "👤",
+            "group" | "grupo" => "👥",
             "forum" | "foro" => "🗣️",
             // Archivo
-            "file" | "archivo" => "📄", "folder" | "carpeta" => "📁",
-            "folder_open" => "📂", "download" | "descargar" => "⬇️",
-            "upload" | "subir" => "⬆️", "image" | "imagen" => "🖼️",
-            "description" | "documento" => "📝", "pdf" => "📕",
+            "file" | "archivo" => "📄",
+            "folder" | "carpeta" => "📁",
+            "folder_open" => "📂",
+            "download" | "descargar" => "⬇️",
+            "upload" | "subir" => "⬆️",
+            "image" | "imagen" => "🖼️",
+            "description" | "documento" => "📝",
+            "pdf" => "📕",
             // Dispositivo
-            "wifi" => "📶", "bluetooth" => "🔷", "location" | "ubicacion" => "📍",
+            "wifi" => "📶",
+            "bluetooth" => "🔷",
+            "location" | "ubicacion" => "📍",
             // Editor
-            "code" | "codigo" => "💻", "undo" | "deshacer" => "↩️",
+            "code" | "codigo" => "💻",
+            "undo" | "deshacer" => "↩️",
             "redo" | "rehacer" => "↪️",
             // Hardware
-            "computer" | "computadora" => "🖥️", "laptop" | "portatil" => "💻",
-            "phone_android" | "movil" => "📱", "tablet" => "📱",
+            "computer" | "computadora" => "🖥️",
+            "laptop" | "portatil" => "💻",
+            "phone_android" | "movil" => "📱",
+            "tablet" => "📱",
             "printer" | "impresora" => "🖨️",
             // Imagen
-            "photo" | "foto" => "📷", "camera" | "camara" => "📷",
-            "brush" | "pincel" => "🖌️", "palette" | "paleta" => "🎨",
+            "photo" | "foto" => "📷",
+            "camera" | "camara" => "📷",
+            "brush" | "pincel" => "🖌️",
+            "palette" | "paleta" => "🎨",
             // Mapa
-            "place" | "lugar" | "pin" => "📍", "directions" | "direcciones" => "🗺️",
-            "map" | "mapa" => "🗺️", "restaurant" | "restaurante" => "🍽️",
+            "place" | "lugar" | "pin" => "📍",
+            "directions" | "direcciones" => "🗺️",
+            "map" | "mapa" => "🗺️",
+            "restaurant" | "restaurante" => "🍽️",
             "hotel" => "🏨",
             // Notificación
-            "info" | "informacion" => "ℹ️", "warning" | "advertencia" => "⚠️",
-            "error" => "❌", "help" | "ayuda" => "❓",
-            "feedback" => "💬", "new_releases" => "🆕",
+            "info" | "informacion" => "ℹ️",
+            "warning" | "advertencia" => "⚠️",
+            "error" => "❌",
+            "help" | "ayuda" => "❓",
+            "feedback" => "💬",
+            "new_releases" => "🆕",
             // Lugar
             "favorite" | "favorito" | "corazon" => "❤️",
             "favorite_outline" => "🤍",
-            "star" | "estrella" => "⭐", "star_half" => "🌟",
+            "star" | "estrella" => "⭐",
+            "star_half" => "🌟",
             "star_outline" => "☆",
-            "thumb_up" | "me_gusta" => "👍", "thumb_down" | "no_gusta" => "👎",
+            "thumb_up" | "me_gusta" => "👍",
+            "thumb_down" | "no_gusta" => "👎",
             // Social
-            "public" | "mundo" => "🌐", "school" | "escuela" => "🏫",
-            "work" | "trabajo" => "💼", "celebration" => "🎉",
+            "public" | "mundo" => "🌐",
+            "school" | "escuela" => "🏫",
+            "work" | "trabajo" => "💼",
+            "celebration" => "🎉",
             // Toggle
-            "check_box" => "☑️", "check_box_outline" => "⬜",
-            "toggle_on" | "activo" => "🔵", "toggle_off" | "inactivo" => "⚪",
+            "check_box" => "☑️",
+            "check_box_outline" => "⬜",
+            "toggle_on" | "activo" => "🔵",
+            "toggle_off" | "inactivo" => "⚪",
             // Fecha / Hora
-            "date" | "fecha" | "calendario" => "📅", "calendar_today" | "hoy" => "📅",
-            "time" | "hora" | "reloj" => "⏰", "alarm" | "alarma" => "⏰",
+            "date" | "fecha" | "calendario" => "📅",
+            "calendar_today" | "hoy" => "📅",
+            "time" | "hora" | "reloj" => "⏰",
+            "alarm" | "alarma" => "⏰",
             // Comercio
-            "shopping_cart" | "carrito" => "🛒", "payment" | "pago" => "💳",
-            "account_balance" | "banco" => "🏦", "store" | "tienda" => "🏪",
+            "shopping_cart" | "carrito" => "🛒",
+            "payment" | "pago" => "💳",
+            "account_balance" | "banco" => "🏦",
+            "store" | "tienda" => "🏪",
             "trending_up" | "tendencia" => "📈",
             // Salud / Ciencia
-            "local_hospital" | "hospital" => "🏥", "science" => "🔬",
+            "local_hospital" | "hospital" => "🏥",
+            "science" => "🔬",
             // Fallback genérico
             _ => "❓",
         }
@@ -672,11 +789,7 @@ pub fn icon_widget(name: &str, size: f64, color: RgbColor) -> Box<AnyWidgetView<
         // Fallback a emoji genérico
         let emoji = catalog::fallback_emoji(name);
         let xilem_color: Color = color.into();
-        Box::new(
-            view::label(emoji)
-                .text_size(size as f32)
-                .color(xilem_color)
-        )
+        Box::new(view::label(emoji).text_size(size as f32).color(xilem_color))
     }
 }
 
@@ -754,8 +867,7 @@ mod tests {
 
     #[test]
     fn test_icon_with_style() {
-        let icon = MaterialIcon::new("test", "M0 0h24v24H0z")
-            .with_style(IconStyle::Outlined);
+        let icon = MaterialIcon::new("test", "M0 0h24v24H0z").with_style(IconStyle::Outlined);
         assert_eq!(icon.style, IconStyle::Outlined);
     }
 
@@ -763,28 +875,96 @@ mod tests {
     fn test_catalog_count() {
         // Verificar que tenemos al menos 90 iconos en el catálogo
         let icons = vec![
-            "home", "search", "settings", "menu", "arrow_back", "arrow_forward",
-            "add", "delete", "edit", "save", "close", "check", "cancel",
-            "email", "phone", "person", "group", "notifications",
-            "file", "folder", "download", "upload", "image",
-            "info", "warning", "error", "help",
-            "favorite", "star", "thumb_up", "thumb_down",
-            "date", "time", "alarm",
-            "send", "filter", "sort", "share", "copy",
-            "code", "lock", "visibility",
-            "wifi", "location", "map", "place",
-            "shopping_cart", "payment", "store",
-            "chat", "forum", "public", "school", "work",
-            "check_box", "toggle_on", "toggle_off",
-            "computer", "laptop", "phone_android", "tablet",
-            "photo", "camera", "brush", "palette",
-            "directions", "restaurant", "hotel",
-            "undo", "redo", "link", "flag",
-            "cloud", "cloud_download", "cloud_upload",
-            "celebration", "science", "local_hospital",
-            "format_bold", "format_italic", "format_list",
+            "home",
+            "search",
+            "settings",
+            "menu",
+            "arrow_back",
+            "arrow_forward",
+            "add",
+            "delete",
+            "edit",
+            "save",
+            "close",
+            "check",
+            "cancel",
+            "email",
+            "phone",
+            "person",
+            "group",
+            "notifications",
+            "file",
+            "folder",
+            "download",
+            "upload",
+            "image",
+            "info",
+            "warning",
+            "error",
+            "help",
+            "favorite",
+            "star",
+            "thumb_up",
+            "thumb_down",
+            "date",
+            "time",
+            "alarm",
+            "send",
+            "filter",
+            "sort",
+            "share",
+            "copy",
+            "code",
+            "lock",
+            "visibility",
+            "wifi",
+            "location",
+            "map",
+            "place",
+            "shopping_cart",
+            "payment",
+            "store",
+            "chat",
+            "forum",
+            "public",
+            "school",
+            "work",
+            "check_box",
+            "toggle_on",
+            "toggle_off",
+            "computer",
+            "laptop",
+            "phone_android",
+            "tablet",
+            "photo",
+            "camera",
+            "brush",
+            "palette",
+            "directions",
+            "restaurant",
+            "hotel",
+            "undo",
+            "redo",
+            "link",
+            "flag",
+            "cloud",
+            "cloud_download",
+            "cloud_upload",
+            "celebration",
+            "science",
+            "local_hospital",
+            "format_bold",
+            "format_italic",
+            "format_list",
         ];
-        let count = icons.iter().filter(|n| catalog::by_name(n).is_some()).count();
-        assert!(count >= 78, "Only {} icons found, expected at least 78", count);
+        let count = icons
+            .iter()
+            .filter(|n| catalog::by_name(n).is_some())
+            .count();
+        assert!(
+            count >= 78,
+            "Only {} icons found, expected at least 78",
+            count
+        );
     }
 }

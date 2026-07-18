@@ -14,14 +14,13 @@ use crate::{
     accesskit::{Node, Role},
     vello::{
         kurbo::{Affine, Point, Rect, Size},
-        peniko::{Brush, Fill},
         peniko::color::AlphaColor,
+        peniko::{Brush, Fill},
         Scene,
     },
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx,
-    NewWidget, PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PointerId,
-    PointerUpdate, PropertiesMut, PropertiesRef, RegisterCtx,
-    Widget, WidgetPod,
+    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NewWidget, PaintCtx,
+    PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerUpdate, PropertiesMut,
+    PropertiesRef, RegisterCtx, Widget, WidgetPod,
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -475,8 +474,7 @@ impl Widget for PullToRefreshWidget {
                     // Solo arrastrando hacia abajo (total_dy > 0)
                     if self.tracker.total_dy > 0.0 {
                         self.pull_distance = self.tracker.total_dy;
-                        self.progress =
-                            (self.pull_distance / self.threshold).clamp(0.0, 1.0);
+                        self.progress = (self.pull_distance / self.threshold).clamp(0.0, 1.0);
                     } else {
                         self.pull_distance = 0.0;
                         self.progress = 0.0;
@@ -493,11 +491,9 @@ impl Widget for PullToRefreshWidget {
                     self.tracker.end();
                     if self.pull_distance >= self.threshold && !self.refreshing {
                         self.refreshing = true;
-                        ctx.submit_action::<GestureResult>(
-                            GestureResult::PullToRefresh {
-                                distance: self.pull_distance,
-                            },
-                        );
+                        ctx.submit_action::<GestureResult>(GestureResult::PullToRefresh {
+                            distance: self.pull_distance,
+                        });
                     }
                     self.pull_distance = 0.0;
                     self.progress = 0.0;
@@ -532,12 +528,7 @@ impl Widget for PullToRefreshWidget {
         size
     }
 
-    fn paint(
-        &mut self,
-        ctx: &mut PaintCtx<'_>,
-        _props: &PropertiesRef<'_>,
-        scene: &mut Scene,
-    ) {
+    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
         let size = ctx.size();
 
         // Pintar indicador de pull-to-refresh si hay progreso
@@ -552,12 +543,7 @@ impl Widget for PullToRefreshWidget {
             };
 
             // Rectángulo de fondo del indicador
-            let bg_rect = Rect::new(
-                0.0,
-                indicator_y,
-                size.width,
-                indicator_y + indicator_height,
-            );
+            let bg_rect = Rect::new(0.0, indicator_y, size.width, indicator_y + indicator_height);
             let bg_color = AlphaColor::from_rgba8(200, 200, 200, 180);
             scene.fill(
                 Fill::NonZero,
@@ -646,7 +632,9 @@ pub struct MultiTouchState {
 
 impl MultiTouchState {
     pub fn new() -> Self {
-        Self { active_pointers: HashMap::new() }
+        Self {
+            active_pointers: HashMap::new(),
+        }
     }
 
     /// Agregar o actualizar un punto táctil
@@ -662,12 +650,16 @@ impl MultiTouchState {
     /// Detectar gesto de pellizco (pinch). Retorna factor de escala relativo.
     /// Se llama en cada Move, comparando con el frame anterior.
     pub fn detect_pinch(&self, prev: &Self) -> Option<f64> {
-        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 { return None; }
+        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 {
+            return None;
+        }
 
         let current_dists = self.pointer_distances();
         let prev_dists = prev.pointer_distances();
 
-        if current_dists.is_empty() || prev_dists.is_empty() { return None; }
+        if current_dists.is_empty() || prev_dists.is_empty() {
+            return None;
+        }
 
         let curr_dist = current_dists[0];
         let prev_dist = prev_dists[0];
@@ -681,7 +673,9 @@ impl MultiTouchState {
 
     /// Detectar gesto de rotación. Retorna ángulo en radianes.
     pub fn detect_rotate(&self, prev: &Self) -> Option<f64> {
-        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 { return None; }
+        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 {
+            return None;
+        }
 
         let curr_angle = self.angle_between_pointers();
         let prev_angle = prev.angle_between_pointers();
@@ -698,10 +692,10 @@ impl MultiTouchState {
         let points: Vec<&Point> = self.active_pointers.values().collect();
         let mut dists = Vec::new();
         for i in 0..points.len() {
-            for j in (i+1)..points.len() {
+            for j in (i + 1)..points.len() {
                 let dx = points[i].x - points[j].x;
                 let dy = points[i].y - points[j].y;
-                dists.push((dx*dx + dy*dy).sqrt());
+                dists.push((dx * dx + dy * dy).sqrt());
             }
         }
         dists
@@ -710,7 +704,9 @@ impl MultiTouchState {
     /// Ángulo entre los 2 primeros punteros
     fn angle_between_pointers(&self) -> Option<f64> {
         let points: Vec<&Point> = self.active_pointers.values().collect();
-        if points.len() < 2 { return None; }
+        if points.len() < 2 {
+            return None;
+        }
         let dx = points[1].x - points[0].x;
         let dy = points[1].y - points[0].y;
         Some(dy.atan2(dx))
@@ -719,8 +715,13 @@ impl MultiTouchState {
     /// Centroide de todos los puntos activos
     pub fn centroid(&self) -> Option<Point> {
         let count = self.active_pointers.len();
-        if count == 0 { return None; }
-        let sum: Point = self.active_pointers.values().fold(Point::ZERO, |acc, p| Point::new(acc.x + p.x, acc.y + p.y));
+        if count == 0 {
+            return None;
+        }
+        let sum: Point = self
+            .active_pointers
+            .values()
+            .fold(Point::ZERO, |acc, p| Point::new(acc.x + p.x, acc.y + p.y));
         Some(Point::new(sum.x / count as f64, sum.y / count as f64))
     }
 }
@@ -774,7 +775,9 @@ impl PinchZoomWidget {
     fn get_position(event: &PointerEvent) -> Option<Point> {
         match event {
             PointerEvent::Down(btn) => Some(Point::new(btn.state.position.x, btn.state.position.y)),
-            PointerEvent::Move(upd) => Some(Point::new(upd.current.position.x, upd.current.position.y)),
+            PointerEvent::Move(upd) => {
+                Some(Point::new(upd.current.position.x, upd.current.position.y))
+            }
             PointerEvent::Up(btn) => Some(Point::new(btn.state.position.x, btn.state.position.y)),
             _ => None,
         }
@@ -805,8 +808,11 @@ impl Widget for PinchZoomWidget {
                     self.prev_multi_touch = self.multi_touch.clone();
                     self.multi_touch.update(id, pos);
 
-                    if let Some(scale_factor) = self.multi_touch.detect_pinch(&self.prev_multi_touch) {
-                        self.scale = (self.scale * scale_factor).clamp(self.min_scale, self.max_scale);
+                    if let Some(scale_factor) =
+                        self.multi_touch.detect_pinch(&self.prev_multi_touch)
+                    {
+                        self.scale =
+                            (self.scale * scale_factor).clamp(self.min_scale, self.max_scale);
                         let size = ctx.size();
                         let center = Point::new(size.width / 2.0, size.height / 2.0);
                         let transform = Affine::translate(center.to_vec2())

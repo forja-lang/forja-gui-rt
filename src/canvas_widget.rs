@@ -17,8 +17,8 @@ use crate::vello::kurbo::{Affine, BezPath, Circle, Line, Point, Rect, Size, Stro
 use crate::vello::peniko::{self, Brush, Fill};
 use crate::vello::Scene;
 use crate::{
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx,
-    PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
+    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx, PointerEvent,
+    PropertiesMut, PropertiesRef, RegisterCtx,
 };
 use crate::{MessageResult, Mut, Pod, View, ViewCtx, ViewMarker};
 
@@ -121,30 +121,13 @@ pub enum CanvasCommand {
         a: u8,
     },
     /// Limpiar todo el canvas con un color
-    Clear {
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-    },
+    Clear { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar color de relleno actual (modo painter)
-    SetFillColor {
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-    },
+    SetFillColor { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar color de trazo actual
-    SetStrokeColor {
-        r: u8,
-        g: u8,
-        b: u8,
-        a: u8,
-    },
+    SetStrokeColor { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar grosor de trazo actual
-    SetStrokeWidth {
-        width: f64,
-    },
+    SetStrokeWidth { width: f64 },
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -247,7 +230,13 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::FillCircle {
-                    x, y, radius, r, g, b, a,
+                    x,
+                    y,
+                    radius,
+                    r,
+                    g,
+                    b,
+                    a,
                 } => {
                     let circle = Circle::new(Point::new(*x, *y), *radius);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
@@ -261,7 +250,14 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::StrokeCircle {
-                    x, y, radius, r, g, b, a, width,
+                    x,
+                    y,
+                    radius,
+                    r,
+                    g,
+                    b,
+                    a,
+                    width,
                 } => {
                     let circle = Circle::new(Point::new(*x, *y), *radius);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
@@ -275,7 +271,14 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::FillRect {
-                    x, y, w, h, r, g, b, a,
+                    x,
+                    y,
+                    w,
+                    h,
+                    r,
+                    g,
+                    b,
+                    a,
                 } => {
                     let rect = Rect::new(*x, *y, x + w, y + h);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
@@ -289,7 +292,15 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::StrokeRect {
-                    x, y, w, h, r, g, b, a, width,
+                    x,
+                    y,
+                    w,
+                    h,
+                    r,
+                    g,
+                    b,
+                    a,
+                    width,
                 } => {
                     let rect = Rect::new(*x, *y, x + w, y + h);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
@@ -303,7 +314,15 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::DrawLine {
-                    x1, y1, x2, y2, r, g, b, a, width,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    r,
+                    g,
+                    b,
+                    a,
+                    width,
                 } => {
                     let line = Line::new(Point::new(*x1, *y1), Point::new(*x2, *y2));
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
@@ -317,7 +336,12 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::FillPath {
-                    points, closed, r, g, b, a,
+                    points,
+                    closed,
+                    r,
+                    g,
+                    b,
+                    a,
                 } => {
                     if points.is_empty() {
                         continue;
@@ -341,7 +365,13 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::StrokePath {
-                    points, closed, r, g, b, a, width,
+                    points,
+                    closed,
+                    r,
+                    g,
+                    b,
+                    a,
+                    width,
                 } => {
                     if points.is_empty() {
                         continue;
@@ -365,18 +395,20 @@ impl crate::Widget for CanvasWidget {
                 }
 
                 CanvasCommand::DrawText {
-                    x, y, text, size, r, g, b, a,
+                    x,
+                    y,
+                    text,
+                    size,
+                    r,
+                    g,
+                    b,
+                    a,
                 } => {
                     // Placeholder: dibujar un pequeño rectángulo coloreado
                     // que representa el área del texto
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
                     let text_width = text.len() as f64 * size * 0.5;
-                    let rect = Rect::new(
-                        *x,
-                        *y,
-                        x + text_width.min(200.0),
-                        y + *size * 1.2,
-                    );
+                    let rect = Rect::new(*x, *y, x + text_width.min(200.0), y + *size * 1.2);
                     scene.fill(
                         Fill::NonZero,
                         Affine::IDENTITY,
@@ -470,11 +502,7 @@ impl<State: 'static> View<State, (), ViewCtx> for CanvasView<State> {
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<CanvasWidget>, ()) {
-        let mut widget = CanvasWidget::new(
-            self.commands_var.clone(),
-            self.width,
-            self.height,
-        );
+        let mut widget = CanvasWidget::new(self.commands_var.clone(), self.width, self.height);
         if !self.commands_json.is_empty() && self.commands_json != "null" {
             widget.load_commands(&self.commands_json);
         }

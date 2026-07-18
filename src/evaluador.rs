@@ -136,11 +136,9 @@ impl ValorGUI {
         match self {
             ValorGUI::Texto(t) => serde_json::Value::String(t.clone()),
             ValorGUI::Entero(n) => serde_json::Value::Number((*n).into()),
-            ValorGUI::Decimal(f) => {
-                serde_json::Number::from_f64(*f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            }
+            ValorGUI::Decimal(f) => serde_json::Number::from_f64(*f)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
             ValorGUI::Booleano(b) => serde_json::Value::Bool(*b),
             ValorGUI::Nulo => serde_json::Value::Null,
         }
@@ -150,18 +148,16 @@ impl ValorGUI {
     pub fn from_serde(val: &serde_json::Value) -> Self {
         match val {
             serde_json::Value::String(s) => ValorGUI::Texto(s.clone()),
-            serde_json::Value::Number(n) => {
-                n.as_i64()
-                    .map(ValorGUI::Entero)
-                    .or_else(|| n.as_f64().map(ValorGUI::Decimal))
-                    .unwrap_or(ValorGUI::Nulo)
-            }
+            serde_json::Value::Number(n) => n
+                .as_i64()
+                .map(ValorGUI::Entero)
+                .or_else(|| n.as_f64().map(ValorGUI::Decimal))
+                .unwrap_or(ValorGUI::Nulo),
             serde_json::Value::Bool(b) => ValorGUI::Booleano(*b),
-            serde_json::Value::Array(arr) => {
-                arr.first()
-                    .map(|v| ValorGUI::from_serde(v))
-                    .unwrap_or(ValorGUI::Nulo)
-            }
+            serde_json::Value::Array(arr) => arr
+                .first()
+                .map(|v| ValorGUI::from_serde(v))
+                .unwrap_or(ValorGUI::Nulo),
             _ => ValorGUI::Nulo,
         }
     }
@@ -185,9 +181,7 @@ impl ValorGUI {
             ValorGUI::Texto(s) => s.clone(),
             ValorGUI::Entero(n) => n.to_string(),
             ValorGUI::Decimal(f) => f.to_string(),
-            ValorGUI::Booleano(b) => {
-                if *b { "verdadero" } else { "falso" }.to_string()
-            }
+            ValorGUI::Booleano(b) => if *b { "verdadero" } else { "falso" }.to_string(),
             ValorGUI::Nulo => "nulo".to_string(),
         }
     }
@@ -256,7 +250,9 @@ pub fn ejecutar_funcion(
     buscar_funcion(nombre, declaraciones).and_then(|func| {
         // Extraer los campos de la función
         let (parametros, cuerpo) = match func {
-            Declaracion::Funcion { parametros, cuerpo, .. } => (parametros, cuerpo),
+            Declaracion::Funcion {
+                parametros, cuerpo, ..
+            } => (parametros, cuerpo),
             _ => return Err(format!("'{}' no es una función", nombre)),
         };
         let mut ambito = Ambito::new();
@@ -281,10 +277,7 @@ fn buscar_funcion<'a>(
     declaraciones: &'a [Declaracion],
 ) -> Result<&'a Declaracion, String> {
     for d in declaraciones {
-        if let Declaracion::Funcion {
-            nombre: ref n, ..
-        } = d
-        {
+        if let Declaracion::Funcion { nombre: ref n, .. } = d {
             if n == nombre {
                 return Ok(d);
             }
@@ -407,11 +400,7 @@ fn evaluar_declaracion(
             Ok(ValorGUI::Nulo)
         }
 
-        Declaracion::Variable {
-            nombre,
-            valor,
-            ..
-        } => {
+        Declaracion::Variable { nombre, valor, .. } => {
             let val = if let Some(expr) = valor {
                 evaluar_expresion(expr, ambito, store, declaraciones)?
             } else {
@@ -469,9 +458,7 @@ fn evaluar_declaracion(
         }
 
         Declaracion::Cuando {
-            condicion,
-            cuerpo,
-            ..
+            condicion, cuerpo, ..
         } => {
             let cond_val = evaluar_expresion(condicion, ambito, store, declaraciones)?;
             if cond_val.es_verdadero() {
@@ -482,9 +469,7 @@ fn evaluar_declaracion(
         }
 
         Declaracion::AsignacionMultiple {
-            variables,
-            valor,
-            ..
+            variables, valor, ..
         } => {
             let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
             for var in variables {
@@ -549,7 +534,10 @@ fn evaluar_expresion(
         }
 
         // ── Operaciones unarias ────────────────────────────────
-        Expresion::Unaria { operador, expr: inner } => {
+        Expresion::Unaria {
+            operador,
+            expr: inner,
+        } => {
             let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
             match operador {
                 OperadorUnario::Negar => match val {
@@ -599,9 +587,8 @@ fn evaluar_expresion(
             }
             let json_arr: Vec<serde_json::Value> =
                 values.iter().map(|v| v.to_json_value()).collect();
-            let json_str =
-                serde_json::to_string(&json_arr)
-                    .map_err(|e| format!("Error serializando array: {}", e))?;
+            let json_str = serde_json::to_string(&json_arr)
+                .map_err(|e| format!("Error serializando array: {}", e))?;
             Ok(ValorGUI::Texto(json_str))
         }
 
@@ -613,14 +600,16 @@ fn evaluar_expresion(
                 let val = evaluar_expresion(v, ambito, store, declaraciones)?;
                 map.insert(key_val.to_display(), val.to_json_value());
             }
-            let json_str =
-                serde_json::to_string(&serde_json::Value::Object(map))
-                    .map_err(|e| format!("Error serializando mapa: {}", e))?;
+            let json_str = serde_json::to_string(&serde_json::Value::Object(map))
+                .map_err(|e| format!("Error serializando mapa: {}", e))?;
             Ok(ValorGUI::Texto(json_str))
         }
 
         // ── Match/Coincidir ───────────────────────────────────
-        Expresion::Coincidir { expr: inner, brazos } => {
+        Expresion::Coincidir {
+            expr: inner,
+            brazos,
+        } => {
             let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
             for brazo in brazos {
                 if coincidir_patron(&val, &brazo.patron, ambito) {
@@ -646,7 +635,11 @@ fn evaluar_expresion(
                 if idx_num < arr.len() {
                     Ok(ValorGUI::from_serde(&arr[idx_num]))
                 } else {
-                    Err(format!("Índice {} fuera de rango (len={})", idx_num, arr.len()))
+                    Err(format!(
+                        "Índice {} fuera de rango (len={})",
+                        idx_num,
+                        arr.len()
+                    ))
                 }
             } else {
                 Err("No se puede indexar un valor que no es un array".to_string())
@@ -654,24 +647,16 @@ fn evaluar_expresion(
         }
 
         // ── Closure ───────────────────────────────────────────
-        Expresion::Closure { .. } => {
-            Err("Closures no soportados en runtime GUI".to_string())
-        }
+        Expresion::Closure { .. } => Err("Closures no soportados en runtime GUI".to_string()),
 
         // ── Grupo (expresión agrupada) ────────────────────────
-        Expresion::Grupo(inner) => {
-            evaluar_expresion(inner, ambito, store, declaraciones)
-        }
+        Expresion::Grupo(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
 
         // ── Hilo ligero ───────────────────────────────────────
-        Expresion::Hilo { .. } => {
-            Err("Hilos ligeros no soportados en runtime GUI".to_string())
-        }
+        Expresion::Hilo { .. } => Err("Hilos ligeros no soportados en runtime GUI".to_string()),
 
         // ── Canal ─────────────────────────────────────────────
-        Expresion::CanalNuevo => {
-            Err("Canales no soportados en runtime GUI".to_string())
-        }
+        Expresion::CanalNuevo => Err("Canales no soportados en runtime GUI".to_string()),
 
         // ── Try (propagación de error) ────────────────────────
         Expresion::Try(inner) => {
@@ -684,9 +669,7 @@ fn evaluar_expresion(
         }
 
         // ── Seleccionar ───────────────────────────────────────
-        Expresion::Seleccionar { .. } => {
-            Err("Seleccionar no soportado en runtime GUI".to_string())
-        }
+        Expresion::Seleccionar { .. } => Err("Seleccionar no soportado en runtime GUI".to_string()),
 
         // ── Asignación como expresión ─────────────────────────
         Expresion::Asignacion { variable, valor } => {
@@ -697,7 +680,11 @@ fn evaluar_expresion(
         }
 
         // ── Asignación a campo como expresión ────────────────
-        Expresion::AsignacionCampo { objeto, campo, valor } => {
+        Expresion::AsignacionCampo {
+            objeto,
+            campo,
+            valor,
+        } => {
             let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
             let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
             let key = format!("{}_{}", obj.to_display(), campo);
@@ -723,25 +710,17 @@ fn evaluar_expresion(
         }
 
         // ── Opción: Algo ──────────────────────────────────────
-        Expresion::Algo(inner) => {
-            evaluar_expresion(inner, ambito, store, declaraciones)
-        }
+        Expresion::Algo(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
 
         // ── Design by Contract ────────────────────────────────
         Expresion::Resultado => Ok(ValorGUI::Nulo),
-        Expresion::Anterior(inner) => {
-            evaluar_expresion(inner, ambito, store, declaraciones)
-        }
+        Expresion::Anterior(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
     }
 }
 
 // ─── Evaluación binaria ─────────────────────────────────────────
 
-fn evaluar_binaria(
-    izq: ValorGUI,
-    operador: &Operador,
-    der: ValorGUI,
-) -> Result<ValorGUI, String> {
+fn evaluar_binaria(izq: ValorGUI, operador: &Operador, der: ValorGUI) -> Result<ValorGUI, String> {
     match operador {
         Operador::Suma => Ok(izq + der),
         Operador::Resta => Ok(izq - der),
@@ -759,10 +738,7 @@ fn evaluar_binaria(
         },
         Operador::IgualIgual => Ok(ValorGUI::Booleano(izq == der)),
         Operador::Diferente => Ok(ValorGUI::Booleano(izq != der)),
-        Operador::Menor
-        | Operador::MenorIgual
-        | Operador::Mayor
-        | Operador::MayorIgual => {
+        Operador::Menor | Operador::MenorIgual | Operador::Mayor | Operador::MayorIgual => {
             Ok(ValorGUI::Booleano(izq.compare(operador, &der)))
         }
         Operador::Y => Ok(ValorGUI::Booleano(izq.es_verdadero() && der.es_verdadero())),
@@ -773,67 +749,53 @@ fn evaluar_binaria(
 // ─── Pattern matching ───────────────────────────────────────────
 
 /// Verifica si un valor coincide con un patrón
-fn coincidir_patron(
-    valor: &ValorGUI,
-    patron: &Patron,
-    ambito: &mut Ambito,
-) -> bool {
+fn coincidir_patron(valor: &ValorGUI, patron: &Patron, ambito: &mut Ambito) -> bool {
     match patron {
         Patron::Ignorar => true,
         Patron::Variable(nombre) => {
             ambito.asignar(nombre.clone(), valor.clone());
             true
         }
-        Patron::Literal(expr) => {
-            match expr {
-                Expresion::LiteralNumero(n) => {
-                    matches!(valor, ValorGUI::Entero(v) if v == n)
-                }
-                Expresion::LiteralDecimal(f) => {
-                    matches!(valor, ValorGUI::Decimal(v) if (v - f).abs() < f64::EPSILON)
-                }
-                Expresion::LiteralTexto(s) => {
-                    matches!(valor, ValorGUI::Texto(v) if v == s)
-                }
-                Expresion::LiteralBooleano(b) => {
-                    matches!(valor, ValorGUI::Booleano(v) if v == b)
-                }
-                Expresion::LiteralNulo => matches!(valor, ValorGUI::Nulo),
-                _ => false,
+        Patron::Literal(expr) => match expr {
+            Expresion::LiteralNumero(n) => {
+                matches!(valor, ValorGUI::Entero(v) if v == n)
             }
-        }
-        Patron::Constructor(nombre, subpatrones) => {
-            match (nombre.as_str(), valor) {
-                ("Ok", _) => subpatrones.is_empty() || {
-                    subpatrones.len() == 1
-                        && coincidir_patron(valor, &subpatrones[0], ambito)
-                },
-                ("Error", _) => subpatrones.is_empty(),
-                ("Algo", _) => subpatrones.is_empty() || {
-                    subpatrones.len() == 1
-                        && coincidir_patron(valor, &subpatrones[0], ambito)
-                },
-                ("Ninguno", _) => matches!(valor, ValorGUI::Nulo),
-                _ => false,
+            Expresion::LiteralDecimal(f) => {
+                matches!(valor, ValorGUI::Decimal(v) if (v - f).abs() < f64::EPSILON)
             }
-        }
+            Expresion::LiteralTexto(s) => {
+                matches!(valor, ValorGUI::Texto(v) if v == s)
+            }
+            Expresion::LiteralBooleano(b) => {
+                matches!(valor, ValorGUI::Booleano(v) if v == b)
+            }
+            Expresion::LiteralNulo => matches!(valor, ValorGUI::Nulo),
+            _ => false,
+        },
+        Patron::Constructor(nombre, subpatrones) => match (nombre.as_str(), valor) {
+            ("Ok", _) => {
+                subpatrones.is_empty() || {
+                    subpatrones.len() == 1 && coincidir_patron(valor, &subpatrones[0], ambito)
+                }
+            }
+            ("Error", _) => subpatrones.is_empty(),
+            ("Algo", _) => {
+                subpatrones.is_empty() || {
+                    subpatrones.len() == 1 && coincidir_patron(valor, &subpatrones[0], ambito)
+                }
+            }
+            ("Ninguno", _) => matches!(valor, ValorGUI::Nulo),
+            _ => false,
+        },
     }
 }
 
 // ─── Funciones públicas para integración ───────────────────────
 
 /// Inicializa el estado evaluando la función `main`
-pub fn inicializar_estado(
-    declaraciones: &[Declaracion],
-    store: &mut VariableStore,
-) {
+pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableStore) {
     for decl in declaraciones {
-        if let Declaracion::Funcion {
-            nombre,
-            cuerpo,
-            ..
-        } = decl
-        {
+        if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
             if nombre == "main" {
                 let mut ambito = Ambito::new();
                 for d in cuerpo {

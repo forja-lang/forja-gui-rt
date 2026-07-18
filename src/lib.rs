@@ -12,47 +12,46 @@ pub mod gui_nativa;
 pub mod evaluador;
 
 // Re-exportar todo lo que necesita el código generado por Forja
+pub use winit::error::EventLoopError;
+pub use xilem::core::{lens, map_message, memoize};
+pub use xilem::core::{MessageContext, MessageResult};
+pub use xilem::masonry::properties::types::Length;
+pub use xilem::style::{Background, Style};
 pub use xilem::view::{
-    self, button, button_any_pointer, checkbox, flex, grid, image, indexed_stack, label,
-    portal, progress_bar, prose, sized_box, slider, spinner, split, text_button, text_input,
-    transformed, variable_label, virtual_scroll, zstack, Axis, GridParams, MainAxisAlignment,
-    CrossAxisAlignment,
+    self, button, button_any_pointer, checkbox, flex, grid, image, indexed_stack, label, portal,
+    progress_bar, prose, sized_box, slider, spinner, split, text_button, text_input, transformed,
+    variable_label, virtual_scroll, zstack, Axis, CrossAxisAlignment, GridParams,
+    MainAxisAlignment,
 };
+pub use xilem::winit;
+pub use xilem::ViewCtx;
+pub use xilem::{palette, Affine, Blob, Color, ImageBrush, ImageFormat};
 pub use xilem::{
     AnyWidgetView, EventLoop, FontWeight, TextAlign, WidgetView, WindowOptions, Xilem,
 };
-pub use xilem::winit;
-pub use winit::error::EventLoopError;
-pub use xilem::{Affine, Blob, Color, ImageBrush, ImageFormat, palette};
-pub use xilem::core::{lens, memoize, map_message};
-pub use xilem::core::{MessageResult, MessageContext};
-pub use xilem::ViewCtx;
-pub use xilem::masonry::properties::types::Length;
-pub use xilem::style::{Background, Style};
 
 // === Re-exportaciones para WindowSize y resize detection ===
+pub use xilem::core::{Mut, View, ViewMarker};
+pub use xilem::masonry::accesskit::{self, Node, Role};
+pub use xilem::masonry::core::ChildrenIds;
+pub use xilem::masonry::core::Widget;
+pub use xilem::masonry::core::{
+    AccessCtx, AccessEvent, ComposeCtx, EventCtx, LayoutCtx, NoAction, PaintCtx,
+    PointerButtonEvent, PointerEvent, PointerId, PointerUpdate, PropertiesMut, PropertiesRef,
+    RegisterCtx, TextEvent, Update, UpdateCtx, WidgetId, WidgetMut, WidgetPod,
+};
+pub use xilem::masonry::core::{BoxConstraints, NewWidget};
 /// LogicalSize: tamaño lógico de ventana (independiente de DPI)
 pub use xilem::masonry::dpi::LogicalSize;
+pub use xilem::masonry::kurbo::{Point, Size};
+pub use xilem::masonry::ui_events::pointer::PointerButton;
+pub use xilem::masonry::vello::{self, Scene};
+/// Re-exportamos módulos de Masonry necesarios para widgets personalizados
+pub use xilem::masonry::widgets;
 /// Window: acceso a la ventana nativa de winit
 pub use xilem::winit::window::Window;
 /// Pod: wrapper de widgets Masonry como WidgetView
 pub use xilem::Pod;
-/// Re-exportamos módulos de Masonry necesarios para widgets personalizados
-pub use xilem::masonry::widgets;
-pub use xilem::masonry::core::Widget;
-pub use xilem::masonry::core::{BoxConstraints, NewWidget};
-pub use xilem::masonry::core::ChildrenIds;
-pub use xilem::masonry::core::{
-    WidgetPod, WidgetMut, NoAction, LayoutCtx, RegisterCtx, PaintCtx, AccessCtx,
-    PropertiesMut, PropertiesRef, UpdateCtx, WidgetId, EventCtx, ComposeCtx,
-    PointerEvent, PointerButtonEvent, PointerId, PointerUpdate, AccessEvent, TextEvent,
-    Update,
-};
-pub use xilem::masonry::ui_events::pointer::PointerButton;
-pub use xilem::masonry::accesskit::{self, Node, Role};
-pub use xilem::masonry::vello::{self, Scene};
-pub use xilem::masonry::kurbo::{Point, Size};
-pub use xilem::core::{View, ViewMarker, Mut};
 
 // Módulo de tema Material You
 pub mod theme;
@@ -65,110 +64,80 @@ pub mod shadow_widget;
 // Re-exportar tipos específicos del theme (evitar conflictos de nombres con xilem,
 // ej: FontWeight existe tanto en xilem como en theme::typography)
 pub use theme::{
-    MaterialTheme,    // Tema completo
-    ColorScheme,      // Esquema de color con roles
-    RgbColor,         // Color RGB (convierte a xilem::Color via From)
-    TypeScale,        // Escala tipográfica (15 estilos)
-    TextStyle,        // Estilo de texto individual
-    ShapeSystem,      // Sistema de formas (radios de borde)
-    ShapeFamily,      // Familia de componentes para formas
-    ElevationSystem,  // Sistema de elevación (sombras)
+    ColorScheme,     // Esquema de color con roles
+    ElevationSystem, // Sistema de elevación (sombras)
+    MaterialTheme,   // Tema completo
+    RgbColor,        // Color RGB (convierte a xilem::Color via From)
+    ShapeFamily,     // Familia de componentes para formas
+    ShapeSystem,     // Sistema de formas (radios de borde)
+    TextStyle,       // Estilo de texto individual
+    TypeScale,       // Escala tipográfica (15 estilos)
 };
 // Re-exportar tipos principales de iconos para uso directo
-pub use icons::{
-    MaterialIcon,
-    IconStyle,
-    icon_widget,
-    icon_widget_styled,
-};
+pub use icons::{icon_widget, icon_widget_styled, IconStyle, MaterialIcon};
 
 // Re-exportar tipos principales de animación para uso directo
 pub use theme::animation::{
-    AnimationEngine,
-    AnimatedValue,
-    SpringAnimation,
-    AnimationPresets,
-    Animation,
-    interpolate_color,
+    interpolate_color, AnimatedValue, Animation, AnimationEngine, AnimationPresets, SpringAnimation,
 };
 
 // Re-exportar tipos principales de signals/streams
 pub use signals::{
-    Signal,
-    Stream,
-    ValorReactivio,
-    VariableStore,
-    ReactiveCtx,
-    read_var,
-    write_var,
+    read_var, write_var, ReactiveCtx, Signal, Stream, ValorReactivio, VariableStore,
 };
 
 // Re-exportar tipos principales de accesibilidad
 pub use accessibility::{
-    AccessibilityManager,
-    A11yData,
-    Anuncio,
-    PrioridadAnuncio,
-    descripcion_accesible,
-    material_role,
-    estado_checkbox,
-    estado_switch,
-    estado_seleccion,
+    descripcion_accesible, estado_checkbox, estado_seleccion, estado_switch, material_role,
+    A11yData, AccessibilityManager, Anuncio, PrioridadAnuncio,
 };
 
 // Re-exportar tipos principales de widgets personalizados
-pub use svg_icon_widget::{MaterialSvgIcon, SvgIconView, svg_icon};
-pub use shadow_widget::{shadow_to_box_shadow, glow_box_shadow};
+pub use shadow_widget::{glow_box_shadow, shadow_to_box_shadow};
+pub use svg_icon_widget::{svg_icon, MaterialSvgIcon, SvgIconView};
 
 // === Módulos de animación ===
-pub mod animation_root;
 pub mod animated_widgets;
+pub mod animation_root;
 
 // Re-exportar tipos principales de animación
+pub use animated_widgets::{AnimatedOpacity, AnimatedScale, AnimatedSlide, RippleWidget};
 pub use animation_root::AnimationRoot;
-pub use animated_widgets::{AnimatedOpacity, AnimatedSlide, AnimatedScale, RippleWidget};
 
 // === Módulo de gestos táctiles ===
 pub mod gesture_widgets;
 pub use gesture_widgets::{
-    SwipeWidget, PanWidget, PullToRefreshWidget, PinchZoomWidget, RotateWidget,
-    GestureResult, GestureTracker, MultiTouchState,
+    GestureResult, GestureTracker, MultiTouchState, PanWidget, PinchZoomWidget,
+    PullToRefreshWidget, RotateWidget, SwipeWidget,
 };
 
 // === Módulo de pickers (DatePicker, TimePicker, ColorPicker) ===
 pub mod pickers;
 
 // === Re-exportaciones de forja::ast para que el transpiler pueda generar código ===
-pub use forja::ast::{Expresion, Declaracion, Programa, Operador, Tipo, Patron, OperadorUnario};
-pub use forja::ast::{Parametro, VariableClase, Metodo, Contrato, BrazoMatch, BrazoSeleccionar};
+pub use forja::ast::{BrazoMatch, BrazoSeleccionar, Contrato, Metodo, Parametro, VariableClase};
+pub use forja::ast::{Declaracion, Expresion, Operador, OperadorUnario, Patron, Programa, Tipo};
 
 // === Módulo de QR Code ===
 pub mod qr_widget;
-pub use qr_widget::{QRWidget, QRView, qr_view};
+pub use qr_widget::{qr_view, QRView, QRWidget};
 
 // === Módulo de gráficos vectoriales con Vello (Fase 9) ===
 pub mod chart_widgets;
 pub use chart_widgets::{
-    BarChartView, BarChartWidget, ChartDataPoint, GaugeChartView, GaugeChartWidget,
-    LineChartView, LineChartWidget, PieChartView, PieChartWidget, Rgba, SparklineView,
-    SparklineWidget,
+    BarChartView, BarChartWidget, ChartDataPoint, GaugeChartView, GaugeChartWidget, LineChartView,
+    LineChartWidget, PieChartView, PieChartWidget, Rgba, SparklineView, SparklineWidget,
 };
 
 // === Módulo de canvas / pintura libre con Vello (Fase 10) ===
 pub mod canvas_widget;
-pub use canvas_widget::{CanvasWidget, CanvasView, CanvasCommand};
+pub use canvas_widget::{CanvasCommand, CanvasView, CanvasWidget};
 
 // === Re-exportaciones del GUI runtime ===
 // Funciones principales para convertir AST → Layout → Widgets
 pub use gui_nativa::{
-    AppStateNativo,
-    Layout,
-    ValorGUI,
-    expr_a_layout,
-    layout_a_view,
-    extraer_layout,
-    build_and_run,
-    inicializar_estado,
+    build_and_run, expr_a_layout, extraer_layout, inicializar_estado, layout_a_view,
+    AppStateNativo, Layout, ValorGUI,
 };
 
 /// Convierte una expresión Forja (AST) a un Layout del runtime.

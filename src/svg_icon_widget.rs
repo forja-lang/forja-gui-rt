@@ -13,8 +13,8 @@ use xilem::masonry::core::{
     PropertiesRef, RegisterCtx,
 };
 use xilem::masonry::kurbo::{Affine, BezPath, Size, Stroke};
-use xilem::masonry::vello::peniko::{Brush, Fill};
 use xilem::masonry::vello::peniko::color::AlphaColor;
+use xilem::masonry::vello::peniko::{Brush, Fill};
 use xilem::masonry::vello::Scene;
 use xilem::{Pod, ViewCtx};
 
@@ -83,7 +83,8 @@ impl Widget for MaterialSvgIcon {
         }
 
         let scale = self.tamaño / 24.0; // Material icons en viewBox 24x24
-        let alpha_color = AlphaColor::from_rgba8(self.rgba[0], self.rgba[1], self.rgba[2], self.rgba[3]);
+        let alpha_color =
+            AlphaColor::from_rgba8(self.rgba[0], self.rgba[1], self.rgba[2], self.rgba[3]);
         let brush = Brush::Solid(alpha_color);
         let transform = Affine::scale(scale);
 

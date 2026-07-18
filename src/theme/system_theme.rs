@@ -74,11 +74,7 @@ fn linux_detect() -> SystemTheme {
     //   gsettings get org.gnome.desktop.interface color-scheme
     //   'prefer-dark' → Dark,  'default' → Light
     if let Ok(output) = std::process::Command::new("gsettings")
-        .args(&[
-            "get",
-            "org.gnome.desktop.interface",
-            "color-scheme",
-        ])
+        .args(&["get", "org.gnome.desktop.interface", "color-scheme"])
         .output()
     {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -89,18 +85,12 @@ fn linux_detect() -> SystemTheme {
 
     // Fallback: verificar si el tema GTK termina en "-dark"
     if let Ok(output) = std::process::Command::new("gsettings")
-        .args(&[
-            "get",
-            "org.gnome.desktop.interface",
-            "gtk-theme",
-        ])
+        .args(&["get", "org.gnome.desktop.interface", "gtk-theme"])
         .output()
     {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let theme = stdout.trim().trim_matches('\'');
-        if theme.to_lowercase().ends_with("-dark")
-            || theme.to_lowercase().ends_with("-black")
-        {
+        if theme.to_lowercase().ends_with("-dark") || theme.to_lowercase().ends_with("-black") {
             return SystemTheme::Dark;
         }
     }

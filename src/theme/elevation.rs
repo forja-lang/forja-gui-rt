@@ -110,7 +110,13 @@ impl Shadow {
 
     /// Convierte a tupla de parámetros para renderizado
     pub fn to_params(&self) -> (f64, f64, f64, f64, (u8, u8, u8, u8)) {
-        (self.offset_x, self.offset_y, self.blur_radius, self.spread, self.color)
+        (
+            self.offset_x,
+            self.offset_y,
+            self.blur_radius,
+            self.spread,
+            self.color,
+        )
     }
 }
 
@@ -175,7 +181,7 @@ mod tests {
         assert!(shadow.offset_y > 0.0);
         assert!(shadow.blur_radius > 0.0);
         assert!(shadow.color.3 > 0); // alpha > 0
-        // Mayor elevación = mayor blur
+                                     // Mayor elevación = mayor blur
         let shadow_low = elev.shadow_for_level(0);
         let shadow_high = elev.shadow_for_level(5);
         assert!(shadow_high.blur_radius >= shadow_low.blur_radius);
@@ -184,13 +190,16 @@ mod tests {
     #[test]
     fn test_shadow_none() {
         let shadow = Shadow::none();
-        assert_eq!(shadow, Shadow {
-            offset_x: 0.0,
-            offset_y: 0.0,
-            blur_radius: 0.0,
-            spread: 0.0,
-            color: (0, 0, 0, 0),
-        });
+        assert_eq!(
+            shadow,
+            Shadow {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur_radius: 0.0,
+                spread: 0.0,
+                color: (0, 0, 0, 0),
+            }
+        );
     }
 
     #[test]

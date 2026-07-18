@@ -399,32 +399,28 @@ impl AnimationPresets {
     ///
     /// Usado para la onda expansiva al hacer clic en un botón.
     pub fn button_ripple() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 150.0)
-            .with_curve(Easings::default().emphasized)
+        AnimatedValue::new(0.0, 1.0, 150.0).with_curve(Easings::default().emphasized)
     }
 
     /// Botón: hover (100ms, curva standard)
     ///
     /// Usado para el cambio de elevación/color al pasar el mouse.
     pub fn button_hover() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 100.0)
-            .with_curve(Easings::default().standard)
+        AnimatedValue::new(0.0, 1.0, 100.0).with_curve(Easings::default().standard)
     }
 
     /// Card: elevación (200ms, curva standard)
     ///
     /// Usado para la sombra de elevación al hacer hover en una tarjeta.
     pub fn card_elevate() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 200.0)
-            .with_curve(Easings::default().standard)
+        AnimatedValue::new(0.0, 1.0, 200.0).with_curve(Easings::default().standard)
     }
 
     /// Transición de página (300ms, curva emphasized)
     ///
     /// Usado para animaciones entre pantallas o vistas completas.
     pub fn page_transition() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 300.0)
-            .with_curve(Easings::default().emphasized)
+        AnimatedValue::new(0.0, 1.0, 300.0).with_curve(Easings::default().emphasized)
     }
 
     /// Container transform (350ms, curva emphasized)
@@ -432,8 +428,7 @@ impl AnimationPresets {
     /// Usado para la transición de container transform de Material You,
     /// donde un elemento se expande/transforma en otro.
     pub fn container_transform() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 350.0)
-            .with_curve(Easings::default().emphasized)
+        AnimatedValue::new(0.0, 1.0, 350.0).with_curve(Easings::default().emphasized)
     }
 
     /// Spinner: loop infinito (800ms por ciclo, curva standard)
@@ -451,8 +446,7 @@ impl AnimationPresets {
     /// Fundido de entrada/salida con estilo expresivo, adecuado para
     /// animaciones decorativas o de bienvenida.
     pub fn expressive_fade() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 450.0)
-            .with_curve(Easings::default().expressive)
+        AnimatedValue::new(0.0, 1.0, 450.0).with_curve(Easings::default().expressive)
     }
 
     /// Expressive: morph (500ms, curva expressive con overshoot)
@@ -460,8 +454,7 @@ impl AnimationPresets {
     /// Transición de morphing entre formas con estilo expresivo,
     /// usando overshoot para un efecto más dramático.
     pub fn expressive_morph() -> AnimatedValue {
-        AnimatedValue::new(0.0, 1.0, 500.0)
-            .with_curve(Easings::default().expressive)
+        AnimatedValue::new(0.0, 1.0, 500.0).with_curve(Easings::default().expressive)
     }
 }
 
@@ -582,7 +575,9 @@ mod tests {
 
     #[test]
     fn test_animated_value_yoyo() {
-        let mut anim = AnimatedValue::new(0.0, 100.0, 500.0).with_loop().with_yoyo();
+        let mut anim = AnimatedValue::new(0.0, 100.0, 500.0)
+            .with_loop()
+            .with_yoyo();
         let primer_desde = anim.desde;
         let primer_hasta = anim.hasta;
         anim.update(500.0); // completa un ciclo, invierte desde↔hasta
