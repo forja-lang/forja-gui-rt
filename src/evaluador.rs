@@ -486,7 +486,9 @@ fn evaluar_declaracion(
         | Declaracion::Enum { .. }
         | Declaracion::Rasgo { .. }
         | Declaracion::Implementacion { .. }
-        | Declaracion::AccesoMiembro { .. } => Ok(ValorGUI::Nulo),
+        | Declaracion::AccesoMiembro { .. }
+        | Declaracion::Romper
+        | Declaracion::Continuar => Ok(ValorGUI::Nulo),
     }
 }
 
@@ -715,6 +717,25 @@ fn evaluar_expresion(
         // ── Design by Contract ────────────────────────────────
         Expresion::Resultado => Ok(ValorGUI::Nulo),
         Expresion::Anterior(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
+
+        // ── Ternario ──────────────────────────────────────────
+        Expresion::Ternario {
+            condicion,
+            si_verdadero,
+            si_falso,
+        } => {
+            let cond = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let b = match &cond {
+                ValorGUI::Booleano(b) => *b,
+                ValorGUI::Entero(n) => *n != 0,
+                _ => false,
+            };
+            if b {
+                evaluar_expresion(si_verdadero, ambito, store, declaraciones)
+            } else {
+                evaluar_expresion(si_falso, ambito, store, declaraciones)
+            }
+        }
     }
 }
 
