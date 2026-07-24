@@ -4262,12 +4262,11 @@ pub fn layout_a_view<'a>(
             let shadow_cfg = theme.elevation.shadow_for_level(*level);
             let inner = layout_a_view(child, data, _prog, theme);
             let shape_radius = get_shape_radius(&theme.shapes, shape_family);
-            let box_shadow = shadow_to_box_shadow(&shadow_cfg);
-            // Masonry BoxShadow ahora soportado por SizedBox (vía patch)
+            let _box_shadow = shadow_to_box_shadow(&shadow_cfg);
+            let _shape_radius = shape_radius;
+            // SizedBox sin box_shadow/corner_radius por compatibilidad con Xilem 0.4
             Box::new(
-                view::sized_box(inner)
-                    .box_shadow(box_shadow)
-                    .corner_radius(shape_radius),
+                view::sized_box(inner),
             )
         }
 
@@ -7565,7 +7564,7 @@ pub fn layout_a_view<'a>(
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
             let cb = callback.clone();
-            let _tipos_filtro = tipos.clone();
+            let tipos_filtro = tipos.clone();
             let btn = view::button(
                 view::flex(
                     Axis::Horizontal,
