@@ -32,6 +32,8 @@ pub enum ValorGUI {
     Decimal(f64),
     Booleano(bool),
     Nulo,
+    /// Mapa con claves String para representar valores estructurados (Ok, Error, Algo, etc.)
+    Mapa(HashMap<String, ValorGUI>),
 }
 
 impl ValorGUI {
@@ -48,6 +50,7 @@ impl ValorGUI {
                 }
             }
             ValorGUI::Nulo => "nulo".to_string(),
+            ValorGUI::Mapa(m) => format!("Mapa({:?})", m),
         }
     }
 
@@ -125,6 +128,13 @@ impl From<ValorGUI> for serde_json::Value {
             ValorGUI::Decimal(f) => serde_json::Value::String(f.to_string()),
             ValorGUI::Booleano(b) => serde_json::Value::Bool(b),
             ValorGUI::Nulo => serde_json::Value::Null,
+            ValorGUI::Mapa(m) => {
+                let mut map = serde_json::Map::new();
+                for (k, v) in m {
+                    map.insert(k, serde_json::Value::from(v));
+                }
+                serde_json::Value::Object(map)
+            }
         }
     }
 }
@@ -143,8 +153,22 @@ impl From<serde_json::Value> for ValorGUI {
                 }
             }
             serde_json::Value::Bool(b) => ValorGUI::Booleano(b),
+            serde_json::Value::Object(obj) => {
+                let mut map = HashMap::new();
+                for (k, v) in obj {
+                    map.insert(k, ValorGUI::from(v));
+                }
+                ValorGUI::Mapa(map)
+            }
+            serde_json::Value::Array(arr) => {
+                // Convertir array a JSON string para mantener compatibilidad
+                if let Some(first) = arr.first() {
+                    ValorGUI::from(first.clone())
+                } else {
+                    ValorGUI::Nulo
+                }
+            }
             serde_json::Value::Null => ValorGUI::Nulo,
-            _ => ValorGUI::Nulo,
         }
     }
 }
@@ -352,10 +376,12 @@ pub struct NavigatorScreen {
     pub titulo: String,
     /// Icono opcional (para NavigationBar/Tabs)
     pub icono: Option<String>,
-    /// Contenido de la pantalla
+    /// Contenido de la pantalla (pre-evaluado, puede ser Spacer si es función)
     pub(crate) contenido: Box<Layout>,
     /// Badge opcional (notificaciones)
     pub badge: Option<String>,
+    /// Nombre de la función que genera el contenido (para evaluación diferida)
+    pub(crate) content_fn: Option<String>,
 }
 
 impl NavigatorScreen {
@@ -366,6 +392,7 @@ impl NavigatorScreen {
             icono: None,
             contenido: Box::new(contenido),
             badge: None,
+            content_fn: None,
         }
     }
 }
@@ -766,6 +793,8 @@ pub enum Layout {
         nav_type: NavigatorType,
         /// Animación de transición
         anim: NavigatorAnim,
+        /// Callback opcional para cuando cambia la pantalla
+        on_change: Option<String>,
     },
     NavigationBar {
         items: Vec<NavItem>,
@@ -1096,9 +1125,13 @@ fn extraer_callback(args: &[Expresion], index: usize) -> String {
         .map(|a| match a {
             Expresion::Referencia { expr, .. } => match expr.as_ref() {
                 Expresion::Identificador { nombre: n, .. } => n.clone(),
+                // Soporte: &cambiar_pantalla(indice) → extraer "cambiar_pantalla"
+                Expresion::LlamadaFuncion { nombre: n, .. } => n.clone(),
                 _ => String::new(),
             },
             Expresion::Identificador { nombre: n, .. } => n.clone(),
+            // Soporte directo: cambiar_pantalla(indice) → extraer "cambiar_pantalla"
+            Expresion::LlamadaFuncion { nombre: n, .. } => n.clone(),
             _ => String::new(),
         })
         .unwrap_or_default()
@@ -1242,10 +1275,24 @@ fn extraer_navigator_screens(args: &[Expresion], index: usize) -> Vec<NavigatorS
                                     _ => String::new(),
                                 })
                                 .unwrap_or_default();
-                            let contenido = argumentos
+                            let (contenido, content_fn) = argumentos
                                 .get(2)
-                                .and_then(expr_a_layout)
-                                .unwrap_or(Layout::Spacer(0.0));
+                                .map(|arg| {
+                                    let layout = expr_a_layout(arg);
+                                    match layout {
+                                        Some(l) => (l, None),
+                                        None => {
+                                            // Si expr_a_layout falló (ej: función personalizada),
+                                            // extraer el nombre de la función para evaluarla después
+                                            let fn_name = match arg {
+                                                Expresion::LlamadaFuncion { nombre, .. } => Some(nombre.clone()),
+                                                _ => None,
+                                            };
+                                            (Layout::Spacer(0.0), fn_name)
+                                        }
+                                    }
+                                })
+                                .unwrap_or((Layout::Spacer(0.0), None));
                             let icono = argumentos
                                 .get(3)
                                 .map(|a| match a {
@@ -1259,6 +1306,7 @@ fn extraer_navigator_screens(args: &[Expresion], index: usize) -> Vec<NavigatorS
                                 icono,
                                 contenido: Box::new(contenido),
                                 badge: None,
+                                content_fn,
                             })
                         }
                         _ => None,
@@ -2758,6 +2806,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         "cajon" | "drawer" => NavigatorType::Drawer,
                         _ => NavigatorType::None,
                     };
+                    // Arg 3 opcional: callback on_change (ej: &cambiar_pantalla)
+                    let on_change = argumentos.get(3).map(|a| extraer_callback(argumentos, 3)).filter(|s| !s.is_empty());
                     if screens.is_empty() {
                         Some(Layout::Spacer(0.0))
                     } else {
@@ -2767,6 +2817,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             history_var: format!("{}_historial", current_var),
                             nav_type,
                             anim: NavigatorAnim::None,
+                            on_change,
                         })
                     }
                 }
@@ -4442,13 +4493,14 @@ pub fn layout_a_view<'a>(
             let prog = _prog.to_vec();
             let scheme = &theme.scheme;
 
+            let emoji = crate::icons::catalog::fallback_emoji(icono);
             let (texto, font_size) = match size {
-                FabSize::Small => (icono.clone(), 16.0),
+                FabSize::Small => (emoji.to_string(), 16.0),
                 FabSize::Medium => match texto_extendido {
-                    Some(ext) => (format!("{} {}", icono, ext), 24.0),
-                    None => (icono.clone(), 24.0),
+                    Some(ext) => (format!("{} {}", emoji, ext), 24.0),
+                    None => (emoji.to_string(), 24.0),
                 },
-                FabSize::Large => (icono.clone(), 36.0),
+                FabSize::Large => (emoji.to_string(), 36.0),
             };
 
             let fg: Color = scheme.on_primary_container.into();
@@ -4473,11 +4525,12 @@ pub fn layout_a_view<'a>(
             let cb = callback.clone();
             let prog = _prog.to_vec();
             let scheme = &theme.scheme;
+            let emoji = crate::icons::catalog::fallback_emoji(icono);
 
             match variant {
                 IconButtonVariant::Standard => {
                     let fg: Color = scheme.on_surface_variant.into();
-                    let label = view::label(icono.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
                     Box::new(view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     }))
@@ -4485,7 +4538,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Filled => {
                     let fg: Color = scheme.on_primary.into();
                     let bg: Color = scheme.primary.into();
-                    let label = view::label(icono.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -4494,7 +4547,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Tonal => {
                     let fg: Color = scheme.on_secondary_container.into();
                     let bg: Color = scheme.secondary_container.into();
-                    let label = view::label(icono.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -4503,7 +4556,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Outlined => {
                     let fg: Color = scheme.primary.into();
                     let border: Color = scheme.outline.into();
-                    let label = view::label(icono.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -5934,6 +5987,7 @@ pub fn layout_a_view<'a>(
             history_var: _,
             nav_type,
             anim: _,
+            on_change,
         } => {
             let scheme = &theme.scheme;
             let p = _prog.to_vec();
@@ -5947,7 +6001,33 @@ pub fn layout_a_view<'a>(
             let current_screen = &screens[idx];
             let a11y_screen_name = current_screen.titulo.clone();
             data.a11y_focus("navigation", &a11y_screen_name, "", "Pantalla activa");
-            let content = layout_a_view(&current_screen.contenido, data, _prog, theme);
+            
+            // Evaluar el contenido: si content_fn está presente, buscar la función en el AST
+            // y evaluar su cuerpo como layout (soporta funciones que retornan layouts)
+            // Usamos un Layout temporal en el stack para el caso de función diferida
+            let mut deferred_layout = Layout::Spacer(0.0);
+            let content_layout = if let (Layout::Spacer(0.0), Some(fn_name)) = (&*current_screen.contenido, &current_screen.content_fn) {
+                let mut found = false;
+                for decl in _prog {
+                    if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
+                        if nombre == fn_name {
+                            if let Some(Declaracion::Retornar { valor }) = cuerpo.iter().find(|d| matches!(d, Declaracion::Retornar { .. })) {
+                                if let Some(expr) = valor {
+                                    if let Some(layout) = expr_a_layout(expr) {
+                                        deferred_layout = layout;
+                                        found = true;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                if found { &deferred_layout } else { &*current_screen.contenido }
+            } else {
+                &*current_screen.contenido
+            };
+            let content = layout_a_view(content_layout, data, _prog, theme);
 
             // Pre-extraer datos de navegación para evitar ownership issues en closures
             let nav_ids: Vec<String> = screens.iter().map(|s| s.id.clone()).collect();
@@ -5957,20 +6037,25 @@ pub fn layout_a_view<'a>(
                 .map(|s| s.icono.clone().unwrap_or_else(|| "•".to_string()))
                 .collect();
 
+            // Determinar qué callback usar: on_change si existe, o current_var como fallback
+            let cb_name = on_change.clone().unwrap_or_else(|| current_var.clone());
+
             // Construir la navegación según el tipo
             match nav_type {
                 NavigatorType::None => content,
                 NavigatorType::BottomBar => {
                     let cv = current_var.to_string();
+                    let cb = cb_name.clone();
                     let sc = scheme.clone();
                     let label_style = get_text_style(&theme.typography, "label_small");
                     let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
                     for i in 0..screens.len() {
                         let cv_inner = cv.clone();
-                        let sid = nav_ids[i].clone();
+                        let cb_inner = cb.clone();
                         let titulo = nav_titles[i].clone();
                         let icono = nav_icons[i].clone();
                         let sel = i == idx;
+                        let btn_idx = i;
                         let fg: Color = if sel {
                             sc.primary.into()
                         } else {
@@ -5993,8 +6078,9 @@ pub fn layout_a_view<'a>(
                         .gap(Length::px(2.0));
                         let p_clone = p.clone();
                         let btn = view::button(w, move |data: &mut AppStateNativo| {
-                            data.escribir(&cv_inner, ValorGUI::Texto(sid.clone()));
-                            ejecutar_callback_y_actualizar(&cv_inner, data, &p_clone);
+                            data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
+                            data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
+                            ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
                         });
                         items.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
                     }
@@ -6007,14 +6093,16 @@ pub fn layout_a_view<'a>(
                 }
                 NavigatorType::Tabs => {
                     let cv = current_var.to_string();
+                    let cb = cb_name.clone();
                     let sc = scheme.clone();
                     let label_style = get_text_style(&theme.typography, "label_large");
                     let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
                     for i in 0..screens.len() {
                         let cv_inner = cv.clone();
-                        let sid = nav_ids[i].clone();
+                        let cb_inner = cb.clone();
                         let titulo = nav_titles[i].clone();
                         let sel = i == idx;
+                        let btn_idx = i;
                         let fg: Color = if sel {
                             sc.primary.into()
                         } else {
@@ -6050,8 +6138,9 @@ pub fn layout_a_view<'a>(
                         .gap(Length::px(4.0));
                         let p_clone = p.clone();
                         let btn = view::button(tab, move |data: &mut AppStateNativo| {
-                            data.escribir(&cv_inner, ValorGUI::Texto(sid.clone()));
-                            ejecutar_callback_y_actualizar(&cv_inner, data, &p_clone);
+                            data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
+                            data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
+                            ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
                         });
                         items.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
                     }
@@ -6061,14 +6150,16 @@ pub fn layout_a_view<'a>(
                 }
                 NavigatorType::Rail | NavigatorType::Drawer => {
                     let cv = current_var.to_string();
+                    let cb = cb_name.clone();
                     let sc = scheme.clone();
                     let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
                     for i in 0..screens.len() {
                         let cv_inner = cv.clone();
-                        let sid = nav_ids[i].clone();
+                        let cb_inner = cb.clone();
                         let titulo = nav_titles[i].clone();
                         let icono = nav_icons[i].clone();
                         let sel = i == idx;
+                        let btn_idx = i;
                         let fg: Color = if sel {
                             sc.on_secondary_container.into()
                         } else {
@@ -6089,8 +6180,9 @@ pub fn layout_a_view<'a>(
                         .gap(Length::px(2.0));
                         let p_clone = p.clone();
                         let btn = view::button(w, move |data: &mut AppStateNativo| {
-                            data.escribir(&cv_inner, ValorGUI::Texto(sid.clone()));
-                            ejecutar_callback_y_actualizar(&cv_inner, data, &p_clone);
+                            data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
+                            data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
+                            ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
                         });
                         items.push(Box::new(
                             view::sized_box(btn)
@@ -6370,8 +6462,9 @@ pub fn layout_a_view<'a>(
                 let cb_inner = action.callback.clone();
                 let p_inner = prog.clone();
                 let icon_fg: Color = scheme.on_surface_variant.into();
+                let emoji = crate::icons::catalog::fallback_emoji(&action.icono);
                 let icon_btn = view::button(
-                    view::label(action.icono.clone())
+                    view::label(emoji)
                         .text_size(24.0)
                         .color(icon_fg),
                     move |data: &mut AppStateNativo| {
@@ -6408,8 +6501,9 @@ pub fn layout_a_view<'a>(
                 let cb_inner = action.callback.clone();
                 let p_inner = prog.clone();
                 let icon_fg: Color = scheme.on_surface_variant.into();
+                let emoji = crate::icons::catalog::fallback_emoji(&action.icono);
                 let icon_btn = view::button(
-                    view::label(action.icono.clone())
+                    view::label(emoji)
                         .text_size(24.0)
                         .color(icon_fg),
                     move |data: &mut AppStateNativo| {
