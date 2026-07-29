@@ -1,6 +1,5 @@
 // Forja GUI Nativa — construye widgets xilem directamente desde el AST
 // con soporte completo de tema Material You
-#![allow(dead_code)]
 
 use crate::theme::animation::AnimationEngine;
 use crate::theme::motion::{EASE_EMPHASIZED, EASE_STANDARD};
@@ -89,10 +88,15 @@ pub struct AppStateNativo {
     anim_prev_visibility: HashMap<String, bool>,
     /// Animation start times for transitions keyed by variable name
     anim_start_time: HashMap<String, Instant>,
+    /// Previous screen ID for navigator transitions
+    nav_prev_screen: String,
+    /// Animation start time for navigator screen transitions
+    nav_anim_start: Option<Instant>,
 }
 
 /// Helper struct for tracking a simple animation (from→to over duration)
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct AnimState {
     pub desde: f64,
     pub hasta: f64,
@@ -101,6 +105,7 @@ struct AnimState {
     pub activa: bool,
 }
 
+#[allow(dead_code)]
 impl AnimState {
     fn new(desde: f64, hasta: f64, duracion_ms: f64) -> Self {
         Self {
@@ -178,10 +183,12 @@ impl AppStateNativo {
         AppStateNativo {
             store: VariableStore::new(),
             window_size: WindowSizeClass::Compact,
-            window_width: 800.0, // Valor por defecto razonable
+            window_width: 800.0,
             animation_engine: AnimationEngine::new(),
             anim_prev_visibility: HashMap::new(),
             anim_start_time: HashMap::new(),
+            nav_prev_screen: String::new(),
+            nav_anim_start: None,
         }
     }
 
@@ -217,6 +224,13 @@ impl AppStateNativo {
     pub fn anim_progress_eased(&self, var_name: &str, duracion_ms: f64) -> f64 {
         let raw = self.anim_progress(var_name, duracion_ms);
         EASE_EMPHASIZED.apply(raw)
+    }
+
+    pub fn nav_transition_start(&mut self, screen_id: &str) {
+        if self.nav_prev_screen != screen_id {
+            self.nav_prev_screen = screen_id.to_string();
+            self.nav_anim_start = Some(Instant::now());
+        }
     }
 
     /// Anuncia un mensaje de accesibilidad (TalkBack)
@@ -384,6 +398,7 @@ pub struct NavigatorScreen {
     pub(crate) content_fn: Option<String>,
 }
 
+#[allow(dead_code)]
 impl NavigatorScreen {
     pub(crate) fn new(id: &str, titulo: &str, contenido: Layout) -> Self {
         NavigatorScreen {
@@ -419,6 +434,8 @@ pub enum NavigatorAnim {
     None,
     /// Fundido
     Fade,
+    /// Deslizamiento horizontal
+    Slide,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2807,7 +2824,17 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         _ => NavigatorType::None,
                     };
                     // Arg 3 opcional: callback on_change (ej: &cambiar_pantalla)
-                    let on_change = argumentos.get(3).map(|a| extraer_callback(argumentos, 3)).filter(|s| !s.is_empty());
+                    let on_change = argumentos.get(3).map(|_| extraer_callback(argumentos, 3)).filter(|s| !s.is_empty());
+                    // Arg 4 opcional: tipo de animación ("fade", "slide", "ninguno")
+                    let anim_type = argumentos.get(4).map(|a| match a {
+                        Expresion::LiteralTexto(s) => s.to_lowercase(),
+                        _ => "ninguno".to_string(),
+                    }).unwrap_or_else(|| "ninguno".to_string());
+                    let anim = match anim_type.as_str() {
+                        "fade" => NavigatorAnim::Fade,
+                        "slide" => NavigatorAnim::Slide,
+                        _ => NavigatorAnim::None,
+                    };
                     if screens.is_empty() {
                         Some(Layout::Spacer(0.0))
                     } else {
@@ -2816,7 +2843,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             current_var: current_var_clone,
                             history_var: format!("{}_historial", current_var),
                             nav_type,
-                            anim: NavigatorAnim::None,
+                            anim,
                             on_change,
                         })
                     }
@@ -3860,6 +3887,7 @@ fn parse_color(s: &str) -> Option<RgbColor> {
 // ─── Helpers para Navigator ─────────────────────────────────────
 
 /// Renderiza una NavigationBar para el Navigator
+#[allow(dead_code)]
 fn render_navigator_bottom_bar<'a>(
     screens: &[NavigatorScreen],
     current_idx: usize,
@@ -3917,6 +3945,7 @@ fn render_navigator_bottom_bar<'a>(
 }
 
 /// Renderiza Tabs para el Navigator
+#[allow(dead_code)]
 fn render_navigator_tabs(
     screens: Vec<NavigatorScreen>,
     current_idx: usize,
@@ -3979,6 +4008,7 @@ fn render_navigator_tabs(
 }
 
 /// Renderiza un NavigationRail para el Navigator
+#[allow(dead_code)]
 fn render_navigator_rail(
     screens: Vec<NavigatorScreen>,
     current_idx: usize,
@@ -4530,7 +4560,7 @@ pub fn layout_a_view<'a>(
             match variant {
                 IconButtonVariant::Standard => {
                     let fg: Color = scheme.on_surface_variant.into();
-                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji).text_size(24.0).color(fg);
                     Box::new(view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     }))
@@ -4538,7 +4568,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Filled => {
                     let fg: Color = scheme.on_primary.into();
                     let bg: Color = scheme.primary.into();
-                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -4547,7 +4577,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Tonal => {
                     let fg: Color = scheme.on_secondary_container.into();
                     let bg: Color = scheme.secondary_container.into();
-                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -4556,7 +4586,7 @@ pub fn layout_a_view<'a>(
                 IconButtonVariant::Outlined => {
                     let fg: Color = scheme.primary.into();
                     let border: Color = scheme.outline.into();
-                    let label = view::label(emoji.clone()).text_size(24.0).color(fg);
+                    let label = view::label(emoji).text_size(24.0).color(fg);
                     let btn = view::button(label, move |data: &mut AppStateNativo| {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
                     });
@@ -5986,7 +6016,7 @@ pub fn layout_a_view<'a>(
             current_var,
             history_var: _,
             nav_type,
-            anim: _,
+            anim,
             on_change,
         } => {
             let scheme = &theme.scheme;
@@ -6029,8 +6059,34 @@ pub fn layout_a_view<'a>(
             };
             let content = layout_a_view(content_layout, data, _prog, theme);
 
+            // ── Animación de transición entre pantallas ──
+            let content = match anim {
+                NavigatorAnim::None => content,
+                NavigatorAnim::Fade | NavigatorAnim::Slide => {
+                    if current_id != data.nav_prev_screen {
+                        data.nav_transition_start(&current_id);
+                    }
+                    let elapsed = data.nav_anim_start
+                        .map(|s| s.elapsed().as_secs_f64())
+                        .unwrap_or(0.0);
+                    let duration = 0.25;
+                    let progress = (elapsed / duration).clamp(0.0, 1.0);
+                    let eased = EASE_EMPHASIZED.apply(progress);
+
+                    if eased >= 1.0 {
+                        content
+                    } else {
+                        let overlay_alpha = 1.0 - eased;
+                        let fade_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha as f64 * 0.5);
+                        Box::new(
+                            view::sized_box(content)
+                                .background(Background::Color(fade_color)),
+                        )
+                    }
+                }
+            };
+
             // Pre-extraer datos de navegación para evitar ownership issues en closures
-            let nav_ids: Vec<String> = screens.iter().map(|s| s.id.clone()).collect();
             let nav_titles: Vec<String> = screens.iter().map(|s| s.titulo.clone()).collect();
             let nav_icons: Vec<String> = screens
                 .iter()
@@ -8431,6 +8487,7 @@ pub struct SwipeToDismissView<V> {
     child: V,
     on_dismiss: String,
     dismissed: String,
+    #[allow(dead_code)]
     label: String,
     program: Vec<Declaracion>,
 }

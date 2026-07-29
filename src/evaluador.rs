@@ -165,14 +165,14 @@ impl ValorGUI {
                 .or_else(|| n.as_f64().map(ValorGUI::Decimal))
                 .unwrap_or(ValorGUI::Nulo),
             serde_json::Value::Bool(b) => ValorGUI::Booleano(*b),
-            serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(_arr) => {
                 // Representar arrays como JSON textual para compatibilidad
                 // con el resto del runtime (que maneja arrays como strings)
                 let json_str = serde_json::to_string(val)
                     .unwrap_or_else(|_| "[]".to_string());
                 ValorGUI::Texto(json_str)
             }
-            serde_json::Value::Object(map) => {
+            serde_json::Value::Object(_map) => {
                 // Representar mapas como JSON textual para compatibilidad
                 // con acceso por clave (mapa["clave"])
                 let json_str = serde_json::to_string(val)
@@ -393,7 +393,6 @@ fn nativa_a_numero(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
             let trimmed = s.trim();
             // Si el texto es JSON (objeto o array), no se puede convertir a número
             if trimmed.starts_with('{') || trimmed.starts_with('[') {
-                eprintln!("[DEBUG nativa_a_numero] Texto JSON detectado, retornando 0: {}...", &trimmed[..std::cmp::min(50, trimmed.len())]);
                 return Ok(ValorGUI::Entero(0));
             }
             match trimmed.parse::<i64>() {
@@ -401,19 +400,16 @@ fn nativa_a_numero(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
                 Err(_) => match trimmed.parse::<f64>() {
                     Ok(f) => Ok(ValorGUI::Entero(f as i64)),
                     Err(_) => {
-                        eprintln!("[DEBUG nativa_a_numero] Texto no numérico '{}', retornando 0", trimmed);
-                        Ok(ValorGUI::Entero(0))
+                       Ok(ValorGUI::Entero(0))
                     }
                 },
             }
         }
-        ValorGUI::Mapa(m) => {
-            eprintln!("[DEBUG nativa_a_numero] Mapa recibido, retornando 0: {:?}", m);
-            Ok(ValorGUI::Entero(0))
+        ValorGUI::Mapa(_) => {
+           Ok(ValorGUI::Entero(0))
         }
         ValorGUI::Nulo => {
-            eprintln!("[DEBUG nativa_a_numero] Nulo recibido, retornando 0");
-            Ok(ValorGUI::Entero(0))
+           Ok(ValorGUI::Entero(0))
         }
     }
 }
@@ -530,9 +526,7 @@ fn nativa_empujar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valor
 
     let result = serde_json::to_string(&arr)
         .map_err(|e| format!("empujar: error serializando array: {}", e))?;
-
-    eprintln!("[DEBUG nativa_empujar] antes={} elem={:?} resultado={}", json_str, args[1], result);
-    Ok(ValorGUI::Texto(result))
+   Ok(ValorGUI::Texto(result))
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -593,8 +587,7 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
         ValorGUI::Decimal(f) => return Ok(vec![Box::new(*f)]),
         ValorGUI::Booleano(b) => return Ok(vec![Box::new(*b as i64)]),
         ValorGUI::Mapa(m) => {
-            eprintln!("[DEBUG args_a_params] Mapa recibido, serializando a JSON: {:?}", m);
-            // Intentar extraer un arreglo de valores del mapa
+           // Intentar extraer un arreglo de valores del mapa
             // Si el mapa tiene una clave "0", "1", etc., tratarlo como arreglo
             let mut arr = Vec::new();
             let mut i = 0;
@@ -620,20 +613,16 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
             }
         }
         ValorGUI::Nulo => {
-            eprintln!("[DEBUG args_a_params] Nulo recibido, retornando un solo parámetro null");
-            return Ok(vec![Box::new(rusqlite::types::Null)]);
+           return Ok(vec![Box::new(rusqlite::types::Null)]);
         }
     };
-    eprintln!("[DEBUG args_a_params] json_str (primeros 100 chars): {}", &json_str[..std::cmp::min(100, json_str.len())]);
     let parsed: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("sqlite_error: no se pudieron parsear los parámetros: {}", e))?;
     let arr = match parsed {
         serde_json::Value::Array(a) => a,
         _ => return Err("sqlite_error: los parámetros deben ser un arreglo JSON".to_string()),
     };
-    eprintln!("[DEBUG args_a_params] Array parsed, longitud: {}", arr.len());
     if arr.is_empty() {
-        eprintln!("[WARN args_a_params] Array vacío — si la consulta SQL tiene placeholders (?), fallará con 'Wrong number of parameters'");
     }
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::with_capacity(arr.len());
     for v in &arr {
@@ -651,7 +640,6 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
             _ => return Err("sqlite_error: tipo de parámetro no soportado".to_string()),
         }
     }
-    eprintln!("[DEBUG args_a_params] Total params generados: {}", params.len());
     Ok(params)
 }
 
@@ -780,10 +768,8 @@ fn sqlite_ejecutar_params(args: &[ValorGUI], _store: &mut VariableStore) -> Resu
         ValorGUI::Texto(s) => s.clone(),
         _ => return Err("_sqlite_ejecutar_params: segundo argumento debe ser texto (SQL)".to_string()),
     };
-    eprintln!("[DEBUG sqlite_ejecutar_params] idx={}, sql={}, args[2] tipo={:?}", idx, sql, std::mem::discriminant(&args[2]));
     let params = args_a_params(&args[2])?;
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    eprintln!("[DEBUG sqlite_ejecutar_params] params count={}", params_refs.len());
 
     let conn_arc = sqlite_obtener_conn(idx)?;
     let conn = conn_arc.lock()
@@ -804,10 +790,8 @@ fn sqlite_consultar_params(args: &[ValorGUI], _store: &mut VariableStore) -> Res
         ValorGUI::Texto(s) => s.clone(),
         _ => return Err("_sqlite_consultar_params: segundo argumento debe ser texto (SQL)".to_string()),
     };
-    eprintln!("[DEBUG sqlite_consultar_params] idx={}, sql={}, args[2] tipo={:?}", idx, sql, std::mem::discriminant(&args[2]));
     let params = args_a_params(&args[2])?;
     let params_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-    eprintln!("[DEBUG sqlite_consultar_params] params count={}", params_refs.len());
 
     let conn_arc = sqlite_obtener_conn(idx)?;
     let conn = conn_arc.lock()
@@ -999,26 +983,21 @@ pub fn ejecutar_funcion(
         };
         let mut ambito = Ambito::new();
 
-        eprintln!("[DEBUG ejecutar_funcion] nombre='{}', args.len={}, params.len={}", nombre, args.len(), parametros.len());
 
         // Asignar parámetros: args explícitos primero, luego cargar desde store
         for (i, param) in parametros.iter().enumerate() {
             if let Some(val) = args.get(i) {
-                eprintln!("[DEBUG ejecutar_funcion] param[{}]='{}' ← args[{}]", i, param.nombre, i);
-                ambito.asignar(param.nombre.clone(), val.clone());
+               ambito.asignar(param.nombre.clone(), val.clone());
             } else if let Some(json_val) = store.get(&param.nombre) {
-                eprintln!("[DEBUG ejecutar_funcion] param[{}]='{}' ← store['{}'] = {:?}", i, param.nombre, param.nombre, json_val);
-                ambito.asignar(param.nombre.clone(), ValorGUI::from_serde(&json_val));
+               ambito.asignar(param.nombre.clone(), ValorGUI::from_serde(&json_val));
             } else {
-                eprintln!("[DEBUG ejecutar_funcion] param[{}]='{}' ← NO ENCONTRADO en args ni store", i, param.nombre);
-            }
+           }
         }
 
         // Fallback: cuando la función se invoca como callback desde widgets GUI
         if args.is_empty() && !parametros.is_empty() {
             if let Some(json_val) = store.get(nombre) {
-                eprintln!("[DEBUG ejecutar_funcion] fallback: store['{}'] = {:?}", nombre, json_val);
-                let primer_param = &parametros[0];
+               let primer_param = &parametros[0];
                 if !ambito.contiene(&primer_param.nombre) {
                     ambito.asignar(
                         primer_param.nombre.clone(),
@@ -1026,8 +1005,7 @@ pub fn ejecutar_funcion(
                     );
                 }
             } else {
-                eprintln!("[DEBUG ejecutar_funcion] fallback: store['{}'] NO ENCONTRADO", nombre);
-            }
+           }
         }
 
         // Evaluar cuerpo
@@ -1252,16 +1230,8 @@ fn evaluar_declaracion(
                 let result = ejecutar_funcion(method, &method_args, declaraciones, store)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
                 if method == "empujar" {
-                    let en_ambito = ambito.obtener(obj_name).is_some();
-                    let en_store = store.get(obj_name).is_some();
-                    eprintln!("[DEBUG Declaracion::LlamadaFuncion empujar] obj_name='{}' en_ambito={} en_store={} result_type={:?} antes_empujar={:?}",
-                        obj_name, en_ambito, en_store,
-                        std::mem::discriminant(&result),
-                        store.get(obj_name).unwrap_or(serde_json::Value::Null));
-                    // SIEMPRE reasignar, tanto en ambito como store
                     ambito.asignar(obj_name.to_string(), result.clone());
                     store.set(obj_name, result.to_json_value());
-                    eprintln!("[DEBUG Declaracion::LlamadaFuncion empujar] -> variable '{}' ACTUALIZADA (result={})", obj_name, result.to_string());
                 }
                 Ok(result)
             } else {
@@ -1395,15 +1365,8 @@ fn evaluar_expresion(
                 let result = ejecutar_funcion(method, &method_args, declaraciones, store)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
                 if method == "empujar" {
-                    let en_ambito = ambito.obtener(obj_name).is_some();
-                    let en_store = store.get(obj_name).is_some();
-                    eprintln!("[DEBUG Expresion::LlamadaFuncion empujar] obj_name='{}' en_ambito={} en_store={} result_type={:?}",
-                        obj_name, en_ambito, en_store,
-                        std::mem::discriminant(&result));
-                    // SIEMPRE reasignar, tanto en ambito como store
                     ambito.asignar(obj_name.to_string(), result.clone());
                     store.set(obj_name, result.to_json_value());
-                    eprintln!("[DEBUG Expresion::LlamadaFuncion empujar] -> variable '{}' ACTUALIZADA (result={})", obj_name, result.to_string());
                 }
                 return Ok(result);
             } else {
@@ -1592,8 +1555,7 @@ fn evaluar_expresion(
         // ── Resultado: Ok / Error ─────────────────────────────
         Expresion::Ok(inner) => {
             let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
-            eprintln!("[DEBUG Expresion::Ok] inner={:?} -> val={:?}", inner, val);
-            Ok(val)
+           Ok(val)
         }
         Expresion::Error(inner) => {
             let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
@@ -1603,8 +1565,7 @@ fn evaluar_expresion(
         // ── Opción: Algo ──────────────────────────────────────
         Expresion::Algo(inner) => {
             let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
-            eprintln!("[DEBUG Expresion::Algo] inner={:?} -> val={:?}", inner, val);
-            Ok(val)
+           Ok(val)
         }
 
         // ── Design by Contract ────────────────────────────────
@@ -1658,12 +1619,9 @@ fn evaluar_expresion(
             // Métodos que mutan (ej: params.empujar(x)): actualizar variable original
             if metodo == "empujar" {
                 if let Expresion::Identificador { nombre, .. } = objeto.as_ref() {
-                    eprintln!("[DEBUG Expresion::LlamadaMetodo empujar] nombre='{}' result_type={:?}", nombre, std::mem::discriminant(&result));
                     ambito.asignar(nombre.clone(), result.clone());
                     store.set(nombre, result.to_json_value());
-                    eprintln!("[DEBUG Expresion::LlamadaMetodo empujar] -> variable '{}' ACTUALIZADA (result={})", nombre, result.to_string());
                 } else {
-                    eprintln!("[DEBUG Expresion::LlamadaMetodo empujar] objeto NO es Identificador, es: {:?}", std::mem::discriminant(objeto.as_ref()));
                 }
             }
             Ok(result)
@@ -1726,8 +1684,7 @@ fn coincidir_patron(valor: &ValorGUI, patron: &Patron, ambito: &mut Ambito) -> b
             _ => false,
         },
         Patron::Constructor(nombre, subpatrones) => {
-            eprintln!("[DEBUG coincidir_patron] Constructor '{}' valor={:?} subpatrones={:?}", nombre, valor, subpatrones);
-            match (nombre.as_str(), valor) {
+           match (nombre.as_str(), valor) {
                 ("Ok", _) => {
                     subpatrones.is_empty() || {
                         subpatrones.len() == 1 && coincidir_patron(valor, &subpatrones[0], ambito)
