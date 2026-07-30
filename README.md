@@ -40,7 +40,7 @@ Basado en [`xilem`](https://github.com/linebender/xilem) v0.4 (Masonry + Vello),
 Crea un archivo `app.fa`:
 
 ```fa
-importar "gui"
+importar gui
 
 funcion al_click() {
     escribir("¡Hiciste clic!")
@@ -1194,7 +1194,7 @@ WindowSizeClass::from_width(600.0);  // Compact, Medium, Expanded
 ### App de Contactos
 
 ```fa
-importar "gui"
+importar gui
 
 variable contactos = '[{"nombre":"Ana","tel":"123"},{"nombre":"Luis","tel":"456"}]'
 
@@ -1213,7 +1213,7 @@ funcion main() {
 ### Dashboard con Charts
 
 ```fa
-importar "gui"
+importar gui
 
 funcion main() {
     columna(
@@ -1239,7 +1239,7 @@ funcion main() {
 ### Formulario con Tema
 
 ```fa
-importar "gui"
+importar gui
 
 variable nombre = ""
 variable email = ""
@@ -1267,7 +1267,7 @@ funcion main() {
 ### Navegación por Tabs con SQLite
 
 ```fa
-importar "gui"
+importar gui
 
 variable tab_actual = 0
 
