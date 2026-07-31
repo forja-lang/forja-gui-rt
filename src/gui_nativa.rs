@@ -7714,7 +7714,6 @@ pub fn layout_a_view<'a>(
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
             let cb = callback.clone();
-            let tipos_filtro = tipos.clone();
             let btn = view::button(
                 view::flex(
                     Axis::Horizontal,
@@ -7735,13 +7734,10 @@ pub fn layout_a_view<'a>(
                     #[cfg(not(target_os = "android"))]
                     {
                         let mut dialog = rfd::FileDialog::new();
-                        if !tipos_filtro.is_empty() {
+                        if !tipos.is_empty() {
                             dialog = dialog.add_filter(
                                 "Archivos",
-                                &tipos_filtro
-                                    .iter()
-                                    .map(|s| s.as_str())
-                                    .collect::<Vec<&str>>(),
+                                &tipos.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
                             );
                         }
                         if let Some(path) = dialog.set_directory(".").pick_file() {
