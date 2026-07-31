@@ -7714,6 +7714,9 @@ pub fn layout_a_view<'a>(
             let scheme = &theme.scheme;
             let prog = _prog.to_vec();
             let cb = callback.clone();
+            // Clonar a owned: el closure del botón debe ser 'static y no puede
+            // capturar la referencia 'a del layout.
+            let tipos_filtro = tipos.clone();
             let btn = view::button(
                 view::flex(
                     Axis::Horizontal,
@@ -7734,10 +7737,13 @@ pub fn layout_a_view<'a>(
                     #[cfg(not(target_os = "android"))]
                     {
                         let mut dialog = rfd::FileDialog::new();
-                        if !tipos.is_empty() {
+                        if !tipos_filtro.is_empty() {
                             dialog = dialog.add_filter(
                                 "Archivos",
-                                &tipos.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
+                                &tipos_filtro
+                                    .iter()
+                                    .map(|s| s.as_str())
+                                    .collect::<Vec<&str>>(),
                             );
                         }
                         if let Some(path) = dialog.set_directory(".").pick_file() {
@@ -7749,10 +7755,18 @@ pub fn layout_a_view<'a>(
                     }
                     #[cfg(target_os = "android")]
                     {
-                        data.escribir(
-                            "archivo",
-                            ValorGUI::Texto("archivo_seleccionado.txt".to_string()),
-                        );
+                        // Sin diálogo nativo en Android: simulamos la selección.
+                        // Si se configuraron filtros, usar el primero como extensión
+                        // (uso legítimo de tipos_filtro en ambos cfg).
+                        let nombre = if tipos_filtro.is_empty() {
+                            "archivo_seleccionado.txt".to_string()
+                        } else {
+                            format!(
+                                "archivo_seleccionado.{}",
+                                tipos_filtro[0].replace('.', "")
+                            )
+                        };
+                        data.escribir("archivo", ValorGUI::Texto(nombre));
                     }
                     if !cb.is_empty() {
                         ejecutar_callback_y_actualizar(&cb, data, &prog);
