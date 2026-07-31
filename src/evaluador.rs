@@ -1272,6 +1272,7 @@ fn evaluar_declaracion(
         Declaracion::Funcion { .. }
         | Declaracion::Clase { .. }
         | Declaracion::Importar(_)
+        | Declaracion::ImportarExterna(_)
         | Declaracion::Enum { .. }
         | Declaracion::Rasgo { .. }
         | Declaracion::Implementacion { .. }
