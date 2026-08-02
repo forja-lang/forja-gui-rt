@@ -5072,14 +5072,18 @@ pub fn layout_a_view<'a>(
                 .text_size(fab_icon_size)
                 .weight(FontWeight::MEDIUM)
                 .color(fg);
+            let cb_log = cb.clone();
             let btn = view::button(label, move |data: &mut AppStateNativo| {
+                eprintln!("[FAB] Click detectado, ejecutando callback '{}'", &cb_log);
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });
-            // FAB flotante: sized_box con fondo, sombra y esquinas redondeadas
+            // FAB flotante: botón con fondo, padding, sombra y esquinas redondeadas.
+            // Aplicamos estilo directamente al botón (sin sized_box intermedio)
+            // para que los eventos de click no se pierdan.
             Box::new(
-                view::sized_box(
-                    btn.background(Background::Color(bg)).corner_radius(28.0)
-                ).padding(16.0)
+                btn.padding(16.0)
+                    .background(Background::Color(bg))
+                    .corner_radius(28.0)
             )
         }
 
@@ -6182,6 +6186,8 @@ pub fn layout_a_view<'a>(
             // El ancho se fija a window_width (recalculado en cada render)
             // y Fill estira los hijos (top, body, bottom) a todo el ancho,
             // por lo que el contenido se reajusta al redimensionar.
+            // NOTA: NO fijamos height para que el flex interno gestione
+            // la distribución vertical correctamente (sin recortar la navbar).
             Box::new(
                 view::sized_box(
                     view::flex(Axis::Vertical, (tv, body_flex, bv))
@@ -6190,7 +6196,6 @@ pub fn layout_a_view<'a>(
                         .cross_axis_alignment(CrossAxisAlignment::Fill),
                 )
                 .width(Length::px(data.window_width.max(200.0)))
-                .height(Length::px(data.window_height.max(200.0))),
             )
         }
 
@@ -8961,7 +8966,10 @@ pub fn build_and_run(
             data.update_window_size(current_width, current_height);
             let root_view = layout_a_view(&layout, data, &prog, &theme);
             let root_bg = theme.scheme.surface.into();
-            let root_with_bg = view::sized_box(root_view).background(Background::Color(root_bg));
+            let root_with_bg = view::sized_box(root_view)
+                .width(Length::px(current_width.max(200.0)))
+                .height(Length::px(current_height.max(200.0)))
+                .background(Background::Color(root_bg));
             Box::new(observe_width(root_with_bg))
         },
         WindowOptions::new("Forja GUI - Material You")
@@ -9011,7 +9019,10 @@ pub fn build_and_run_android(
             data.update_window_size(current_width, current_height);
             let root_view = layout_a_view(&layout, data, &prog, &theme);
             let root_bg = theme.scheme.surface.into();
-            let root_with_bg = view::sized_box(root_view).background(Background::Color(root_bg));
+            let root_with_bg = view::sized_box(root_view)
+                .width(Length::px(current_width.max(200.0)))
+                .height(Length::px(current_height.max(200.0)))
+                .background(Background::Color(root_bg));
             Box::new(observe_width(root_with_bg))
         },
         WindowOptions::new("Forja GUI - Material You")
