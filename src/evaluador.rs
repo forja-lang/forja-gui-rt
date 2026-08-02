@@ -1047,6 +1047,18 @@ fn buscar_funcion<'a>(
     Err(format!("Función '{}' no encontrada", nombre))
 }
 
+/// Verifica si un nombre corresponde a una función ejecutable real
+/// (nativa o declarada en el AST). Los widgets del layout GUI
+/// (andamio, barra_superior, navegador, pantalla, columna, boton, ...)
+/// no son funciones ejecutables del programa.
+fn es_funcion_ejecutable(nombre: &str, declaraciones: &[Declaracion]) -> bool {
+    let nativas = obtener_nativas();
+    if nativas.contains_key(nombre) {
+        return true;
+    }
+    buscar_funcion(nombre, declaraciones).is_ok()
+}
+
 // ─── Evaluación de bloques ──────────────────────────────────────
 
 /// Evalúa un bloque de declaraciones.
@@ -1204,9 +1216,57 @@ fn evaluar_declaracion(
         } => {
             let idx_val = evaluar_expresion(indice, ambito, store, declaraciones)?;
             let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            // Actualizar el mapa/objeto en el ámbito local (clave → valor).
+            // Los mapas y arrays se representan como Texto(JSON), así que se
+            // parsean, se inserta la clave y se vuelven a serializar.
+            if let Some(obj) = ambito.obtener(nombre).cloned() {
+                match obj {
+                    ValorGUI::Mapa(mut m) => {
+                        m.insert(idx_val.to_display(), val.clone());
+                        ambito.asignar(nombre.to_string(), ValorGUI::Mapa(m));
+                    }
+                    ValorGUI::Texto(s) => {
+                        if let Ok(serde_json::Value::Object(mut map)) =
+                            serde_json::from_str::<serde_json::Value>(&s)
+                        {
+                            map.insert(idx_val.to_display(), val.to_json_value());
+                            if let Ok(nuevo) =
+                                serde_json::to_string(&serde_json::Value::Object(map))
+                            {
+                                ambito.asignar(nombre.to_string(), ValorGUI::Texto(nuevo));
+                            }
+                        } else if let Ok(serde_json::Value::Array(mut arr)) =
+                            serde_json::from_str::<serde_json::Value>(&s)
+                        {
+                            let idx = match &idx_val {
+                                ValorGUI::Entero(n) => *n as usize,
+                                _ => {
+                                    if let Ok(n) = idx_val.to_display().parse::<usize>() {
+                                        n
+                                    } else {
+                                        0
+                                    }
+                                }
+                            };
+                            if idx < arr.len() {
+                                arr[idx] = val.to_json_value();
+                            } else {
+                                arr.push(val.to_json_value());
+                            }
+                            if let Ok(nuevo) =
+                                serde_json::to_string(&serde_json::Value::Array(arr))
+                            {
+                                ambito.asignar(nombre.to_string(), ValorGUI::Texto(nuevo));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Mantener compatibilidad con el store (claves con corchetes)
             let key = format!("{}[{}]", nombre, idx_val.to_display());
             store.set(&key, val.to_json_value());
-            Ok(ValorGUI::Nulo)
+            Ok(val)
         }
 
         Declaracion::LlamadaFuncion { nombre, argumentos } => {
@@ -1448,6 +1508,11 @@ fn evaluar_expresion(
         Expresion::Index { objeto, indice } => {
             let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
             let idx = evaluar_expresion(indice, ambito, store, declaraciones)?;
+            // Acceso directo a mapa (ValorGUI::Mapa) por clave
+            if let ValorGUI::Mapa(m) = &obj {
+                let key = idx.to_display();
+                return Ok(m.get(&key).cloned().unwrap_or(ValorGUI::Nulo));
+            }
             let obj_str = obj.to_display();
             match idx {
                 ValorGUI::Entero(n) => {
@@ -1549,7 +1614,59 @@ fn evaluar_expresion(
         // ── ArraySet (arr[i] = valor como expresión) ─────────
         Expresion::ArraySet { array, valor } => {
             let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
-            let _arr_val = evaluar_expresion(array, ambito, store, declaraciones)?;
+            // array es un Index(objeto, indice): actualizar el mapa/array en el
+            // ámbito (dashboard["saldo_total"] = s). Sin esto, el mapa queda
+            // vacío y luego las lecturas devuelven nulo.
+            if let Expresion::Index { objeto, indice } = array.as_ref() {
+                let obj_nombre = match objeto.as_ref() {
+                    Expresion::Identificador { nombre, .. } => Some(nombre.clone()),
+                    _ => None,
+                };
+                if let Some(nombre) = obj_nombre {
+                    let idx_val = evaluar_expresion(indice, ambito, store, declaraciones)?;
+                    if let Some(obj) = ambito.obtener(&nombre).cloned() {
+                        match obj {
+                            ValorGUI::Mapa(mut m) => {
+                                m.insert(idx_val.to_display(), val.clone());
+                                ambito.asignar(nombre.clone(), ValorGUI::Mapa(m));
+                            }
+                            ValorGUI::Texto(s) => {
+                                if let Ok(serde_json::Value::Object(mut map)) =
+                                    serde_json::from_str::<serde_json::Value>(&s)
+                                {
+                                    map.insert(idx_val.to_display(), val.to_json_value());
+                                    if let Ok(nuevo) =
+                                        serde_json::to_string(&serde_json::Value::Object(map))
+                                    {
+                                        ambito.asignar(nombre.clone(), ValorGUI::Texto(nuevo));
+                                    }
+                                } else if let Ok(serde_json::Value::Array(mut arr)) =
+                                    serde_json::from_str::<serde_json::Value>(&s)
+                                {
+                                    let idx = match &idx_val {
+                                        ValorGUI::Entero(n) => *n as usize,
+                                        _ => idx_val.to_display().parse::<usize>().unwrap_or(0),
+                                    };
+                                    if idx < arr.len() {
+                                        arr[idx] = val.to_json_value();
+                                    } else {
+                                        arr.push(val.to_json_value());
+                                    }
+                                    if let Ok(nuevo) =
+                                        serde_json::to_string(&serde_json::Value::Array(arr))
+                                    {
+                                        ambito.asignar(nombre.clone(), ValorGUI::Texto(nuevo));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    // Mantener compatibilidad con el store (claves con corchetes)
+                    let key = format!("{}[{}]", nombre, idx_val.to_display());
+                    store.set(&key, val.to_json_value());
+                }
+            }
             Ok(val)
         }
 
@@ -1735,16 +1852,25 @@ pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableSto
             if nombre == "main" {
                 for d in cuerpo {
                     match d {
-                        Declaracion::Variable { .. }
-                        | Declaracion::Asignacion { .. }
-                        | Declaracion::LlamadaFuncion { .. }
-                        | Declaracion::Expresion(..) => {
+                        Declaracion::Variable { .. } | Declaracion::Asignacion { .. } => {
                             match evaluar_declaracion(d, &mut ambito, store, declaraciones) {
                                 Ok(_) => {}
                                 Err(e) => {
                                     eprintln!("[inicializar_estado] main: {} — ignorado", e);
                                 }
                             }
+                        }
+                        Declaracion::LlamadaFuncion { nombre, .. } => {
+                            // Solo ejecutar funciones reales (nativas o declaradas en el AST).
+                            // Los widgets del layout GUI (andamio, barra_superior, navegador,
+                            // etc.) no deben evaluarse aquí: se omiten silenciosamente para
+                            // evitar falsos errores tipo "Variable 'buscar_transacciones' no encontrada".
+                            if es_funcion_ejecutable(nombre, declaraciones) {
+                                let _ = evaluar_declaracion(d, &mut ambito, store, declaraciones);
+                            }
+                        }
+                        Declaracion::Expresion(..) => {
+                            let _ = evaluar_declaracion(d, &mut ambito, store, declaraciones);
                         }
                         _ => {} // Ignorar Funcion, Clase, etc.
                     }

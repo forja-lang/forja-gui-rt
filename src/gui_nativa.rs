@@ -6189,7 +6189,8 @@ pub fn layout_a_view<'a>(
                         .must_fill_major_axis(true)
                         .cross_axis_alignment(CrossAxisAlignment::Fill),
                 )
-                .width(Length::px(data.window_width.max(200.0))),
+                .width(Length::px(data.window_width.max(200.0)))
+                .height(Length::px(data.window_height.max(200.0))),
             )
         }
 
