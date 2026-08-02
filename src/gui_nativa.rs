@@ -6815,15 +6815,26 @@ pub fn layout_a_view<'a>(
                             .border_width(1.0)
                             .padding(0.0),
                     ) as Box<AnyWidgetView<AppStateNativo>>;
-                    // Envolver contenido en portal() para scroll cuando
-                    // excede el espacio disponible. La barra queda fija abajo.
+                    // SOLUCIÓN DEFINITIVA: zstack con height explícito
+                    // Capa 1: contenido scrollable (llena toda la ventana)
+                    // Capa 2: overlay con spacer (flex=1) + barra (height fija)
+                    // El spacer empuja la barra SIEMPRE al fondo de la ventana
                     let scrollable_content = view::portal(content);
-                    let content_flex = xilem::view::FlexExt::flex(scrollable_content, 1.0);
-                    Box::new(
-                        view::flex(Axis::Vertical, (content_flex, bar))
-                            .must_fill_major_axis(true)
-                            .cross_axis_alignment(CrossAxisAlignment::Fill),
-                    )
+                    let spacer = xilem::view::FlexExt::flex(
+                        view::sized_box(view::label("")),
+                        1.0,
+                    );
+                    let nav_overlay = Box::new(
+                        view::sized_box(
+                            view::flex(Axis::Vertical, (spacer, bar))
+                                .must_fill_major_axis(true)
+                                .cross_axis_alignment(CrossAxisAlignment::Fill),
+                        ).height(Length::px(data.window_height))
+                    ) as Box<AnyWidgetView<AppStateNativo>>;
+                    Box::new(view::zstack((
+                        Box::new(scrollable_content) as Box<AnyWidgetView<AppStateNativo>>,
+                        nav_overlay,
+                    )))
                 }
                 NavigatorType::Tabs => {
                     let cv = current_var.to_string();
