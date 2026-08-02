@@ -31,8 +31,10 @@ pub struct MaterialSvgIcon {
     tamaño: f64,
     /// Color de relleno del icono (empaquetado como [u8; 4] RGBA)
     rgba: [u8; 4],
-    /// Paths SVG cacheados después del primer lookup
+    /// Paths SVG como strings (para referencia)
     paths: Vec<String>,
+    /// BezPath cacheados después del primer parse (evita re-parsear en cada paint)
+    bez_paths: Vec<BezPath>,
     /// Fill rule
     fill_rule: Fill,
     /// Estilo del icono (Filled, Outlined, Rounded, Sharp, TwoTone)
@@ -47,6 +49,7 @@ impl MaterialSvgIcon {
             tamaño,
             rgba: [color.0, color.1, color.2, 255],
             paths: Vec::new(),
+            bez_paths: Vec::new(),
             fill_rule: Fill::NonZero,
             estilo,
         };
@@ -54,11 +57,16 @@ impl MaterialSvgIcon {
         icon
     }
 
-    /// Carga los paths SVG desde el catálogo de iconos
+    /// Carga los paths SVG desde el catálogo de iconos y los cachea como BezPath
     fn cargar_paths(&mut self) {
         let icon_data = icons::catalog::by_name(&self.nombre);
         if let Some(icon) = icon_data {
-            self.paths.push(icon.svg_path.to_string());
+            let path_str = icon.svg_path.to_string();
+            // Pre-parsear el BezPath una sola vez para evitar costo en cada paint
+            if let Ok(bez) = BezPath::from_svg(&path_str) {
+                self.bez_paths.push(bez);
+            }
+            self.paths.push(path_str);
         }
     }
 }
@@ -88,18 +96,16 @@ impl Widget for MaterialSvgIcon {
         let brush = Brush::Solid(alpha_color);
         let transform = Affine::scale(scale);
 
-        for path_data in &self.paths {
-            if let Ok(bez_path) = BezPath::from_svg(path_data) {
-                match self.estilo {
-                    IconStyle::Outlined => {
-                        // Outlined: stroke con línea fina para efecto de contorno
-                        let stroke = Stroke::new(1.5);
-                        scene.stroke(&stroke, transform, &brush, None, &bez_path);
-                    }
-                    _ => {
-                        // Filled, Rounded, Sharp, TwoTone: relleno sólido
-                        scene.fill(self.fill_rule, transform, &brush, None, &bez_path);
-                    }
+        for bez_path in &self.bez_paths {
+            match self.estilo {
+                IconStyle::Outlined => {
+                    // Outlined: stroke con línea fina para efecto de contorno
+                    let stroke = Stroke::new(1.5);
+                    scene.stroke(&stroke, transform, &brush, None, bez_path);
+                }
+                _ => {
+                    // Filled, Rounded, Sharp, TwoTone: relleno sólido
+                    scene.fill(self.fill_rule, transform, &brush, None, bez_path);
                 }
             }
         }

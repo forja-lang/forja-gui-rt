@@ -1,4 +1,4 @@
-// Forja GUI — Sistema de iconos vectoriales Material Design
+﻿// Forja GUI — Sistema de iconos vectoriales Material Design
 // Basado en Material Icons (Google Material Design)
 // Los SVG paths están embebidos para zero dependencias externas.
 //
@@ -498,6 +498,23 @@ pub mod catalog {
     /// Science / ciencia
     pub const SCIENCE: MaterialIcon = MaterialIcon::new("science", "M19.8 18.4L14 10.67V6.5l1.35-1.69c.26-.33.03-.81-.39-.81H9.04c-.42 0-.65.48-.39.81L10 6.5v4.17L4.2 18.4c-.49.66-.02 1.6.8 1.6h14c.82 0 1.29-.94.8-1.6z");
 
+
+    // ═══════════════════════════════════════════════════════════════════
+    // APLICACION (App-specific icons for navigation)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Dashboard / panel de control
+    pub const DASHBOARD: MaterialIcon = MaterialIcon::new("dashboard", "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z");
+    /// Receipt long / recibo largo (transacciones)
+    pub const RECEIPT_LONG: MaterialIcon = MaterialIcon::new("receipt_long", "M19.5 3.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5zM19 19.09H5V4.91h14v14.18zM6 15h12v2H6zm0-4h12v2H6zm0-4h12v2H6z");
+    /// Category / categorias
+    pub const CATEGORY_ICON: MaterialIcon = MaterialIcon::new("category", "M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.87L12 5.84zM17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM3 21.5h8v-8H3v8zm2-6h4v4H5v-4z");
+    /// Pie chart / grafico circular (presupuestos)
+    pub const PIE_CHART: MaterialIcon = MaterialIcon::new("pie_chart", "M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zM13.03 2v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zM13.03 13.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z");
+    /// Bar chart / grafico de barras (estadisticas)
+    pub const BAR_CHART_ICON: MaterialIcon = MaterialIcon::new("bar_chart", "M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z");
+    /// Savings / ahorro (metas)
+    pub const SAVINGS: MaterialIcon = MaterialIcon::new("savings", "M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z");
     // ─── Buscar icono por nombre ─────────────────────────────────────
 
     /// Busca un icono en el catálogo por su nombre
@@ -640,7 +657,13 @@ pub mod catalog {
             // Salud / Ciencia
             "local_hospital" | "hospital" => Some(&LOCAL_HOSPITAL),
             "science" | "ciencia" | "laboratorio" => Some(&SCIENCE),
-            // No encontrado
+            // Aplicacion
+            "dashboard" | "panel" => Some(&DASHBOARD),
+            "receipt_long" | "recibo" | "transacciones" => Some(&RECEIPT_LONG),
+            "category" | "categorias" => Some(&CATEGORY_ICON),
+            "pie_chart" | "circular" | "presupuesto" => Some(&PIE_CHART),
+            "bar_chart" | "barras" | "estadisticas" => Some(&BAR_CHART_ICON),
+            "savings" | "ahorro" | "metas" => Some(&SAVINGS),            // No encontrado
             _ => None,
         }
     }
@@ -766,7 +789,13 @@ pub mod catalog {
             // Salud / Ciencia
             "local_hospital" | "hospital" => "🏥",
             "science" => "🔬",
-            // Fallback genérico
+            // Aplicacion
+            "dashboard" | "panel" => "📊",
+            "receipt_long" | "recibo" | "transacciones" => "🧾",
+            "category" | "categorias" => "📂",
+            "pie_chart" | "circular" | "presupuesto" => "🥧",
+            "bar_chart" | "barras" | "estadisticas" => "📊",
+            "savings" | "ahorro" | "metas" => "💰",            // Fallback genérico
             _ => "❓",
         }
     }
