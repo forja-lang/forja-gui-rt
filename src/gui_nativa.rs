@@ -4535,47 +4535,22 @@ pub fn layout_a_view<'a>(
             gap,
             alignment,
         } => {
-            let mut normal_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            let mut fab_widget: Option<Box<AnyWidgetView<AppStateNativo>>> = None;
+            let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in children {
-                if matches!(h, Layout::FAB { .. }) {
-                    fab_widget = Some(layout_a_view(h, data, _prog, theme));
-                } else {
-                    normal_widgets.push(layout_a_view(h, data, _prog, theme));
-                }
+                widgets.push(layout_a_view(h, data, _prog, theme));
             }
             let ma = parse_alignment(alignment);
             let ancho = (data.window_width - 18.0).max(200.0);
-            let column_content = view::sized_box(
-                view::flex(Axis::Vertical, (normal_widgets,))
-                    .gap(Length::px(*gap))
-                    .main_axis_alignment(ma)
-                    .cross_axis_alignment(CrossAxisAlignment::Fill),
+            Box::new(
+                view::sized_box(
+                    view::flex(Axis::Vertical, (widgets,))
+                        .gap(Length::px(*gap))
+                        .main_axis_alignment(ma)
+                        .cross_axis_alignment(CrossAxisAlignment::Fill),
+                )
+                .width(Length::px(ancho))
+                .padding(16.0),
             )
-            .width(Length::px(ancho))
-            .padding(16.0);
-            // Si hay un FAB, superponerlo con zstack en la esquina inferior derecha
-            match fab_widget {
-                Some(fab) => {
-                    // Posicionar el FAB en la esquina inferior derecha (estilo Android)
-                    // Usar spacer horizontal + spacer vertical para empujarlo
-                    let right_pad = (data.window_width - 80.0).max(0.0);
-                    let _bottom_pad = (data.window_height - 120.0).max(0.0);
-                    let positioned_fab = view::flex(Axis::Vertical, (
-                        view::flex(Axis::Horizontal, (
-                            view::sized_box(view::label("")).width(Length::px(right_pad)),
-                            Box::new(view::sized_box(fab).padding(8.0)) as Box<AnyWidgetView<AppStateNativo>>,
-                        )).gap(Length::px(0.0)),
-                    )).gap(Length::px(0.0));
-                    Box::new(
-                        view::zstack((
-                            Box::new(column_content) as Box<AnyWidgetView<AppStateNativo>>,
-                            Box::new(positioned_fab),
-                        ))
-                    )
-                }
-                None => Box::new(column_content),
-            }
         }
         Layout::CenteredColumn(hijos) => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
@@ -6835,20 +6810,14 @@ pub fn layout_a_view<'a>(
                             .border_width(1.0)
                             .padding(0.0),
                     ) as Box<AnyWidgetView<AppStateNativo>>;
-                    // zstack: contenido ocupa toda la ventana como capa base,
-                    // navbar superpuesta al fondo como capa separada.
-                    // El spacer con flex(1.0) empuja la barra al fondo.
-                    let nav_overlay: Box<AnyWidgetView<AppStateNativo>> = {
-                        let spacer = xilem::view::FlexExt::flex(
-                            view::sized_box(view::label(String::new())),
-                            1.0,
-                        );
-                        Box::new(
-                            view::flex(Axis::Vertical, (spacer, bar))
-                                .must_fill_major_axis(true),
-                        )
-                    };
-                    Box::new(view::zstack((content, nav_overlay)))
+                    // Flex vertical: contenido ocupa todo el espacio flexible,
+                    // la barra va al final (parte inferior).
+                    let content_flex = xilem::view::FlexExt::flex(content, 1.0);
+                    Box::new(
+                        view::flex(Axis::Vertical, (content_flex, bar))
+                            .must_fill_major_axis(true)
+                            .cross_axis_alignment(CrossAxisAlignment::Fill),
+                    )
                 }
                 NavigatorType::Tabs => {
                     let cv = current_var.to_string();
@@ -6906,20 +6875,12 @@ pub fn layout_a_view<'a>(
                     let tabs = Box::new(
                         view::flex(Axis::Horizontal, (items,)).gap(Length::px(0.0)),
                     ) as Box<AnyWidgetView<AppStateNativo>>;
-                    // zstack: contenido ocupa toda la ventana como capa base,
-                    // tabs superpuestas arriba como capa separada.
-                    // El spacer con flex(1.0) deja las tabs pegadas arriba.
-                    let nav_overlay: Box<AnyWidgetView<AppStateNativo>> = {
-                        let spacer = xilem::view::FlexExt::flex(
-                            view::sized_box(view::label(String::new())),
-                            1.0,
-                        );
-                        Box::new(
-                            view::flex(Axis::Vertical, (tabs, spacer))
-                                .must_fill_major_axis(true),
-                        )
-                    };
-                    Box::new(view::zstack((content, nav_overlay)))
+                    // Flex vertical: tabs arriba, contenido flexible abajo.
+                    let content_flex = xilem::view::FlexExt::flex(content, 1.0);
+                    Box::new(
+                        view::flex(Axis::Vertical, (tabs, content_flex))
+                            .must_fill_major_axis(true),
+                    )
                 }
                 NavigatorType::Rail | NavigatorType::Drawer => {
                     let cv = current_var.to_string();
@@ -6966,19 +6927,12 @@ pub fn layout_a_view<'a>(
                             .gap(Length::px(4.0))
                             .background(Background::Color(sc.surface.into())),
                     );
-                    // zstack: contenido ocupa toda la ventana como capa base,
-                    // rail superpuesto a la izquierda como capa separada.
-                    let nav_overlay: Box<AnyWidgetView<AppStateNativo>> = {
-                        let spacer = xilem::view::FlexExt::flex(
-                            view::sized_box(view::label(String::new())),
-                            1.0,
-                        );
-                        Box::new(
-                            view::flex(Axis::Horizontal, (rail, spacer))
-                                .must_fill_major_axis(true),
-                        )
-                    };
-                    Box::new(view::zstack((content, nav_overlay)))
+                    // Flex horizontal: rail a la izquierda, contenido flexible a la derecha.
+                    let content_flex = xilem::view::FlexExt::flex(content, 1.0);
+                    Box::new(
+                        view::flex(Axis::Horizontal, (rail, content_flex))
+                            .must_fill_major_axis(true),
+                    )
                 }
             }
         }
