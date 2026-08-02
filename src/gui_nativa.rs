@@ -6183,11 +6183,9 @@ pub fn layout_a_view<'a>(
                 });
             // Llenar la ventana: el body ocupa el espacio restante y el
             // contenido interno (navigator) queda limitado con scroll.
-            // El ancho se fija a window_width (recalculado en cada render)
-            // y Fill estira los hijos (top, body, bottom) a todo el ancho,
-            // por lo que el contenido se reajusta al redimensionar.
-            // NOTA: NO fijamos height para que el flex interno gestione
-            // la distribución vertical correctamente (sin recortar la navbar).
+            // El width+height fijan la jerarquía a las dimensiones de la
+            // ventana para que el flex distribuya correctamente y el
+            // portal() dentro del navigator permita scroll.
             Box::new(
                 view::sized_box(
                     view::flex(Axis::Vertical, (tv, body_flex, bv))
@@ -6196,6 +6194,7 @@ pub fn layout_a_view<'a>(
                         .cross_axis_alignment(CrossAxisAlignment::Fill),
                 )
                 .width(Length::px(data.window_width.max(200.0)))
+                .height(Length::px(data.window_height.max(200.0)))
             )
         }
 
@@ -6816,9 +6815,10 @@ pub fn layout_a_view<'a>(
                             .border_width(1.0)
                             .padding(0.0),
                     ) as Box<AnyWidgetView<AppStateNativo>>;
-                    // Flex vertical: contenido ocupa todo el espacio flexible,
-                    // la barra va al final (parte inferior).
-                    let content_flex = xilem::view::FlexExt::flex(content, 1.0);
+                    // Envolver contenido en portal() para scroll cuando
+                    // excede el espacio disponible. La barra queda fija abajo.
+                    let scrollable_content = view::portal(content);
+                    let content_flex = xilem::view::FlexExt::flex(scrollable_content, 1.0);
                     Box::new(
                         view::flex(Axis::Vertical, (content_flex, bar))
                             .must_fill_major_axis(true)
