@@ -121,11 +121,6 @@ impl<T: Clone> Clone for Signal<T> {
     }
 }
 
-// Safety: Signal<T> es Send + Sync cuando T: Send + Sync
-// porque usa Arc internamente
-unsafe impl<T: Send> Send for Signal<T> {}
-unsafe impl<T: Send + Sync> Sync for Signal<T> {}
-
 // ─── Stream ──────────────────────────────────────────────────────────
 //
 /// Un canal de eventos simple para comunicación reactiva.
@@ -163,11 +158,12 @@ impl<T> Stream<T> {
     }
 
     /// Obtiene el último valor emitido (si hay) y su generación.
-    pub fn peek(&self) -> (Option<&T>, u64) {
+    pub fn peek(&self) -> (Option<T>, u64)
+    where
+        T: Clone,
+    {
         let guard = self.inner.read().expect("Stream::peek lock poisoned");
-        // No podemos devolver una referencia al valor dentro del lock
-        // porque el lock se dropearía al salir. Retornamos generación nomas.
-        (None, guard.generation)
+        (guard.value.clone(), guard.generation)
     }
 
     /// Obtiene la generación actual.
@@ -192,9 +188,6 @@ impl<T: Clone> Clone for Stream<T> {
         }
     }
 }
-
-unsafe impl<T: Send> Send for Stream<T> {}
-unsafe impl<T: Send + Sync> Sync for Stream<T> {}
 
 // ─── ValorReactivio (enum wrapper) ──────────────────────────────────
 //
