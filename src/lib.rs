@@ -7,9 +7,12 @@ extern crate self as forja_gui_rt;
 pub mod signals;
 // Módulo de accesibilidad (TalkBack/VoiceOver)
 pub mod accessibility;
+pub(crate) mod widgets;
 pub mod gui_nativa;
 // Módulo de evaluación tree-walking completa del AST de Forja
 pub mod evaluador;
+// Funciones helper centralizadas (extracción AST, temas/colores, callbacks, builders)
+pub(crate) mod helpers;
 
 // Re-exportar todo lo que necesita el código generado por Forja
 pub use winit::error::EventLoopError;
@@ -47,7 +50,7 @@ pub use xilem::masonry::kurbo::{Point, Size};
 pub use xilem::masonry::ui_events::pointer::PointerButton;
 pub use xilem::masonry::vello::{self, Scene};
 /// Re-exportamos módulos de Masonry necesarios para widgets personalizados
-pub use xilem::masonry::widgets;
+pub use xilem::masonry::widgets as masonry_widgets;
 /// Window: acceso a la ventana nativa de winit
 pub use xilem::winit::window::Window;
 /// Pod: wrapper de widgets Masonry como WidgetView
@@ -137,7 +140,7 @@ pub use canvas_widget::{CanvasCommand, CanvasView, CanvasWidget};
 // Funciones principales para convertir AST → Layout → Widgets
 pub use gui_nativa::{
     build_and_run, expr_a_layout, extraer_layout, inicializar_estado, layout_a_view,
-    AppStateNativo, Layout, ValorGUI,
+    AppStateNativo, Layout, Orientation, ValorGUI,
 };
 
 /// Convierte una expresión Forja (AST) a un Layout del runtime.
