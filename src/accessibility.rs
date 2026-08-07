@@ -7,7 +7,7 @@
 // - Anuncios de accesibilidad (TalkBack-style)
 // - Gestión de foco
 
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use xilem::masonry::accesskit::Role;
@@ -186,7 +186,6 @@ pub struct AccessibilityManager {
     /// Anuncios pendientes
     announcements: Arc<std::sync::RwLock<Vec<Anuncio>>>,
     /// ID del widget con foco
-    #[allow(dead_code)]
     focused_id: Arc<AtomicU64>,
     /// Último widget anunciado (para evitar repeticiones)
     last_announced: Arc<std::sync::RwLock<String>>,
@@ -254,6 +253,16 @@ impl AccessibilityManager {
     /// Alterna el estado del screen reader
     pub fn toggle(&mut self) {
         self.set_enabled(!self.enabled);
+    }
+
+    /// 5.2: Establece el ID del widget con foco
+    pub fn set_focused(&self, widget_id: u64) {
+        self.focused_id.store(widget_id, Ordering::SeqCst);
+    }
+
+    /// 5.2: Obtiene el ID del widget con foco
+    pub fn get_focused(&self) -> u64 {
+        self.focused_id.load(Ordering::SeqCst)
     }
 }
 
