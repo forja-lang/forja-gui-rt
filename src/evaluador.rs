@@ -183,6 +183,38 @@ impl ValorGUI {
         }
     }
 
+    /// 5.3: Conversión lazy desde serde_json::Value.
+    /// Para objetos, preserva la estructura como Mapa en vez de serializar a JSON string.
+    /// Para arrays pequeños (≤10 elems), también preserva como Mapa con claves numéricas.
+    pub fn from_serde_lazy(val: &serde_json::Value) -> Self {
+        match val {
+            serde_json::Value::Object(map) => {
+                let inner: HashMap<String, ValorGUI> = map.iter()
+                    .map(|(k, v)| (k.clone(), ValorGUI::from_serde(v)))
+                    .collect();
+                ValorGUI::Mapa(inner)
+            }
+            serde_json::Value::Array(arr) => {
+                if arr.len() <= 10 {
+                    let inner: Vec<ValorGUI> = arr.iter()
+                        .map(|v| ValorGUI::from_serde(v))
+                        .collect();
+                    // Usar Mapa con claves numéricas como workaround para arrays pequeños
+                    let map: HashMap<String, ValorGUI> = inner.into_iter()
+                        .enumerate()
+                        .map(|(i, v)| (i.to_string(), v))
+                        .collect();
+                    ValorGUI::Mapa(map)
+                } else {
+                    // Arrays grandes: serializar a JSON string (comportamiento original)
+                    let json_str = val.to_string();
+                    ValorGUI::Texto(json_str)
+                }
+            }
+            _ => ValorGUI::from_serde(val),
+        }
+    }
+
     /// Comparación ordenada para <, <=, >, >=
     pub fn compare(&self, op: &Operador, other: &ValorGUI) -> bool {
         let a = ValorGUI::to_f64(self);
@@ -914,7 +946,6 @@ fn sqlite_columnas(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 
 /// Algoritmo: días desde epoch (1970-01-01) hasta una fecha civil (año, mes, día)
 /// Basado en el algoritmo de Howard Hinnant (calendario Gregoriano)
-#[allow(dead_code)]
 fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let y = if month <= 2 { year - 1 } else { year };
     let era = if y >= 0 { y } else { y - 399 } / 400;
