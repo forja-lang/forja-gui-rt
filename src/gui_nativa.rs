@@ -1111,10 +1111,12 @@ pub fn extraer_layout(decls: &[Declaracion]) -> Layout {
                             argumentos: argumentos.clone(),
                         };
                         if let Some(layout) = expr_a_layout(&expr) {
+                            crate::debug::print_layout_tree(&layout);
                             return layout;
                         }
                     } else if let Declaracion::Expresion(expr) = d {
                         if let Some(layout) = expr_a_layout(expr) {
+                            crate::debug::print_layout_tree(&layout);
                             return layout;
                         }
                     }

@@ -11,8 +11,11 @@ pub mod gui_nativa;
 pub(crate) mod widgets;
 // Módulo de evaluación tree-walking completa del AST de Forja
 pub mod evaluador;
+// Módulo de depuración y trazabilidad del estado GUI
+pub mod debug;
 // Funciones helper centralizadas (extracción AST, temas/colores, callbacks, builders)
 pub(crate) mod helpers;
+pub use debug::*;
 
 // Re-exportar todo lo que necesita el código generado por Forja
 pub use winit::error::EventLoopError;

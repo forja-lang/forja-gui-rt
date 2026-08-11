@@ -492,12 +492,14 @@ pub(crate) fn ejecutar_callback_y_actualizar(
     state: &mut AppStateNativo,
     programa: &[Declaracion],
 ) {
+    crate::debug::log_callback_start(nombre_fn);
     match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut state.store) {
         Ok(valor) => {
+            crate::debug::log_callback_success(nombre_fn, &valor.to_display());
             state.store.set("resultado", valor.to_json_value());
         }
         Err(e) => {
-            eprintln!("Error ejecutando callback '{}': {}", nombre_fn, e);
+            crate::debug::log_callback_error(nombre_fn, &e);
             state.store.set(
                 "resultado",
                 serde_json::Value::String(format!("Error: {}", e)),

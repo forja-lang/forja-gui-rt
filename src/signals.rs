@@ -306,9 +306,11 @@ impl VariableStore {
     /// Escribe un valor en una variable, incrementa su generación
     /// y la generación global. Retorna la generación de la señal.
     pub fn set(&self, name: &str, value: serde_json::Value) -> u64 {
+        let old_val = self.get(name);
         let signal = self.ensure_signal(name);
-        let gen = signal.write(value);
+        let gen = signal.write(value.clone());
         self.global_gen.fetch_add(1, Ordering::Release);
+        crate::debug::log_state_change(name, old_val.as_ref(), &value);
         gen
     }
 
