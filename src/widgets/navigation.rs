@@ -2,15 +2,15 @@
 // NavigationDrawer, TopAppBar, BottomAppBar, Tabs, SearchBar, SearchView
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::view;
-use crate::helpers::*;
 use crate::gui_nativa::{
-    AppStateNativo, IconAction, Layout, NavigatorAnim, NavigatorScreen,
-    NavigatorType, NavItem, ValorGUI,
+    AppStateNativo, IconAction, Layout, NavItem, NavigatorAnim, NavigatorScreen, NavigatorType,
+    ValorGUI,
 };
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
-use crate::Length;
+use crate::helpers::*;
 use crate::theme::motion::EASE_EMPHASIZED;
+use crate::view;
+use crate::Length;
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
 use forja::ast::Declaracion;
 use xilem::style::Style;
 
@@ -41,12 +41,17 @@ pub(crate) fn render_navigator(
 
     // Evaluar el contenido: si content_fn está presente, buscar la función en el AST
     let mut deferred_layout = Layout::Spacer(0.0);
-    let content_layout = if let (Layout::Spacer(0.0), Some(fn_name)) = (&*current_screen.contenido, &current_screen.content_fn) {
+    let content_layout = if let (Layout::Spacer(0.0), Some(fn_name)) =
+        (&*current_screen.contenido, &current_screen.content_fn)
+    {
         let mut found = false;
         for decl in prog {
             if let forja::ast::Declaracion::Funcion { nombre, cuerpo, .. } = decl {
                 if nombre == fn_name {
-                    if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo.iter().find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. })) {
+                    if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo
+                        .iter()
+                        .find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. }))
+                    {
                         if let Some(expr) = valor {
                             match crate::gui_nativa::expr_a_layout(expr) {
                                 Some(layout) => {
@@ -63,8 +68,14 @@ pub(crate) fn render_navigator(
                 }
             }
         }
-        if found { &deferred_layout } else {
-            eprintln!("[Navigator] content_fn '{}' NO encontrada en AST (screens: {})", fn_name, screens.len());
+        if found {
+            &deferred_layout
+        } else {
+            eprintln!(
+                "[Navigator] content_fn '{}' NO encontrada en AST (screens: {})",
+                fn_name,
+                screens.len()
+            );
             &*current_screen.contenido
         }
     } else {
@@ -79,7 +90,8 @@ pub(crate) fn render_navigator(
             if current_id != data.nav_prev_screen {
                 data.nav_transition_start(&current_id);
             }
-            let elapsed = data.nav_anim_start
+            let elapsed = data
+                .nav_anim_start
                 .map(|s| s.elapsed().as_secs_f64())
                 .unwrap_or(0.0);
             let duration = 0.25;
@@ -91,10 +103,7 @@ pub(crate) fn render_navigator(
             } else {
                 let overlay_alpha = 1.0 - eased;
                 let fade_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha as f64 * 0.5);
-                Box::new(
-                    view::sized_box(content)
-                        .background(Background::Color(fade_color)),
-                )
+                Box::new(view::sized_box(content).background(Background::Color(fade_color)))
             }
         }
     };
@@ -124,24 +133,37 @@ pub(crate) fn render_navigator(
                 let icono = nav_icons[i].clone();
                 let sel = i == idx;
                 let btn_idx = i;
-                let fg_rgb: RgbColor = if sel { sc.primary } else { sc.on_surface_variant };
+                let fg_rgb: RgbColor = if sel {
+                    sc.primary
+                } else {
+                    sc.on_surface_variant
+                };
                 let fg: crate::Color = fg_rgb.into();
                 let pill_bg: crate::Color = if sel {
                     sc.secondary_container.into()
                 } else {
                     crate::Color::TRANSPARENT
                 };
-                let icono_view = view::sized_box(crate::svg_icon::<AppStateNativo>(&icono, 24.0, fg_rgb, crate::IconStyle::Filled))
-                    .padding(8.0)
-                    .corner_radius(20.0)
-                    .background(Background::Color(pill_bg));
+                let icono_view = view::sized_box(crate::svg_icon::<AppStateNativo>(
+                    &icono,
+                    24.0,
+                    fg_rgb,
+                    crate::IconStyle::Filled,
+                ))
+                .padding(8.0)
+                .corner_radius(20.0)
+                .background(Background::Color(pill_bg));
                 let w = view::flex(
                     crate::view::Axis::Vertical,
                     (
                         icono_view,
                         view::label(titulo)
                             .text_size(label_style.font_size as f32)
-                            .weight(if sel { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                            .weight(if sel {
+                                FontWeight::MEDIUM
+                            } else {
+                                FontWeight::NORMAL
+                            })
                             .color(fg),
                     ),
                 )
@@ -164,16 +186,14 @@ pub(crate) fn render_navigator(
                     .padding(0.0),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             let scrollable_content = view::portal(content);
-            let spacer = xilem::view::FlexExt::flex(
-                view::sized_box(view::label("")),
-                1.0,
-            );
+            let spacer = xilem::view::FlexExt::flex(view::sized_box(view::label("")), 1.0);
             let nav_overlay = Box::new(
                 view::sized_box(
                     view::flex(crate::view::Axis::Vertical, (spacer, bar))
                         .must_fill_major_axis(true)
                         .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
-                ).height(Length::px(data.window_height))
+                )
+                .height(Length::px(data.window_height)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             Box::new(view::zstack((
                 Box::new(scrollable_content) as Box<AnyWidgetView<AppStateNativo>>,
@@ -192,13 +212,21 @@ pub(crate) fn render_navigator(
                 let titulo = nav_titles[i].clone();
                 let sel = i == idx;
                 let btn_idx = i;
-                let fg: crate::Color = if sel { sc.primary.into() } else { sc.on_surface_variant.into() };
+                let fg: crate::Color = if sel {
+                    sc.primary.into()
+                } else {
+                    sc.on_surface_variant.into()
+                };
                 let tab = view::flex(
                     crate::view::Axis::Vertical,
                     (
                         view::label(titulo)
                             .text_size(label_style.font_size as f32)
-                            .weight(if sel { FontWeight::BOLD } else { FontWeight::MEDIUM })
+                            .weight(if sel {
+                                FontWeight::BOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
                             .color(fg),
                         if sel {
                             Box::new(
@@ -208,8 +236,7 @@ pub(crate) fn render_navigator(
                             ) as Box<AnyWidgetView<AppStateNativo>>
                         } else {
                             Box::new(
-                                view::sized_box(view::label(String::new()))
-                                    .height(Length::px(3.0)),
+                                view::sized_box(view::label(String::new())).height(Length::px(3.0)),
                             ) as Box<AnyWidgetView<AppStateNativo>>
                         },
                     ),
@@ -233,16 +260,14 @@ pub(crate) fn render_navigator(
                     .padding(0.0),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             let scrollable_content = view::portal(content);
-            let spacer = xilem::view::FlexExt::flex(
-                view::sized_box(view::label("")),
-                1.0,
-            );
+            let spacer = xilem::view::FlexExt::flex(view::sized_box(view::label("")), 1.0);
             let nav_overlay = Box::new(
                 view::sized_box(
                     view::flex(crate::view::Axis::Vertical, (tabs, spacer))
                         .must_fill_major_axis(true)
                         .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
-                ).height(Length::px(data.window_height))
+                )
+                .height(Length::px(data.window_height)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             Box::new(view::zstack((
                 Box::new(scrollable_content) as Box<AnyWidgetView<AppStateNativo>>,
@@ -261,7 +286,11 @@ pub(crate) fn render_navigator(
                 let icono = nav_icons[i].clone();
                 let sel = i == idx;
                 let btn_idx = i;
-                let fg_rgb: RgbColor = if sel { sc.on_secondary_container } else { sc.on_surface_variant };
+                let fg_rgb: RgbColor = if sel {
+                    sc.on_secondary_container
+                } else {
+                    sc.on_surface_variant
+                };
                 let fg: crate::Color = fg_rgb.into();
                 let bg: crate::Color = if sel {
                     sc.secondary_container.into()
@@ -271,7 +300,12 @@ pub(crate) fn render_navigator(
                 let w = view::flex(
                     crate::view::Axis::Vertical,
                     (
-                        crate::svg_icon::<AppStateNativo>(&icono, 24.0, fg_rgb, crate::IconStyle::Filled),
+                        crate::svg_icon::<AppStateNativo>(
+                            &icono,
+                            24.0,
+                            fg_rgb,
+                            crate::IconStyle::Filled,
+                        ),
                         view::label(titulo).text_size(10.0).color(fg),
                     ),
                 )
@@ -338,7 +372,11 @@ pub(crate) fn render_navigation_bar(
                     .color(fg_color),
                 view::label(item.label.clone())
                     .text_size(label_style.font_size as f32)
-                    .weight(if is_selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                    .weight(if is_selected {
+                        FontWeight::MEDIUM
+                    } else {
+                        FontWeight::NORMAL
+                    })
                     .color(fg_color),
             ),
         )
@@ -558,13 +596,15 @@ pub(crate) fn render_top_app_bar(
         let cb_inner = action.callback.clone();
         let p_inner = p.clone();
         let icon_fg_rgb: RgbColor = scheme.on_surface_variant;
-        let icon_view = crate::svg_icon::<AppStateNativo>(&action.icono, 24.0, icon_fg_rgb, crate::IconStyle::Filled);
-        let icon_btn = view::button(
-            icon_view,
-            move |data: &mut AppStateNativo| {
-                ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
-            },
+        let icon_view = crate::svg_icon::<AppStateNativo>(
+            &action.icono,
+            24.0,
+            icon_fg_rgb,
+            crate::IconStyle::Filled,
         );
+        let icon_btn = view::button(icon_view, move |data: &mut AppStateNativo| {
+            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+        });
         action_widgets.push(Box::new(icon_btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
@@ -601,13 +641,15 @@ pub(crate) fn render_bottom_app_bar(
         let cb_inner = action.callback.clone();
         let p_inner = p.clone();
         let icon_fg_rgb: RgbColor = scheme.on_surface_variant;
-        let icon_view = crate::svg_icon::<AppStateNativo>(&action.icono, 24.0, icon_fg_rgb, crate::IconStyle::Filled);
-        let icon_btn = view::button(
-            icon_view,
-            move |data: &mut AppStateNativo| {
-                ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
-            },
+        let icon_view = crate::svg_icon::<AppStateNativo>(
+            &action.icono,
+            24.0,
+            icon_fg_rgb,
+            crate::IconStyle::Filled,
         );
+        let icon_btn = view::button(icon_view, move |data: &mut AppStateNativo| {
+            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+        });
         action_widgets.push(Box::new(icon_btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
@@ -621,9 +663,11 @@ pub(crate) fn render_bottom_app_bar(
     }
 
     Box::new(
-        view::sized_box(view::flex(crate::view::Axis::Horizontal, (children,)).gap(Length::px(16.0)))
-            .background(Background::Color(scheme.surface.into()))
-            .padding(8.0),
+        view::sized_box(
+            view::flex(crate::view::Axis::Horizontal, (children,)).gap(Length::px(16.0)),
+        )
+        .background(Background::Color(scheme.surface.into()))
+        .padding(8.0),
     )
 }
 
@@ -661,7 +705,11 @@ pub(crate) fn render_tabs(
             (
                 view::label(t.clone())
                     .text_size(label_style.font_size as f32)
-                    .weight(if is_selected { FontWeight::BOLD } else { FontWeight::MEDIUM })
+                    .weight(if is_selected {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
                     .color(fg_color),
                 if is_selected {
                     Box::new(
@@ -670,9 +718,8 @@ pub(crate) fn render_tabs(
                             .background(Background::Color(scheme.primary.into())),
                     ) as Box<AnyWidgetView<AppStateNativo>>
                 } else {
-                    Box::new(
-                        view::sized_box(view::label(String::new())).height(Length::px(3.0)),
-                    ) as Box<AnyWidgetView<AppStateNativo>>
+                    Box::new(view::sized_box(view::label(String::new())).height(Length::px(3.0)))
+                        as Box<AnyWidgetView<AppStateNativo>>
                 },
             ),
         )

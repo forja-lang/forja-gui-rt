@@ -3,11 +3,11 @@
 // SliderDiscrete, SliderRange, ChipGroup
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::view;
-use crate::helpers::*;
 use crate::gui_nativa::{AppStateNativo, TextFieldVariant};
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
+use crate::helpers::*;
+use crate::view;
 use crate::Length;
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
 use forja::ast::Declaracion;
 use xilem::style::Style;
 
@@ -47,11 +47,10 @@ pub(crate) fn render_text_field(
     };
 
     // Campo de texto
-    let mut ti =
-        view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-            data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
-        })
-        .text_color(scheme.on_surface.into());
+    let mut ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
+        data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+    })
+    .text_color(scheme.on_surface.into());
     if !placeholder_text.is_empty() {
         ti = ti.placeholder(placeholder_text.as_str());
     }
@@ -179,10 +178,7 @@ pub(crate) fn render_number_field(
 
     let range_text = format!("{}-{}", mn, mx);
     let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        if new_val.parse::<f64>().is_ok()
-            || new_val.is_empty()
-            || new_val == "-"
-            || new_val == "."
+        if new_val.parse::<f64>().is_ok() || new_val.is_empty() || new_val == "-" || new_val == "."
         {
             data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
         }
@@ -514,13 +510,17 @@ pub(crate) fn render_slider_range(
     let mx = *max;
 
     let slider1 = view::slider(
-        mn, mx, val1,
+        mn,
+        mx,
+        val1,
         move |data: &mut AppStateNativo, new_val: f64| {
             data.escribir(&var1, crate::ValorGUI::Decimal(new_val));
         },
     );
     let slider2 = view::slider(
-        mn, mx, val2,
+        mn,
+        mx,
+        val2,
         move |data: &mut AppStateNativo, new_val: f64| {
             data.escribir(&var2, crate::ValorGUI::Decimal(new_val));
         },
@@ -579,9 +579,10 @@ pub(crate) fn render_chip_group(
             let btn = view::button(label, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb_inner, data, &prog_inner);
             });
-            chip_widgets.push(Box::new(
-                btn.background(Background::Color(bg)).corner_radius(8.0),
-            ) as Box<AnyWidgetView<AppStateNativo>>);
+            chip_widgets.push(
+                Box::new(btn.background(Background::Color(bg)).corner_radius(8.0))
+                    as Box<AnyWidgetView<AppStateNativo>>,
+            );
         } else {
             let fg: crate::Color = scheme.on_surface.into();
             let border: crate::Color = scheme.outline.into();

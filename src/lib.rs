@@ -7,8 +7,8 @@ extern crate self as forja_gui_rt;
 pub mod signals;
 // Módulo de accesibilidad (TalkBack/VoiceOver)
 pub mod accessibility;
-pub(crate) mod widgets;
 pub mod gui_nativa;
+pub(crate) mod widgets;
 // Módulo de evaluación tree-walking completa del AST de Forja
 pub mod evaluador;
 // Funciones helper centralizadas (extracción AST, temas/colores, callbacks, builders)

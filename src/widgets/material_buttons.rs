@@ -1,10 +1,10 @@
 // Material Design 3 — Botones: FAB, IconButton, SegmentedButton
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::view;
-use crate::helpers::*;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
 use crate::gui_nativa::{AppStateNativo, FabSize, IconButtonVariant};
+use crate::helpers::*;
+use crate::view;
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
 use forja::ast::Declaracion;
 use xilem::style::Style;
 
@@ -69,7 +69,8 @@ pub(crate) fn render_icon_button(
     match variant {
         IconButtonVariant::Standard => {
             let fg_rgb: RgbColor = scheme.on_surface_variant;
-            let icon_view = crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
+            let icon_view =
+                crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
             Box::new(view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             }))
@@ -77,7 +78,8 @@ pub(crate) fn render_icon_button(
         IconButtonVariant::Filled => {
             let fg_rgb: RgbColor = scheme.on_primary;
             let bg: crate::Color = scheme.primary.into();
-            let icon_view = crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
+            let icon_view =
+                crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
             let btn = view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });
@@ -86,7 +88,8 @@ pub(crate) fn render_icon_button(
         IconButtonVariant::Tonal => {
             let fg_rgb: RgbColor = scheme.on_secondary_container;
             let bg: crate::Color = scheme.secondary_container.into();
-            let icon_view = crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
+            let icon_view =
+                crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
             let btn = view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });
@@ -95,7 +98,8 @@ pub(crate) fn render_icon_button(
         IconButtonVariant::Outlined => {
             let fg_rgb: RgbColor = scheme.primary;
             let border: crate::Color = scheme.outline.into();
-            let icon_view = crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
+            let icon_view =
+                crate::svg_icon::<AppStateNativo>(icono, 24.0, fg_rgb, crate::IconStyle::Filled);
             let btn = view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });

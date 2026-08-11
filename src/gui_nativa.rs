@@ -1,14 +1,14 @@
 // Forja GUI Nativa — construye widgets xilem directamente desde el AST
 // con soporte completo de tema Material You
 
+use crate::helpers::*;
 use crate::theme::animation::AnimationEngine;
 use crate::theme::motion::{EASE_EMPHASIZED, EASE_STANDARD};
 use crate::view::{self, Axis};
+use crate::FontWeight;
 use crate::Length;
 use crate::*;
-use crate::helpers::*;
 use crate::{map_message, MessageResult};
-use crate::FontWeight;
 use crate::{
     MaterialTheme, // Tema Material You completo
     RgbColor,      // Color RGB (convierte a xilem::Color vía From)
@@ -1139,7 +1139,8 @@ fn procesar_args(args: &[Expresion]) -> Vec<Layout> {
 
 /// 5.8: Tipo para la función de procesamiento de hijos.
 /// Permite que `parse_layout_call` use tanto `procesar_args` como `procesar_args_item`.
-type ChildProcessor = fn(&[Expresion], &HashMap<String, ValorGUI>, &VariableStore, &[Declaracion]) -> Vec<Layout>;
+type ChildProcessor =
+    fn(&[Expresion], &HashMap<String, ValorGUI>, &VariableStore, &[Declaracion]) -> Vec<Layout>;
 
 /// 5.8: Wrapper que adapta `procesar_args` al signature de `ChildProcessor`.
 /// Disponible para futura migración de `expr_a_layout` a usar `parse_layout_call`.
@@ -1210,18 +1211,32 @@ fn parse_layout_call(
             alignment: "start".to_string(),
         }),
         "columna_con_gap" | "column_with_gap" => {
-            let children = argumentos.first()
-                .map(|a| extract_children_from_array(a, params, store, declaraciones, process_children))
+            let children = argumentos
+                .first()
+                .map(|a| {
+                    extract_children_from_array(a, params, store, declaraciones, process_children)
+                })
                 .unwrap_or_default();
             let (gap, alignment) = extract_gap_alignment(argumentos);
-            Some(Layout::Column { children, gap, alignment })
+            Some(Layout::Column {
+                children,
+                gap,
+                alignment,
+            })
         }
         "fila_con_gap" | "row_with_gap" => {
-            let children = argumentos.first()
-                .map(|a| extract_children_from_array(a, params, store, declaraciones, process_children))
+            let children = argumentos
+                .first()
+                .map(|a| {
+                    extract_children_from_array(a, params, store, declaraciones, process_children)
+                })
                 .unwrap_or_default();
             let (gap, alignment) = extract_gap_alignment(argumentos);
-            Some(Layout::Row { children, gap, alignment })
+            Some(Layout::Row {
+                children,
+                gap,
+                alignment,
+            })
         }
         "espacio" | "spacer" => {
             let tamano = argumentos
@@ -1234,13 +1249,17 @@ fn parse_layout_call(
             Some(Layout::Spacer(tamano))
         }
         "flujo" | "flow_layout" | "flow" => {
-            let children = argumentos.first()
+            let children = argumentos
+                .first()
                 .and_then(|a| match a {
-                    Expresion::Arreglo(exprs) => Some(process_children(exprs, params, store, declaraciones)),
+                    Expresion::Arreglo(exprs) => {
+                        Some(process_children(exprs, params, store, declaraciones))
+                    }
                     _ => None,
                 })
                 .unwrap_or_default();
-            let gap = argumentos.get(1)
+            let gap = argumentos
+                .get(1)
                 .and_then(|a| match a {
                     Expresion::LiteralNumero(n) => Some(*n as f64),
                     Expresion::LiteralDecimal(f) => Some(*f),
@@ -1250,26 +1269,35 @@ fn parse_layout_call(
             Some(Layout::FlowLayout { children, gap })
         }
         "grid" | "cuadricula" | "cuadrícula" => {
-            let children = argumentos.first()
+            let children = argumentos
+                .first()
                 .and_then(|a| match a {
-                    Expresion::Arreglo(exprs) => Some(process_children(exprs, params, store, declaraciones)),
+                    Expresion::Arreglo(exprs) => {
+                        Some(process_children(exprs, params, store, declaraciones))
+                    }
                     _ => None,
                 })
                 .unwrap_or_default();
-            let columnas = argumentos.get(1)
+            let columnas = argumentos
+                .get(1)
                 .and_then(|a| match a {
                     Expresion::LiteralNumero(n) => Some(*n as usize),
                     _ => None,
                 })
                 .unwrap_or(2);
-            let gap = argumentos.get(2)
+            let gap = argumentos
+                .get(2)
                 .and_then(|a| match a {
                     Expresion::LiteralNumero(n) => Some(*n as f64),
                     Expresion::LiteralDecimal(f) => Some(*f),
                     _ => None,
                 })
                 .unwrap_or(8.0);
-            Some(Layout::Grid { children, columnas, gap })
+            Some(Layout::Grid {
+                children,
+                columnas,
+                gap,
+            })
         }
         "boton" | "button" | "btn" => {
             let texto = extraer_texto(argumentos, 0);
@@ -1767,7 +1795,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(8.0);
-                    Some(Layout::Grid { children, columnas, gap })
+                    Some(Layout::Grid {
+                        children,
+                        columnas,
+                        gap,
+                    })
                 }
 
                 // caja_relativa(hijo, proporcion) — Aspect ratio
@@ -2716,12 +2748,18 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         _ => NavigatorType::None,
                     };
                     // Arg 3 opcional: callback on_change (ej: &cambiar_pantalla)
-                    let on_change = argumentos.get(3).map(|_| extraer_callback(argumentos, 3)).filter(|s| !s.is_empty());
+                    let on_change = argumentos
+                        .get(3)
+                        .map(|_| extraer_callback(argumentos, 3))
+                        .filter(|s| !s.is_empty());
                     // Arg 4 opcional: tipo de animación ("fade", "slide", "ninguno")
-                    let anim_type = argumentos.get(4).map(|a| match a {
-                        Expresion::LiteralTexto(s) => s.to_lowercase(),
-                        _ => "ninguno".to_string(),
-                    }).unwrap_or_else(|| "ninguno".to_string());
+                    let anim_type = argumentos
+                        .get(4)
+                        .map(|a| match a {
+                            Expresion::LiteralTexto(s) => s.to_lowercase(),
+                            _ => "ninguno".to_string(),
+                        })
+                        .unwrap_or_else(|| "ninguno".to_string());
                     let anim = match anim_type.as_str() {
                         "fade" => NavigatorAnim::Fade,
                         "slide" => NavigatorAnim::Slide,
@@ -3582,7 +3620,13 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     })
                 }
 
-                _ => None,
+                _ => {
+                    eprintln!("[Forja GUI Warning] Función de widget no reconocida en layout: '{}'", nombre);
+                    Some(Layout::Label {
+                        texto: format!("[Widget Desconocido: {}]", nombre),
+                        es_variable: false,
+                    })
+                }
             }
         }
         Expresion::LiteralTexto(s) => Some(Layout::Label {
@@ -3655,9 +3699,7 @@ pub(crate) fn expr_a_valor(
             if let Some(v) = params.get(nombre) {
                 return Some(v.clone());
             }
-            store
-                .get(nombre)
-                .map(|v| ValorGUI::from_serde(&v))
+            store.get(nombre).map(|v| ValorGUI::from_serde(&v))
         }
         Expresion::Index { objeto, indice } => {
             let obj = expr_a_valor(objeto, params, store, declaraciones)?;
@@ -3696,7 +3738,11 @@ pub(crate) fn expr_a_valor(
                 _ => None,
             }
         }
-        Expresion::Binaria { izquierda, operador, derecha } => {
+        Expresion::Binaria {
+            izquierda,
+            operador,
+            derecha,
+        } => {
             if *operador == Operador::Suma {
                 let a = expr_a_texto(izquierda, params, store, declaraciones);
                 let b = expr_a_texto(derecha, params, store, declaraciones);
@@ -3711,7 +3757,11 @@ pub(crate) fn expr_a_valor(
                     Operador::Resta => fa - fb,
                     Operador::Multiplicacion => fa * fb,
                     Operador::Division => {
-                        if fb == 0.0 { 0.0 } else { fa / fb }
+                        if fb == 0.0 {
+                            0.0
+                        } else {
+                            fa / fb
+                        }
                     }
                     _ => return None,
                 };
@@ -3772,10 +3822,18 @@ fn texto_item_columna(
                 if let Some(Expresion::Arreglo(hijos)) = argumentos.first() {
                     let mut textos = Vec::new();
                     for h in hijos {
-                        if let Expresion::LlamadaFuncion { nombre: hn, argumentos: ha } = h {
-                            if hn == "etiqueta" || hn == "texto_pequeno" || hn == "texto_pequeño"
-                                || hn == "texto_mediano" || hn == "titular_mediano"
-                                || hn == "titular_grande" || hn == "encabezado_mediano"
+                        if let Expresion::LlamadaFuncion {
+                            nombre: hn,
+                            argumentos: ha,
+                        } = h
+                        {
+                            if hn == "etiqueta"
+                                || hn == "texto_pequeno"
+                                || hn == "texto_pequeño"
+                                || hn == "texto_mediano"
+                                || hn == "titular_mediano"
+                                || hn == "titular_grande"
+                                || hn == "encabezado_mediano"
                             {
                                 if let Some(t) = ha.first() {
                                     textos.push(expr_a_texto(t, params, store, declaraciones));
@@ -3809,7 +3867,12 @@ pub(crate) fn expr_a_layout_item(
         Expresion::LlamadaFuncion { nombre, argumentos } => {
             // 5.8: Intentar parse_layout_call para casos compartidos primero
             if let Some(layout) = parse_layout_call(
-                nombre, argumentos, params, store, declaraciones, procesar_args_item,
+                nombre,
+                argumentos,
+                params,
+                store,
+                declaraciones,
+                procesar_args_item,
             ) {
                 return Some(layout);
             }
@@ -3820,8 +3883,12 @@ pub(crate) fn expr_a_layout_item(
                         .first()
                         .and_then(|a| expr_a_layout_item(a, params, store, declaraciones))
                         .map(Box::new);
-                    let titulo =
-                        texto_item_columna(argumentos.get(1).unwrap_or(argumentos.first()?), params, store, declaraciones);
+                    let titulo = texto_item_columna(
+                        argumentos.get(1).unwrap_or(argumentos.first()?),
+                        params,
+                        store,
+                        declaraciones,
+                    );
                     let subtitulo = argumentos
                         .get(2)
                         .map(|a| texto_item_columna(a, params, store, declaraciones));
@@ -3854,7 +3921,10 @@ pub(crate) fn expr_a_layout_item(
                         .first()
                         .map(|a| expr_a_texto(a, params, store, declaraciones))
                         .unwrap_or_default();
-                    Some(Layout::ColoredLabel { texto: String::new(), color })
+                    Some(Layout::ColoredLabel {
+                        texto: String::new(),
+                        color,
+                    })
                 }
                 "etiqueta" | "label" | "text" | "escribir" => {
                     if let Some(arg) = argumentos.first() {
@@ -3862,7 +3932,10 @@ pub(crate) fn expr_a_layout_item(
                         if txt.is_empty() {
                             Some(Layout::Spacer(0.0))
                         } else {
-                            Some(Layout::Label { texto: txt, es_variable: false })
+                            Some(Layout::Label {
+                                texto: txt,
+                                es_variable: false,
+                            })
                         }
                     } else {
                         Some(Layout::Spacer(0.0))
@@ -3886,7 +3959,10 @@ pub(crate) fn expr_a_layout_item(
                         .first()
                         .map(|a| expr_a_texto(a, params, store, declaraciones))
                         .unwrap_or_default();
-                    Some(Layout::StyledLabel { texto: txt, style: style.to_string() })
+                    Some(Layout::StyledLabel {
+                        texto: txt,
+                        style: style.to_string(),
+                    })
                 }
                 "tarjeta" | "card" => argumentos
                     .first()
@@ -4030,21 +4106,21 @@ pub fn layout_a_view<'a>(
             // ya que Pod<DynWidget> no implementa AnyElement<FlexElement>.
             // Se maneja con tuplas de tamaño fijo para los casos más comunes (1-3 hijos).
             let ma = parse_alignment(alignment);
-            let flex_eligible = children.iter().all(|h| matches!(h,
-                Layout::MaterialCard { .. }
-                | Layout::MaterialListItem { .. }
-            ));
+            let flex_eligible = children.iter().all(|h| {
+                matches!(
+                    h,
+                    Layout::MaterialCard { .. } | Layout::MaterialListItem { .. }
+                )
+            });
             if flex_eligible && !children.is_empty() && children.len() <= 3 {
                 // Casos con 1-3 hijos flex: usar tuplas con FlexExt
                 match children.len() {
                     1 => {
                         let a = layout_a_view(&children[0], data, _prog, theme);
-                        let row = view::flex(
-                            Axis::Horizontal,
-                            (xilem::view::FlexExt::flex(a, 1.0),),
-                        )
-                        .gap(Length::px(*gap))
-                        .main_axis_alignment(ma);
+                        let row =
+                            view::flex(Axis::Horizontal, (xilem::view::FlexExt::flex(a, 1.0),))
+                                .gap(Length::px(*gap))
+                                .main_axis_alignment(ma);
                         return Box::new(row) as Box<AnyWidgetView<AppStateNativo>>;
                     }
                     2 => {
@@ -4104,7 +4180,11 @@ pub fn layout_a_view<'a>(
             // El área desplazable ocupa el ancho de la ventana (menos un margen
             // para el scrollbar). El contenido interno se estira con cross Fill.
             let ancho = (data.window_width - 18.0).max(200.0);
-            Box::new(view::portal(view::sized_box(inner).width(Length::px(ancho)).padding(16.0)))
+            Box::new(view::portal(
+                view::sized_box(inner)
+                    .width(Length::px(ancho))
+                    .padding(16.0),
+            ))
         }
         Layout::Container { child, max_width } => {
             let inner = layout_a_view(child, data, _prog, theme);
@@ -4298,7 +4378,11 @@ pub fn layout_a_view<'a>(
 
         // DynamicText: texto evaluado en tiempo de render (concatenación,
         // etiqueta_dinamica, helpers del AST) con estilo tipográfico.
-        Layout::DynamicText { expr, params, style } => {
+        Layout::DynamicText {
+            expr,
+            params,
+            style,
+        } => {
             let text_style = get_text_style(&theme.typography, style);
             let txt = expr_a_texto(expr, params, &data.store, _prog);
             let color = color_segun_monto(&theme.scheme, &txt);
@@ -4360,10 +4444,7 @@ pub fn layout_a_view<'a>(
         }
 
         // 5.6: StateLayerBox — overlay semi-transparente según el estado visual
-        Layout::StateLayerBox {
-            child,
-            state,
-        } => {
+        Layout::StateLayerBox { child, state } => {
             let inner = layout_a_view(child, data, _prog, theme);
             let overlay_alpha: f64 = match state.as_str() {
                 "hover" => 0.08,
@@ -4374,12 +4455,10 @@ pub fn layout_a_view<'a>(
             };
             if overlay_alpha > 0.0 {
                 let overlay_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
-                Box::new(
-                    view::zstack((
-                        Box::new(view::sized_box(inner).background(Background::Color(overlay_color.into())))
-                            as Box<AnyWidgetView<AppStateNativo>>,
-                    ))
+                Box::new(view::zstack((Box::new(
+                    view::sized_box(inner).background(Background::Color(overlay_color.into())),
                 )
+                    as Box<AnyWidgetView<AppStateNativo>>,)))
             } else {
                 inner
             }
@@ -4447,16 +4526,24 @@ pub fn layout_a_view<'a>(
         // (type erasure). Se mantiene la implementación con flex anidado que funciona
         // correctamente. Si xilem 0.4 expone una API de grid compatible con type erasure,
         // se puede migrar aquí usando GridParams::new(cols, rows).spacing(gap).
-        Layout::Grid { children, columnas, gap } => {
+        Layout::Grid {
+            children,
+            columnas,
+            gap,
+        } => {
             if children.is_empty() {
                 return Box::new(view::sized_box(view::label("")).height(Length::px(0.0)));
             }
             // Determinar columnas según orientación y tamaño
             let effective_cols = match data.orientation {
                 Orientation::Portrait => {
-                    if data.window_width < 400.0 { 1 }
-                    else if data.window_width < 600.0 { (*columnas).min(2) }
-                    else { *columnas }
+                    if data.window_width < 400.0 {
+                        1
+                    } else if data.window_width < 600.0 {
+                        (*columnas).min(2)
+                    } else {
+                        *columnas
+                    }
                 }
                 Orientation::Landscape => *columnas,
             };
@@ -4472,11 +4559,15 @@ pub fn layout_a_view<'a>(
                 for item in chunk {
                     let widget = layout_a_view(item, data, _prog, theme);
                     // Cada celda se ajusta al ancho calculado
-                    row_widgets.push(Box::new(view::sized_box(widget).width(Length::px(cell_width))));
+                    row_widgets.push(Box::new(
+                        view::sized_box(widget).width(Length::px(cell_width)),
+                    ));
                 }
                 // Si la fila tiene menos elementos que columnas, agregar spacers
                 while row_widgets.len() < effective_cols {
-                    row_widgets.push(Box::new(view::sized_box(view::label("")).width(Length::px(0.0))));
+                    row_widgets.push(Box::new(
+                        view::sized_box(view::label("")).width(Length::px(0.0)),
+                    ));
                 }
                 rows.push(Box::new(
                     view::flex(Axis::Horizontal, (row_widgets,))
@@ -4502,7 +4593,8 @@ pub fn layout_a_view<'a>(
                 return Box::new(view::sized_box(view::label("")).height(Length::px(0.0)));
             }
             // Estimar anchos de cada hijo y renderizarlos
-            let rendered: Vec<(Box<AnyWidgetView<AppStateNativo>>, f64)> = children.iter()
+            let rendered: Vec<(Box<AnyWidgetView<AppStateNativo>>, f64)> = children
+                .iter()
                 .map(|h| {
                     let w = layout_a_view(h, data, _prog, theme);
                     let child_width = estimate_child_width(h).unwrap_or(100.0);
@@ -4529,12 +4621,14 @@ pub fn layout_a_view<'a>(
                 rows.push(current_row);
             }
 
-            let row_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = rows.into_iter()
+            let row_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = rows
+                .into_iter()
                 .map(|row| {
-                    Box::new(view::flex(Axis::Horizontal, (row,))
-                        .gap(Length::px(*gap))
-                        .cross_axis_alignment(CrossAxisAlignment::Start))
-                        as Box<AnyWidgetView<AppStateNativo>>
+                    Box::new(
+                        view::flex(Axis::Horizontal, (row,))
+                            .gap(Length::px(*gap))
+                            .cross_axis_alignment(CrossAxisAlignment::Start),
+                    ) as Box<AnyWidgetView<AppStateNativo>>
                 })
                 .collect();
 
@@ -4559,24 +4653,54 @@ pub fn layout_a_view<'a>(
             let label_style = get_text_style(&theme.typography, "label_large");
             match variant {
                 ButtonVariant::Filled => make_material_button(
-                    texto, scheme.on_primary.into(), Some(scheme.primary.into()), None,
-                    label_style, callback, _prog, 20.0,
+                    texto,
+                    scheme.on_primary.into(),
+                    Some(scheme.primary.into()),
+                    None,
+                    label_style,
+                    callback,
+                    _prog,
+                    20.0,
                 ),
                 ButtonVariant::Tonal => make_material_button(
-                    texto, scheme.on_secondary_container.into(), Some(scheme.secondary_container.into()), None,
-                    label_style, callback, _prog, 20.0,
+                    texto,
+                    scheme.on_secondary_container.into(),
+                    Some(scheme.secondary_container.into()),
+                    None,
+                    label_style,
+                    callback,
+                    _prog,
+                    20.0,
                 ),
                 ButtonVariant::Outlined => make_material_button(
-                    texto, scheme.primary.into(), None, Some(scheme.outline.into()),
-                    label_style, callback, _prog, 20.0,
+                    texto,
+                    scheme.primary.into(),
+                    None,
+                    Some(scheme.outline.into()),
+                    label_style,
+                    callback,
+                    _prog,
+                    20.0,
                 ),
                 ButtonVariant::Text => make_material_button(
-                    texto, scheme.primary.into(), None, None,
-                    label_style, callback, _prog, 20.0,
+                    texto,
+                    scheme.primary.into(),
+                    None,
+                    None,
+                    label_style,
+                    callback,
+                    _prog,
+                    20.0,
                 ),
                 ButtonVariant::Elevated => make_material_button(
-                    texto, scheme.primary.into(), Some(scheme.surface.into()), None,
-                    label_style, callback, _prog, 20.0,
+                    texto,
+                    scheme.primary.into(),
+                    Some(scheme.surface.into()),
+                    None,
+                    label_style,
+                    callback,
+                    _prog,
+                    20.0,
                 ),
             }
         }
@@ -4587,11 +4711,15 @@ pub fn layout_a_view<'a>(
             callback,
             size,
             texto_extendido,
-        } => {
-            crate::widgets::material_buttons::render_fab(
-                icono, callback, size, texto_extendido, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_buttons::render_fab(
+            icono,
+            callback,
+            size,
+            texto_extendido,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── IconButton (4 variantes) ──────────────────────────────
         Layout::IconButton {
@@ -4599,11 +4727,9 @@ pub fn layout_a_view<'a>(
             callback,
             variant,
             seleccionado: _,
-        } => {
-            crate::widgets::material_buttons::render_icon_button(
-                icono, callback, variant, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_buttons::render_icon_button(
+            icono, callback, variant, data, _prog, theme,
+        ),
 
         // ─── SegmentedButton ────────────────────────────────────────
         Layout::SegmentedButton {
@@ -4611,11 +4737,14 @@ pub fn layout_a_view<'a>(
             seleccionados,
             callback,
             multiple: _,
-        } => {
-            crate::widgets::material_buttons::render_segmented_button(
-                opciones, seleccionados, callback, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_buttons::render_segmented_button(
+            opciones,
+            seleccionados,
+            callback,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── Chip (4 variantes) ────────────────────────────────────
         Layout::Chip {
@@ -4629,25 +4758,49 @@ pub fn layout_a_view<'a>(
             let label_style = get_text_style(&theme.typography, "label_small");
             match variant {
                 ChipVariant::Assist | ChipVariant::Suggestion => make_chip_button(
-                    texto, scheme.on_surface.into(), None, Some(scheme.outline.into()),
-                    label_style, callback, _prog, 8.0,
+                    texto,
+                    scheme.on_surface.into(),
+                    None,
+                    Some(scheme.outline.into()),
+                    label_style,
+                    callback,
+                    _prog,
+                    8.0,
                 ),
                 ChipVariant::Filter => {
                     if *activo {
                         make_chip_button(
-                            texto, scheme.on_secondary_container.into(), Some(scheme.secondary_container.into()), None,
-                            label_style, callback, _prog, 8.0,
+                            texto,
+                            scheme.on_secondary_container.into(),
+                            Some(scheme.secondary_container.into()),
+                            None,
+                            label_style,
+                            callback,
+                            _prog,
+                            8.0,
                         )
                     } else {
                         make_chip_button(
-                            texto, scheme.on_surface.into(), None, Some(scheme.outline.into()),
-                            label_style, callback, _prog, 8.0,
+                            texto,
+                            scheme.on_surface.into(),
+                            None,
+                            Some(scheme.outline.into()),
+                            label_style,
+                            callback,
+                            _prog,
+                            8.0,
                         )
                     }
                 }
                 ChipVariant::Input => make_chip_button(
-                    texto, scheme.on_secondary_container.into(), Some(scheme.secondary_container.into()), None,
-                    label_style, callback, _prog, 8.0,
+                    texto,
+                    scheme.on_secondary_container.into(),
+                    Some(scheme.secondary_container.into()),
+                    None,
+                    label_style,
+                    callback,
+                    _prog,
+                    8.0,
                 ),
             }
         }
@@ -4663,22 +4816,25 @@ pub fn layout_a_view<'a>(
             multiline: _,
             error,
             counter: _,
-        } => {
-            crate::widgets::material_inputs::render_text_field(
-                variable, label, placeholder, variant, error, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_text_field(
+            variable,
+            label,
+            placeholder,
+            variant,
+            error,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── MaterialPasswordField ─────────────────────────────────────
         Layout::MaterialPasswordField {
             variable,
             label,
             visible: _,
-        } => {
-            crate::widgets::material_inputs::render_password_field(
-                variable, label, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_password_field(
+            variable, label, data, _prog, theme,
+        ),
 
         // ─── MaterialNumberField ───────────────────────────────────────
         Layout::MaterialNumberField {
@@ -4687,53 +4843,55 @@ pub fn layout_a_view<'a>(
             min,
             max,
             decimales: _,
-        } => {
-            crate::widgets::material_inputs::render_number_field(
-                variable, label, min, max, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_number_field(
+            variable, label, min, max, data, _prog, theme,
+        ),
 
         // ─── MaterialSearchField ───────────────────────────────────────
         Layout::MaterialSearchField {
             variable,
             placeholder,
-        } => {
-            crate::widgets::material_inputs::render_search_field(
-                variable, placeholder, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_search_field(
+            variable,
+            placeholder,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── MaterialDropdown ──────────────────────────────────────────
         Layout::MaterialDropdown {
             opciones,
             seleccionada,
             placeholder,
-        } => {
-            crate::widgets::material_inputs::render_dropdown(
-                opciones, seleccionada, placeholder, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_dropdown(
+            opciones,
+            seleccionada,
+            placeholder,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── MaterialSelect ────────────────────────────────────────────
         Layout::MaterialSelect {
             opciones,
             seleccionada,
             label,
-        } => {
-            crate::widgets::material_inputs::render_select(
-                opciones, seleccionada, label, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_select(
+            opciones,
+            seleccionada,
+            label,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── MaterialAutocomplete ──────────────────────────────────────
         Layout::MaterialAutocomplete {
             opciones: _,
             variable,
-        } => {
-            crate::widgets::material_inputs::render_autocomplete(
-                variable, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_autocomplete(variable, data, _prog, theme),
 
         // ─── MaterialRadioGroup ────────────────────────────────────────
         Layout::MaterialRadioGroup {
@@ -4742,17 +4900,13 @@ pub fn layout_a_view<'a>(
             seleccion,
             callback,
             direction,
-        } => {
-            crate::widgets::material_inputs::render_radio_group(
-                opciones, seleccion, callback, direction, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_radio_group(
+            opciones, seleccion, callback, direction, data, _prog, theme,
+        ),
 
         // ─── MaterialSwitch ────────────────────────────────────────────
         Layout::MaterialSwitch { label, variable } => {
-            crate::widgets::material_inputs::render_switch(
-                label, variable, data, _prog, theme,
-            )
+            crate::widgets::material_inputs::render_switch(label, variable, data, _prog, theme)
         }
 
         // ─── MaterialSliderDiscrete ────────────────────────────────────
@@ -4761,11 +4915,9 @@ pub fn layout_a_view<'a>(
             min,
             max,
             steps: _,
-        } => {
-            crate::widgets::material_inputs::render_slider_discrete(
-                variable, min, max, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_slider_discrete(
+            variable, min, max, data, _prog, theme,
+        ),
 
         // ─── MaterialSliderRange ───────────────────────────────────────
         Layout::MaterialSliderRange {
@@ -4773,11 +4925,15 @@ pub fn layout_a_view<'a>(
             variable_fin,
             min,
             max,
-        } => {
-            crate::widgets::material_inputs::render_slider_range(
-                variable_inicio, variable_fin, min, max, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_slider_range(
+            variable_inicio,
+            variable_fin,
+            min,
+            max,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── MaterialChipGroup ─────────────────────────────────────────
         Layout::MaterialChipGroup {
@@ -4785,11 +4941,9 @@ pub fn layout_a_view<'a>(
             seleccion,
             callback,
             multiple: _,
-        } => {
-            crate::widgets::material_inputs::render_chip_group(
-                chips, seleccion, callback, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_inputs::render_chip_group(
+            chips, seleccion, callback, data, _prog, theme,
+        ),
 
         // ─── MaterialDatePicker ────────────────────────────────────────
         Layout::MaterialDatePicker { variable } => {
@@ -4825,11 +4979,14 @@ pub fn layout_a_view<'a>(
             variant,
             on_click: _,
             seleccionado,
-        } => {
-            crate::widgets::material_cards::render_card(
-                child, variant, seleccionado, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_cards::render_card(
+            child,
+            variant,
+            seleccionado,
+            data,
+            _prog,
+            theme,
+        ),
 
         Layout::MaterialListItem {
             leading,
@@ -4837,11 +4994,9 @@ pub fn layout_a_view<'a>(
             subtitulo,
             trailing,
             on_click: _,
-        } => {
-            crate::widgets::material_cards::render_list_item(
-                leading, titulo, subtitulo, trailing, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_cards::render_list_item(
+            leading, titulo, subtitulo, trailing, data, _prog, theme,
+        ),
 
         Layout::MaterialList { items, dividers } => {
             crate::widgets::material_cards::render_list(items, dividers, data, _prog, theme)
@@ -4851,18 +5006,14 @@ pub fn layout_a_view<'a>(
             items,
             control_type: _,
             variables: _,
-        } => {
-            crate::widgets::material_cards::render_list_control(items, data, _prog, theme)
-        }
+        } => crate::widgets::material_cards::render_list_control(items, data, _prog, theme),
 
         Layout::MaterialListSelection {
             items,
             seleccion: _,
             callback: _,
             multiple: _,
-        } => {
-            crate::widgets::material_cards::render_list_selection(items, data, _prog, theme)
-        }
+        } => crate::widgets::material_cards::render_list_selection(items, data, _prog, theme),
 
         // ─── DynamicList: renderiza items desde una variable ────────
         // 5.4: NOTA sobre virtualización: view::virtual_scroll() de xilem 0.4 requiere
@@ -4883,16 +5034,12 @@ pub fn layout_a_view<'a>(
             seleccionable: _,
             col_orden,
             orden_asc,
-        } => {
-            crate::widgets::material_cards::render_data_table(
-                columnas, filas, ordenable, col_orden, orden_asc, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_cards::render_data_table(
+            columnas, filas, ordenable, col_orden, orden_asc, data, _prog, theme,
+        ),
 
         Layout::MaterialSurface { child, color_role } => {
-            crate::widgets::material_cards::render_surface(
-                child, color_role, data, _prog, theme,
-            )
+            crate::widgets::material_cards::render_surface(child, color_role, data, _prog, theme)
         }
 
         Layout::MaterialScaffold {
@@ -4900,11 +5047,7 @@ pub fn layout_a_view<'a>(
             body,
             bottom,
             fab: _,
-        } => {
-            crate::widgets::material_cards::render_scaffold(
-                top, body, bottom, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::material_cards::render_scaffold(top, body, bottom, data, _prog, theme),
 
         // ═══════════════════════════════════════════════════════════════
         // FEEDBACK Y SUPERPOSICIONES (Material Design 3)
@@ -5370,22 +5513,25 @@ pub fn layout_a_view<'a>(
             nav_type,
             anim,
             on_change,
-        } => {
-            crate::widgets::navigation::render_navigator(
-                screens, current_var, nav_type, anim, on_change, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::navigation::render_navigator(
+            screens,
+            current_var,
+            nav_type,
+            anim,
+            on_change,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── NavigationBar ───────────────────────────────────────────
         Layout::NavigationBar {
             items,
             seleccion,
             on_change,
-        } => {
-            crate::widgets::navigation::render_navigation_bar(
-                items, seleccion, on_change, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::navigation::render_navigation_bar(
+            items, seleccion, on_change, data, _prog, theme,
+        ),
 
         // ─── NavigationRail ──────────────────────────────────────────
         Layout::NavigationRail {
@@ -5393,11 +5539,9 @@ pub fn layout_a_view<'a>(
             seleccion,
             on_change,
             extended,
-        } => {
-            crate::widgets::navigation::render_navigation_rail(
-                items, seleccion, on_change, extended, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::navigation::render_navigation_rail(
+            items, seleccion, on_change, extended, data, _prog, theme,
+        ),
 
         // ─── NavigationDrawer ────────────────────────────────────────
         Layout::NavigationDrawer {
@@ -5406,11 +5550,9 @@ pub fn layout_a_view<'a>(
             on_change,
             modal,
             visible,
-        } => {
-            crate::widgets::navigation::render_navigation_drawer(
-                items, seleccion, on_change, modal, visible, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::navigation::render_navigation_drawer(
+            items, seleccion, on_change, modal, visible, data, _prog, theme,
+        ),
 
         // ─── TopAppBar ───────────────────────────────────────────────
         Layout::TopAppBar {
@@ -5418,17 +5560,11 @@ pub fn layout_a_view<'a>(
             acciones,
             menu_visible: _,
             variant: _,
-        } => {
-            crate::widgets::navigation::render_top_app_bar(
-                titulo, acciones, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::navigation::render_top_app_bar(titulo, acciones, data, _prog, theme),
 
         // ─── BottomAppBar ────────────────────────────────────────────
         Layout::BottomAppBar { acciones, fab } => {
-            crate::widgets::navigation::render_bottom_app_bar(
-                acciones, fab, data, _prog, theme,
-            )
+            crate::widgets::navigation::render_bottom_app_bar(acciones, fab, data, _prog, theme)
         }
 
         // ─── Tabs ────────────────────────────────────────────────────
@@ -5438,9 +5574,7 @@ pub fn layout_a_view<'a>(
             on_change,
             scrollable: _,
         } => {
-            crate::widgets::navigation::render_tabs(
-                tabs, seleccion, on_change, data, _prog, theme,
-            )
+            crate::widgets::navigation::render_tabs(tabs, seleccion, on_change, data, _prog, theme)
         }
 
         // ─── SearchBar ───────────────────────────────────────────────
@@ -5449,9 +5583,7 @@ pub fn layout_a_view<'a>(
             on_search: _,
             variable,
         } => {
-            crate::widgets::navigation::render_search_bar(
-                placeholder, variable, data, _prog, theme,
-            )
+            crate::widgets::navigation::render_search_bar(placeholder, variable, data, _prog, theme)
         }
 
         // ─── SearchView ──────────────────────────────────────────────
@@ -5460,9 +5592,7 @@ pub fn layout_a_view<'a>(
             resultados,
             visible,
         } => {
-            crate::widgets::navigation::render_search_view(
-                resultados, visible, data, _prog, theme,
-            )
+            crate::widgets::navigation::render_search_view(resultados, visible, data, _prog, theme)
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -5473,11 +5603,13 @@ pub fn layout_a_view<'a>(
         Layout::LinearProgress {
             variable,
             indeterminado,
-        } => {
-            crate::widgets::indicators::render_linear_progress(
-                variable, indeterminado, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::indicators::render_linear_progress(
+            variable,
+            indeterminado,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── LinearProgressValue: barra con valor directo (items de lista) ──
         Layout::LinearProgressValue(val) => {
@@ -5489,11 +5621,14 @@ pub fn layout_a_view<'a>(
             variable,
             size,
             indeterminado,
-        } => {
-            crate::widgets::indicators::render_circular_progress(
-                variable, size, indeterminado, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::indicators::render_circular_progress(
+            variable,
+            size,
+            indeterminado,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── Badge ──────────────────────────────────────────────────
         Layout::Badge { child, valor, dot } => {
@@ -5511,17 +5646,19 @@ pub fn layout_a_view<'a>(
             mensaje,
             accion_texto,
             accion_cb,
-        } => {
-            crate::widgets::indicators::render_empty_state(
-                icono, mensaje, accion_texto, accion_cb, data, _prog, theme,
-            )
-        }
+        } => crate::widgets::indicators::render_empty_state(
+            icono,
+            mensaje,
+            accion_texto,
+            accion_cb,
+            data,
+            _prog,
+            theme,
+        ),
 
         // ─── ErrorState ─────────────────────────────────────────────
         Layout::ErrorState { mensaje, on_retry } => {
-            crate::widgets::indicators::render_error_state(
-                mensaje, on_retry, data, _prog, theme,
-            )
+            crate::widgets::indicators::render_error_state(mensaje, on_retry, data, _prog, theme)
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -5533,9 +5670,7 @@ pub fn layout_a_view<'a>(
             texto,
             variant,
             tamaño,
-        } => {
-            crate::widgets::indicators::render_avatar(texto, variant, tamaño, theme)
-        }
+        } => crate::widgets::indicators::render_avatar(texto, variant, tamaño, theme),
 
         // ─── AvatarGroup ────────────────────────────────────────────
         Layout::AvatarGroup { avatares, max } => {
@@ -6263,10 +6398,7 @@ pub fn layout_a_view<'a>(
                         let nombre = if tipos_filtro.is_empty() {
                             "archivo_seleccionado.txt".to_string()
                         } else {
-                            format!(
-                                "archivo_seleccionado.{}",
-                                tipos_filtro[0].replace('.', "")
-                            )
+                            format!("archivo_seleccionado.{}", tipos_filtro[0].replace('.', ""))
                         };
                         data.escribir("archivo", ValorGUI::Texto(nombre));
                     }
@@ -7101,22 +7233,25 @@ where
             None => {
                 match message.take_message::<GestureAction>() {
                     Some(boxed) => match *boxed {
-                    GestureAction::Swipe { .. } => {
-                        // 5.1: Usar campo label para debugging durante swipe
-                        if !self.label.is_empty() {
-                            eprintln!("[SwipeToDismiss] '{}' — deslizando para descartar", &self.label);
+                        GestureAction::Swipe { .. } => {
+                            // 5.1: Usar campo label para debugging durante swipe
+                            if !self.label.is_empty() {
+                                eprintln!(
+                                    "[SwipeToDismiss] '{}' — deslizando para descartar",
+                                    &self.label
+                                );
+                            }
+                            // Marcar como descartado y ejecutar callback
+                            if !self.on_dismiss.is_empty() {
+                                app_state.escribir(&self.dismissed, ValorGUI::Booleano(true));
+                                ejecutar_callback_y_actualizar(
+                                    &self.on_dismiss,
+                                    app_state,
+                                    &self.program,
+                                );
+                            }
+                            crate::MessageResult::Nop
                         }
-                        // Marcar como descartado y ejecutar callback
-                        if !self.on_dismiss.is_empty() {
-                            app_state.escribir(&self.dismissed, ValorGUI::Booleano(true));
-                            ejecutar_callback_y_actualizar(
-                                &self.on_dismiss,
-                                app_state,
-                                &self.program,
-                            );
-                        }
-                        crate::MessageResult::Nop
-                    }
                         _ => crate::MessageResult::Stale,
                     },
                     None => crate::MessageResult::Stale,

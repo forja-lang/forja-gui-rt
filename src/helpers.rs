@@ -2,8 +2,8 @@
 // Este módulo centraliza las funciones de utilidad compartidas:
 // extracción de argumentos AST, temas/colores, callbacks y builders de botones.
 
-use crate::*;
 use crate::gui_nativa::*;
+use crate::*;
 use forja::ast::*;
 
 // ─── Helpers para extraer argumentos de funciones Forja ─────────────
@@ -182,7 +182,9 @@ pub(crate) fn extraer_navigator_screens(args: &[Expresion], index: usize) -> Vec
                                             // Si expr_a_layout falló (ej: función personalizada),
                                             // extraer el nombre de la función para evaluarla después
                                             let fn_name = match arg {
-                                                Expresion::LlamadaFuncion { nombre, .. } => Some(nombre.clone()),
+                                                Expresion::LlamadaFuncion { nombre, .. } => {
+                                                    Some(nombre.clone())
+                                                }
                                                 _ => None,
                                             };
                                             (Layout::Spacer(0.0), fn_name)
@@ -531,9 +533,16 @@ pub(crate) fn make_material_button(
     });
     // corner_radius SIEMPRE debe ser el último en la cadena builder
     if let Some(bg_color) = bg {
-        Box::new(btn.background(Background::Color(bg_color)).corner_radius(corner_radius))
+        Box::new(
+            btn.background(Background::Color(bg_color))
+                .corner_radius(corner_radius),
+        )
     } else if let Some(border_color) = border {
-        Box::new(btn.border_color(border_color).border_width(1.0).corner_radius(corner_radius))
+        Box::new(
+            btn.border_color(border_color)
+                .border_width(1.0)
+                .corner_radius(corner_radius),
+        )
     } else {
         Box::new(btn.corner_radius(corner_radius))
     }

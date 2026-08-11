@@ -2,11 +2,11 @@
 // Skeleton, EmptyState, ErrorState, Avatar, AvatarGroup
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::view;
-use crate::helpers::*;
 use crate::gui_nativa::{AppStateNativo, AvatarVariant, Layout};
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
+use crate::helpers::*;
+use crate::view;
 use crate::Length;
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
 use forja::ast::Declaracion;
 use xilem::style::Style;
 
@@ -230,10 +230,11 @@ pub(crate) fn render_empty_state(
         children.push(Box::new(view::label(icono.to_string()).text_size(48.0))
             as Box<AnyWidgetView<AppStateNativo>>);
     }
-    children.push(
-        Box::new(view::label(mensaje.to_string()).text_size(16.0).color(fg_var))
-            as Box<AnyWidgetView<AppStateNativo>>,
-    );
+    children.push(Box::new(
+        view::label(mensaje.to_string())
+            .text_size(16.0)
+            .color(fg_var),
+    ) as Box<AnyWidgetView<AppStateNativo>>);
     if let Some(texto) = accion_texto {
         if let Some(cb_name) = accion_cb {
             let cb = cb_name.clone();
@@ -281,8 +282,7 @@ pub(crate) fn render_error_state(
     let p = prog.to_vec();
     let mut children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     children
-        .push(Box::new(view::label("⚠️").text_size(48.0))
-            as Box<AnyWidgetView<AppStateNativo>>);
+        .push(Box::new(view::label("⚠️").text_size(48.0)) as Box<AnyWidgetView<AppStateNativo>>);
     children.push(
         Box::new(view::label(mensaje.to_string()).text_size(16.0).color(fg))
             as Box<AnyWidgetView<AppStateNativo>>,

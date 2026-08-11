@@ -3,11 +3,11 @@
 // MaterialDataTable, MaterialSurface, MaterialScaffold
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::view;
-use crate::helpers::*;
 use crate::gui_nativa::{AppStateNativo, CardVariant, Layout, ValorGUI};
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
+use crate::helpers::*;
+use crate::view;
 use crate::Length;
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
 use forja::ast::Declaracion;
 use std::collections::HashMap;
 use xilem::style::Style;
@@ -82,14 +82,12 @@ pub(crate) fn render_list_item(
     let fg_var: crate::Color = scheme.on_surface_variant.into();
 
     let mut text_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-    text_children.push(
-        Box::new(
-            view::label(titulo.to_string())
-                .text_size(16.0)
-                .weight(FontWeight::MEDIUM)
-                .color(fg),
-        ) as Box<AnyWidgetView<AppStateNativo>>,
-    );
+    text_children.push(Box::new(
+        view::label(titulo.to_string())
+            .text_size(16.0)
+            .weight(FontWeight::MEDIUM)
+            .color(fg),
+    ) as Box<AnyWidgetView<AppStateNativo>>);
 
     if let Some(sub) = subtitulo {
         if !sub.is_empty() {
@@ -100,9 +98,9 @@ pub(crate) fn render_list_item(
         }
     }
 
-    let text_col = Box::new(
-        view::flex(crate::view::Axis::Vertical, (text_children,)).gap(Length::px(2.0)),
-    ) as Box<AnyWidgetView<AppStateNativo>>;
+    let text_col =
+        Box::new(view::flex(crate::view::Axis::Vertical, (text_children,)).gap(Length::px(2.0)))
+            as Box<AnyWidgetView<AppStateNativo>>;
 
     let leading_view = leading
         .as_ref()
@@ -211,9 +209,18 @@ pub(crate) fn render_dynamic_list(
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
             if let serde_json::Value::Array(arr) = json {
                 for decl in prog {
-                    if let forja::ast::Declaracion::Funcion { nombre, parametros, cuerpo, .. } = decl {
+                    if let forja::ast::Declaracion::Funcion {
+                        nombre,
+                        parametros,
+                        cuerpo,
+                        ..
+                    } = decl
+                    {
                         if nombre == &fn_name {
-                            if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo.iter().find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. })) {
+                            if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo
+                                .iter()
+                                .find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. }))
+                            {
                                 if let Some(expr) = valor {
                                     for item in &arr {
                                         let mut params = HashMap::new();
@@ -223,8 +230,12 @@ pub(crate) fn render_dynamic_list(
                                                 ValorGUI::from_serde(item),
                                             );
                                         }
-                                        if let Some(layout) = crate::gui_nativa::expr_a_layout_item(expr, &params, &store, &p) {
-                                            widgets.push(crate::gui_nativa::layout_a_view(&layout, data, &p, theme));
+                                        if let Some(layout) = crate::gui_nativa::expr_a_layout_item(
+                                            expr, &params, &store, &p,
+                                        ) {
+                                            widgets.push(crate::gui_nativa::layout_a_view(
+                                                &layout, data, &p, theme,
+                                            ));
                                         }
                                     }
                                 }
@@ -296,19 +307,22 @@ pub(crate) fn render_data_table(
         let mut cell_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
         for celda in fila.iter() {
             let cell = view::label(celda.clone()).text_size(14.0).color(fg_body);
-            cell_widgets.push(Box::new(view::sized_box(cell).padding(8.0))
-                as Box<AnyWidgetView<AppStateNativo>>);
+            cell_widgets
+                .push(Box::new(view::sized_box(cell).padding(8.0))
+                    as Box<AnyWidgetView<AppStateNativo>>);
         }
         let row_bg = if row_idx % 2 == 0 { bg_row1 } else { bg_row2 };
-        let row =
-            Box::new(view::flex(crate::view::Axis::Horizontal, (cell_widgets,)).gap(Length::px(8.0)))
-                as Box<AnyWidgetView<AppStateNativo>>;
-        body_widgets.push(Box::new(
-            view::sized_box(row).background(Background::Color(row_bg)),
-        ) as Box<AnyWidgetView<AppStateNativo>>);
+        let row = Box::new(
+            view::flex(crate::view::Axis::Horizontal, (cell_widgets,)).gap(Length::px(8.0)),
+        ) as Box<AnyWidgetView<AppStateNativo>>;
+        body_widgets.push(
+            Box::new(view::sized_box(row).background(Background::Color(row_bg)))
+                as Box<AnyWidgetView<AppStateNativo>>,
+        );
     }
 
-    let body = Box::new(view::flex(crate::view::Axis::Vertical, (body_widgets,)).gap(Length::px(0.0)));
+    let body =
+        Box::new(view::flex(crate::view::Axis::Vertical, (body_widgets,)).gap(Length::px(0.0)));
 
     Box::new(view::flex(crate::view::Axis::Vertical, (header_container, body)).gap(Length::px(4.0)))
 }
@@ -370,6 +384,6 @@ pub(crate) fn render_scaffold(
                 .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
         )
         .width(Length::px(data.window_width.max(200.0)))
-        .height(Length::px(data.window_height.max(200.0)))
+        .height(Length::px(data.window_height.max(200.0))),
     )
 }
