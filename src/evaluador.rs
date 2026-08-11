@@ -946,6 +946,7 @@ fn sqlite_columnas(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 
 /// Algoritmo: días desde epoch (1970-01-01) hasta una fecha civil (año, mes, día)
 /// Basado en el algoritmo de Howard Hinnant (calendario Gregoriano)
+#[allow(dead_code)]
 fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let y = if month <= 2 { year - 1 } else { year };
     let era = if y >= 0 { y } else { y - 399 } / 400;
