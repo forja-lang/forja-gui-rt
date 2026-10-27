@@ -8,7 +8,7 @@ use crate::helpers::*;
 use crate::view;
 use crate::Length;
 use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
-use forja::ast::Declaracion;
+use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
 // ─── MaterialTextField ───────────────────────────────────────────
