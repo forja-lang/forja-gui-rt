@@ -1,6 +1,6 @@
 [package]
 name = "forja-gui-rt"
-version = "0.9.3"
+version = "0.9.4"
 edition = "2021"
 description = "Forja GUI Runtime — Runtime de GUI Material You (Material 3) sobre xilem para apps Forja y Rust"
 license = "MIT"
@@ -13,12 +13,12 @@ categories = ["gui", "graphics"]
 exclude = ["examples/*.fa"]
 
 [dependencies]
-forja-theme = { version = "0.9.3", path = "../forja-theme", features = ["xilem"] }
-forja-gui-core = { version = "0.9.3", path = "../forja-gui-core" }
+forja-theme = { version = "0.9.4", path = "../forja-theme", features = ["xilem"] }
+forja-gui-core = { version = "0.9.4", path = "../forja-gui-core" }
 xilem = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-forja-syntax = { version = "0.9.3", path = "../forja-syntax" }
+forja-syntax = { version = "0.9.4", path = "../forja-syntax" }
 chrono = "0.4"
 qrcode = "0.14"
 image = "0.25"
