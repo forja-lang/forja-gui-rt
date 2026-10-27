@@ -8,7 +8,7 @@ use crate::helpers::*;
 use crate::view;
 use crate::Length;
 use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
-use forja::ast::Declaracion;
+use forja_syntax::ast::Declaracion;
 use std::collections::HashMap;
 use xilem::style::Style;
 
@@ -209,7 +209,7 @@ pub(crate) fn render_dynamic_list(
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
             if let serde_json::Value::Array(arr) = json {
                 for decl in prog {
-                    if let forja::ast::Declaracion::Funcion {
+                    if let forja_syntax::ast::Declaracion::Funcion {
                         nombre,
                         parametros,
                         cuerpo,
@@ -217,9 +217,10 @@ pub(crate) fn render_dynamic_list(
                     } = decl
                     {
                         if nombre == &fn_name {
-                            if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo
-                                .iter()
-                                .find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. }))
+                            if let Some(forja_syntax::ast::Declaracion::Retornar { valor }) =
+                                cuerpo.iter().find(|d| {
+                                    matches!(d, forja_syntax::ast::Declaracion::Retornar { .. })
+                                })
                             {
                                 if let Some(expr) = valor {
                                     for item in &arr {
