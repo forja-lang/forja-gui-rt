@@ -15,7 +15,7 @@ use crate::{
     VariableStore, // Store reactivo de variables
 };
 use chrono::Datelike;
-use forja::ast::*;
+use forja_syntax::ast::*;
 use std::collections::HashMap;
 use std::time::Instant;
 // icons module used implicitly through svg_icon() call
@@ -3623,7 +3623,10 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
 
                 _ => {
-                    eprintln!("[Forja GUI Warning] Función de widget no reconocida en layout: '{}'", nombre);
+                    eprintln!(
+                        "[Forja GUI Warning] Función de widget no reconocida en layout: '{}'",
+                        nombre
+                    );
                     Some(Layout::Label {
                         texto: format!("[Widget Desconocido: {}]", nombre),
                         es_variable: false,
