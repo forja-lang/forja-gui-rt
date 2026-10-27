@@ -11,7 +11,7 @@ use crate::theme::motion::EASE_EMPHASIZED;
 use crate::view;
 use crate::Length;
 use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
-use forja::ast::Declaracion;
+use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
 // ─── Navigator (navegación por pantallas) ────────────────────────
@@ -46,11 +46,11 @@ pub(crate) fn render_navigator(
     {
         let mut found = false;
         for decl in prog {
-            if let forja::ast::Declaracion::Funcion { nombre, cuerpo, .. } = decl {
+            if let forja_syntax::ast::Declaracion::Funcion { nombre, cuerpo, .. } = decl {
                 if nombre == fn_name {
-                    if let Some(forja::ast::Declaracion::Retornar { valor }) = cuerpo
+                    if let Some(forja_syntax::ast::Declaracion::Retornar { valor }) = cuerpo
                         .iter()
-                        .find(|d| matches!(d, forja::ast::Declaracion::Retornar { .. }))
+                        .find(|d| matches!(d, forja_syntax::ast::Declaracion::Retornar { .. }))
                     {
                         if let Some(expr) = valor {
                             match crate::gui_nativa::expr_a_layout(expr) {
