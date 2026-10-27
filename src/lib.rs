@@ -4,7 +4,7 @@ extern crate self as forja_gui_rt;
 // Este crate se compila UNA SOLA VEZ; las apps generadas solo enlazan contra él.
 
 // Módulo de signals/streams reactivos (reemplaza HashMap)
-pub mod signals;
+pub use forja_gui_core::signals;
 // Módulo de accesibilidad (TalkBack/VoiceOver)
 pub mod accessibility;
 pub mod gui_nativa;
@@ -59,8 +59,9 @@ pub use xilem::winit::window::Window;
 /// Pod: wrapper de widgets Masonry como WidgetView
 pub use xilem::Pod;
 
-// Módulo de tema Material You
-pub mod theme;
+// Módulo de tema Material You — extraído al crate `forja-theme` (F3-T2).
+// Se re-exporta para preservar la API pública histórica `forja_gui_rt::theme::*`.
+pub use forja_theme as theme;
 // Módulo de iconos Material Design
 pub mod icons;
 // Widget de icono SVG Material Design con renderizado Vello
@@ -120,9 +121,13 @@ pub use gesture_widgets::{
 // === Módulo de pickers (DatePicker, TimePicker, ColorPicker) ===
 pub mod pickers;
 
-// === Re-exportaciones de forja::ast para que el transpiler pueda generar código ===
-pub use forja::ast::{BrazoMatch, BrazoSeleccionar, Contrato, Metodo, Parametro, VariableClase};
-pub use forja::ast::{Declaracion, Expresion, Operador, OperadorUnario, Patron, Programa, Tipo};
+// === Re-exportaciones de forja_syntax::ast para que el transpiler pueda generar código ===
+pub use forja_syntax::ast::{
+    BrazoMatch, BrazoSeleccionar, Contrato, Metodo, Parametro, VariableClase,
+};
+pub use forja_syntax::ast::{
+    Declaracion, Expresion, Operador, OperadorUnario, Patron, Programa, Tipo,
+};
 
 // === Módulo de QR Code ===
 pub mod qr_widget;
