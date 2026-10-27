@@ -22,16 +22,35 @@ pub fn debug_log(category: &str, message: &str) {
 }
 
 /// Registra el cambio de valor de una variable reactiva en el VariableStore
-pub fn log_state_change(var_name: &str, old_val: Option<&serde_json::Value>, new_val: &serde_json::Value) {
+pub fn log_state_change(
+    var_name: &str,
+    old_val: Option<&serde_json::Value>,
+    new_val: &serde_json::Value,
+) {
     if is_debug_enabled() {
         match old_val {
             Some(old) => {
-                log::info!("[GUI State] Variable '{}' cambió: {} ──→ {}", var_name, old, new_val);
-                eprintln!("⚡ [GUI State] Variable '{}' cambió: {} ──→ {}", var_name, old, new_val);
+                log::info!(
+                    "[GUI State] Variable '{}' cambió: {} ──→ {}",
+                    var_name,
+                    old,
+                    new_val
+                );
+                eprintln!(
+                    "⚡ [GUI State] Variable '{}' cambió: {} ──→ {}",
+                    var_name, old, new_val
+                );
             }
             None => {
-                log::info!("[GUI State] Variable '{}' inicializada: {}", var_name, new_val);
-                eprintln!("⚡ [GUI State] Variable '{}' inicializada: {}", var_name, new_val);
+                log::info!(
+                    "[GUI State] Variable '{}' inicializada: {}",
+                    var_name,
+                    new_val
+                );
+                eprintln!(
+                    "⚡ [GUI State] Variable '{}' inicializada: {}",
+                    var_name, new_val
+                );
             }
         }
     }
@@ -48,8 +67,15 @@ pub fn log_callback_start(nombre_fn: &str) {
 /// Registra el éxito de un callback
 pub fn log_callback_success(nombre_fn: &str, resultado: &str) {
     if is_debug_enabled() {
-        log::info!("[GUI Callback] Callback '{}' completado con éxito: {}", nombre_fn, resultado);
-        eprintln!("✅ [GUI Callback] Callback '{}' completado con éxito: {}", nombre_fn, resultado);
+        log::info!(
+            "[GUI Callback] Callback '{}' completado con éxito: {}",
+            nombre_fn,
+            resultado
+        );
+        eprintln!(
+            "✅ [GUI Callback] Callback '{}' completado con éxito: {}",
+            nombre_fn, resultado
+        );
     }
 }
 
@@ -57,13 +83,19 @@ pub fn log_callback_success(nombre_fn: &str, resultado: &str) {
 pub fn log_callback_error(nombre_fn: &str, error: &str) {
     // Los errores SIEMPRE se imprimen en log y stderr para no ocultar fallos
     log::error!("[GUI Error] Error en callback '{}': {}", nombre_fn, error);
-    eprintln!("❌ [GUI Error] Error en callback '{}': {}", nombre_fn, error);
+    eprintln!(
+        "❌ [GUI Error] Error en callback '{}': {}",
+        nombre_fn, error
+    );
 }
 
 /// Registra una advertencia de conversión de layout
 pub fn log_layout_warning(widget_name: &str, reason: &str) {
     log::warn!("[GUI Layout Warning] Widget '{}': {}", widget_name, reason);
-    eprintln!("⚠️ [GUI Layout Warning] Widget '{}': {}", widget_name, reason);
+    eprintln!(
+        "⚠️ [GUI Layout Warning] Widget '{}': {}",
+        widget_name, reason
+    );
 }
 
 /// Convierte un Layout a una representación textual en árbol con sangría
@@ -72,7 +104,11 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
     use crate::gui_nativa::Layout::*;
 
     match layout {
-        Column { children, gap, alignment } => {
+        Column {
+            children,
+            gap,
+            alignment,
+        } => {
             let mut out = format!("{}Column (gap: {}, align: {})\n", indent, gap, alignment);
             for c in children {
                 out.push_str(&format_layout_tree(c, depth + 1));
@@ -86,7 +122,11 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
             }
             out
         }
-        Row { children, gap, alignment } => {
+        Row {
+            children,
+            gap,
+            alignment,
+        } => {
             let mut out = format!("{}Row (gap: {}, align: {})\n", indent, gap, alignment);
             for c in children {
                 out.push_str(&format_layout_tree(c, depth + 1));
@@ -101,7 +141,12 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
             out
         }
         Container { child, max_width } => {
-            format!("{}Container (max_width: {})\n{}", indent, max_width, format_layout_tree(child, depth + 1))
+            format!(
+                "{}Container (max_width: {})\n{}",
+                indent,
+                max_width,
+                format_layout_tree(child, depth + 1)
+            )
         }
         Portal(child) => {
             format!("{}Portal\n{}", indent, format_layout_tree(child, depth + 1))
@@ -122,17 +167,36 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
         ColoredLabel { texto, color } => {
             format!("{}ColoredLabel (\"{}\", color: {})\n", indent, texto, color)
         }
-        MaterialButton { texto, callback, variant, disabled, .. } => {
-            format!("{}MaterialButton (\"{}\", cb: '{}', variant: {:?}, disabled: {})\n", indent, texto, callback, variant, disabled)
+        MaterialButton {
+            texto,
+            callback,
+            variant,
+            disabled,
+            ..
+        } => {
+            format!(
+                "{}MaterialButton (\"{}\", cb: '{}', variant: {:?}, disabled: {})\n",
+                indent, texto, callback, variant, disabled
+            )
         }
-        TextInput { variable, multiline, placeholder } => {
-            format!("{}TextInput (var: '{}', multiline: {}, placeholder: \"{}\")\n", indent, variable, multiline, placeholder)
+        TextInput {
+            variable,
+            multiline,
+            placeholder,
+        } => {
+            format!(
+                "{}TextInput (var: '{}', multiline: {}, placeholder: \"{}\")\n",
+                indent, variable, multiline, placeholder
+            )
         }
         ProgressBar { variable } => {
             format!("{}ProgressBar (var: '{}')\n", indent, variable)
         }
         Slider { variable, min, max } => {
-            format!("{}Slider (var: '{}', min: {}, max: {})\n", indent, variable, min, max)
+            format!(
+                "{}Slider (var: '{}', min: {}, max: {})\n",
+                indent, variable, min, max
+            )
         }
         Checkbox { variable } => {
             format!("{}Checkbox (var: '{}')\n", indent, variable)
@@ -143,10 +207,27 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
         Spinner => format!("{}Spinner\n", indent),
         Separator => format!("{}Separator\n", indent),
         Spacer(size) => format!("{}Spacer ({})\n", indent, size),
-        Expanded { child } => format!("{}Expanded\n{}", indent, format_layout_tree(child, depth + 1)),
-        Centered { child } => format!("{}Centered\n{}", indent, format_layout_tree(child, depth + 1)),
-        Padding { child, amount } => format!("{}Padding ({})\n{}", indent, amount, format_layout_tree(child, depth + 1)),
-        ResponsiveLayout { compact, medium, expanded } => {
+        Expanded { child } => format!(
+            "{}Expanded\n{}",
+            indent,
+            format_layout_tree(child, depth + 1)
+        ),
+        Centered { child } => format!(
+            "{}Centered\n{}",
+            indent,
+            format_layout_tree(child, depth + 1)
+        ),
+        Padding { child, amount } => format!(
+            "{}Padding ({})\n{}",
+            indent,
+            amount,
+            format_layout_tree(child, depth + 1)
+        ),
+        ResponsiveLayout {
+            compact,
+            medium,
+            expanded,
+        } => {
             let mut out = format!("{}ResponsiveLayout\n", indent);
             out.push_str(&format!("{}  [Compact]\n", indent));
             out.push_str(&format_layout_tree(compact, depth + 2));
