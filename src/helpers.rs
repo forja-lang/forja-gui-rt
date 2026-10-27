@@ -4,7 +4,7 @@
 
 use crate::gui_nativa::*;
 use crate::*;
-use forja::ast::*;
+use forja_syntax::ast::*;
 
 // ─── Helpers para extraer argumentos de funciones Forja ─────────────
 
