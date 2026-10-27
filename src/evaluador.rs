@@ -16,7 +16,7 @@
 
 use crate::gui_nativa::ValorGUI;
 use crate::signals::VariableStore;
-use forja::ast::*;
+use forja_syntax::ast::*;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::ops::{Add, Div, Mul, Sub};
