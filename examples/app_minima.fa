@@ -1,0 +1,25 @@
+// App GUI mínima — ejemplo standalone de forja-gui-rt
+//
+// Ejecutar (requiere el compilador `forja`):
+//     forja ejecutar crates/forja-gui-rt/examples/app_minima.fa
+//
+// Este ejemplo demuestra la API de alto nivel del runtime GUI de Forja
+// (Material You sobre xilem). El runtime pre-compilado `forja-gui-rt`
+// evita recompilar xilem en cada build.
+
+importar "gui"
+
+funcion main() {
+    // Tema Material You a partir de un color semilla.
+    tema_material("#6750A4", falso)
+
+    // Contenido de la ventana.
+    columna([
+        texto_titulo("Hola, Forja GUI"),
+        texto_cuerpo("App mínima usando forja-gui-rt como runtime independiente."),
+        espacio(16),
+        boton("Saludar", funcion() {
+            escribir("¡Hola desde el botón!")
+        })
+    ])
+}
