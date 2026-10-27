@@ -5,7 +5,7 @@ use crate::gui_nativa::{AppStateNativo, FabSize, IconButtonVariant};
 use crate::helpers::*;
 use crate::view;
 use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
-use forja::ast::Declaracion;
+use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
 // ─── FAB (Floating Action Button) ───────────────────────────────────
