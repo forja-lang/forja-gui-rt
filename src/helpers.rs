@@ -3,6 +3,7 @@
 // extracción de argumentos AST, temas/colores, callbacks y builders de botones.
 
 use crate::gui_nativa::*;
+use crate::layout::AsUnit as _;
 use crate::*;
 use forja_syntax::ast::*;
 
@@ -326,17 +327,18 @@ pub(crate) fn extraer_array_f64(args: &[Expresion], index: usize) -> Vec<f64> {
 // ─── Helpers de tema/color ─────────────────────────────────────────
 
 /// Obtiene un color del esquema por su nombre de role
-pub(crate) fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
-    match role {
-        "primary" => scheme.primary,
-        "on_primary" => scheme.on_primary,
-        "primary_container" => scheme.primary_container,
+/// Color de un rol del esquema por nombre. `None` si el nombre no es un rol.
+pub(crate) fn color_de_rol(scheme: &ColorScheme, role: &str) -> Option<RgbColor> {
+    let color = match role.to_lowercase().as_str() {
+        "primary" | "primario" => scheme.primary,
+        "on_primary" | "sobre_primario" => scheme.on_primary,
+        "primary_container" | "primario_contenedor" => scheme.primary_container,
         "on_primary_container" => scheme.on_primary_container,
-        "secondary" => scheme.secondary,
-        "on_secondary" => scheme.on_secondary,
-        "secondary_container" => scheme.secondary_container,
+        "secondary" | "secundario" => scheme.secondary,
+        "on_secondary" | "sobre_secundario" => scheme.on_secondary,
+        "secondary_container" | "secundario_contenedor" => scheme.secondary_container,
         "on_secondary_container" => scheme.on_secondary_container,
-        "tertiary" => scheme.tertiary,
+        "tertiary" | "terciario" => scheme.tertiary,
         "on_tertiary" => scheme.on_tertiary,
         "tertiary_container" => scheme.tertiary_container,
         "on_tertiary_container" => scheme.on_tertiary_container,
@@ -344,19 +346,24 @@ pub(crate) fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
         "on_error" => scheme.on_error,
         "error_container" => scheme.error_container,
         "on_error_container" => scheme.on_error_container,
-        "surface" => scheme.surface,
-        "on_surface" => scheme.on_surface,
+        "surface" | "superficie" => scheme.surface,
+        "on_surface" | "sobre_superficie" => scheme.on_surface,
         "surface_variant" => scheme.surface_variant,
         "on_surface_variant" => scheme.on_surface_variant,
-        "background" => scheme.background,
+        "background" | "fondo" => scheme.background,
         "on_background" => scheme.on_background,
-        "outline" => scheme.outline,
+        "outline" | "perfil" => scheme.outline,
         "outline_variant" => scheme.outline_variant,
         "inverse_surface" => scheme.inverse_surface,
         "inverse_on_surface" => scheme.inverse_on_surface,
         "inverse_primary" => scheme.inverse_primary,
-        _ => scheme.primary,
-    }
+        _ => return None,
+    };
+    Some(color)
+}
+
+pub(crate) fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
+    color_de_rol(scheme, role).unwrap_or(scheme.primary)
 }
 
 /// Convierte un color role (string) a Rgba para usar con chart_widgets
@@ -435,8 +442,10 @@ pub(crate) fn parse_alignment(s: &str) -> MainAxisAlignment {
 // ─── Colores ────────────────────────────────────────────────────────
 
 /// Parsea un nombre de color a `Color` de Vello (usado por ColoredLabel legacy)
-pub(crate) fn color_desde_nombre(nombre: &str) -> Color {
-    match nombre.to_lowercase().as_str() {
+/// Color por nombre CSS en español/inglés. `None` si el nombre no se conoce
+/// (así el llamador decide el fallback con el tema, en vez de caer en blanco).
+pub(crate) fn color_desde_nombre(nombre: &str) -> Option<Color> {
+    let color = match nombre.to_lowercase().as_str() {
         "rojo" | "red" => palette::css::RED,
         "azul" | "blue" => palette::css::BLUE,
         "verde" | "green" => palette::css::GREEN,
@@ -451,9 +460,10 @@ pub(crate) fn color_desde_nombre(nombre: &str) -> Color {
         "azul_marino" | "navy" => palette::css::NAVY,
         "plateado" | "silver" => palette::css::SILVER,
         "marron" | "brown" => palette::css::BROWN,
-        "defecto" | "default" => palette::css::WHITE,
-        _ => palette::css::WHITE,
-    }
+        "defecto" | "default" => return None,
+        _ => return None,
+    };
+    Some(color)
 }
 
 /// Parsea un string de color (hex #RRGGBB o nombre/role del tema) a RgbColor.
@@ -492,8 +502,24 @@ pub(crate) fn ejecutar_callback_y_actualizar(
     state: &mut AppStateNativo,
     programa: &[Declaracion],
 ) {
+    ejecutar_callback_con_valor(nombre_fn, None, state, programa)
+}
+
+/// Igual que [`ejecutar_callback_y_actualizar`] pero le entrega al callback el
+/// valor del widget que lo disparó (rating, fecha, ruta, paso, ítem de nav).
+///
+/// Los parámetros de la función Forja se bindean por posición: los callbacks de
+/// los ejemplos declaran `funcion calificar(valor: Texto)`, así que el valor va
+/// como primer argumento. Un callback sin parámetros ignora el valor.
+pub(crate) fn ejecutar_callback_con_valor(
+    nombre_fn: &str,
+    valor: Option<ValorGUI>,
+    state: &mut AppStateNativo,
+    programa: &[Declaracion],
+) {
     crate::debug::log_callback_start(nombre_fn);
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut state.store) {
+    let args: Vec<ValorGUI> = valor.into_iter().collect();
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &args, programa, &mut state.store) {
         Ok(valor) => {
             crate::debug::log_callback_success(nombre_fn, &valor.to_display());
             state.store.set("resultado", valor.to_json_value());
@@ -537,16 +563,16 @@ pub(crate) fn make_material_button(
     if let Some(bg_color) = bg {
         Box::new(
             btn.background(Background::Color(bg_color))
-                .corner_radius(corner_radius),
+                .corner_radius(corner_radius.px()),
         )
     } else if let Some(border_color) = border {
         Box::new(
             btn.border_color(border_color)
-                .border_width(1.0)
-                .corner_radius(corner_radius),
+                .border_width(1.0.px())
+                .corner_radius(corner_radius.px()),
         )
     } else {
-        Box::new(btn.corner_radius(corner_radius))
+        Box::new(btn.corner_radius(corner_radius.px()))
     }
 }
 

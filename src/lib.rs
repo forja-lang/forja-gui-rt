@@ -19,19 +19,24 @@ pub use debug::*;
 
 // Re-exportar todo lo que necesita el código generado por Forja
 pub use winit::error::EventLoopError;
-pub use xilem::core::{lens, map_message, memoize};
-pub use xilem::core::{MessageContext, MessageResult};
-pub use xilem::masonry::properties::types::Length;
+pub use xilem::core::{lens, memoize};
+// Renombres de xilem_core (main): `map_message` → `map_message_result`,
+// `MessageContext` → `MessageCtx`. Se aliasan al nombre histórico de Forja.
+pub use xilem::core::map_message_result as map_message;
+pub use xilem::core::{MessageCtx as MessageContext, MessageResult};
+pub use xilem::masonry::layout::Length;
+// Módulos de Masonry usados por los widgets personalizados del crate
+// (re-exportados para evitar escribir `xilem::masonry::...` en cada archivo).
+pub use xilem::masonry::{kurbo, layout};
 pub use xilem::style::{Background, Style};
 pub use xilem::view::{
     self, button, button_any_pointer, checkbox, flex, grid, image, indexed_stack, label, portal,
     progress_bar, prose, sized_box, slider, spinner, split, text_button, text_input, transformed,
-    variable_label, virtual_scroll, zstack, Axis, CrossAxisAlignment, GridParams,
-    MainAxisAlignment,
+    variable_label, virtual_scroll, zstack, CrossAxisAlignment, GridParams, MainAxisAlignment,
 };
 pub use xilem::winit;
 pub use xilem::ViewCtx;
-pub use xilem::{palette, Affine, Blob, Color, ImageBrush, ImageFormat};
+pub use xilem::{palette, Blob, Color, ImageBrush, ImageFormat};
 pub use xilem::{
     AnyWidgetView, EventLoop, FontWeight, TextAlign, WidgetView, WindowOptions, Xilem,
 };
@@ -40,18 +45,21 @@ pub use xilem::{
 pub use xilem::core::{Mut, View, ViewMarker};
 pub use xilem::masonry::accesskit::{self, Node, Role};
 pub use xilem::masonry::core::ChildrenIds;
+pub use xilem::masonry::core::NewWidget;
 pub use xilem::masonry::core::Widget;
 pub use xilem::masonry::core::{
-    AccessCtx, AccessEvent, ComposeCtx, EventCtx, LayoutCtx, NoAction, PaintCtx,
+    AccessCtx, AccessEvent, ComposeCtx, EventCtx, LayoutCtx, MeasureCtx, NoAction, PaintCtx,
     PointerButtonEvent, PointerEvent, PointerId, PointerUpdate, PropertiesMut, PropertiesRef,
     RegisterCtx, TextEvent, Update, UpdateCtx, WidgetId, WidgetMut, WidgetPod,
 };
-pub use xilem::masonry::core::{BoxConstraints, NewWidget};
 /// LogicalSize: tamaño lógico de ventana (independiente de DPI)
 pub use xilem::masonry::dpi::LogicalSize;
-pub use xilem::masonry::kurbo::{Point, Size};
+/// Dibujo: `imaging::Painter` reemplaza a `vello::Scene` en `Widget::paint`.
+pub use xilem::masonry::imaging::{self, Painter};
+pub use xilem::masonry::kurbo::{Affine, Axis, Point, Size};
+pub use xilem::masonry::layout::LenReq;
+pub use xilem::masonry::peniko;
 pub use xilem::masonry::ui_events::pointer::PointerButton;
-pub use xilem::masonry::vello::{self, Scene};
 /// Re-exportamos módulos de Masonry necesarios para widgets personalizados
 pub use xilem::masonry::widgets as masonry_widgets;
 /// Window: acceso a la ventana nativa de winit
@@ -59,6 +67,15 @@ pub use xilem::winit::window::Window;
 /// Pod: wrapper de widgets Masonry como WidgetView
 pub use xilem::Pod;
 
+// Propiedades por defecto de Masonry derivadas del tema (afecta a TODOS los
+// widgets nativos: botones, campos, switches, sliders, labels).
+pub mod theme_props;
+// Material y detalles de la ventana nativa (Mica en Windows 11).
+pub mod chrome;
+// Configuración de la ventana declarada desde el código Forja.
+pub mod window_config;
+// Medición del costo de armar cada frame (FORJA_GUI_PERF=1).
+pub mod perf;
 // Módulo de tema Material You — extraído al crate `forja-theme` (F3-T2).
 // Se re-exporta para preservar la API pública histórica `forja_gui_rt::theme::*`.
 pub use forja_theme as theme;
@@ -72,6 +89,7 @@ pub mod shadow_widget;
 // ej: FontWeight existe tanto en xilem como en theme::typography)
 pub use theme::{
     ColorScheme,     // Esquema de color con roles
+    DesignStyle,     // Diseño visual base (Material You, Liquid Glass, Fluent)
     ElevationSystem, // Sistema de elevación (sombras)
     MaterialTheme,   // Tema completo
     RgbColor,        // Color RGB (convierte a xilem::Color via From)
@@ -132,6 +150,8 @@ pub use forja_syntax::ast::{
 // === Módulo de QR Code ===
 pub mod qr_widget;
 pub use qr_widget::{qr_view, QRView, QRWidget};
+pub mod star_widget;
+pub use star_widget::{estrella, StarIconView, StarWidget};
 
 // === Módulo de gráficos vectoriales con Vello (Fase 9) ===
 pub mod chart_widgets;
