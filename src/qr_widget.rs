@@ -8,12 +8,13 @@ use std::marker::PhantomData;
 use xilem::core::{MessageResult, Mut, View, ViewMarker};
 use xilem::masonry::core::Widget;
 use xilem::masonry::core::{
-    AccessCtx, BoxConstraints, ChildrenIds, LayoutCtx, NoAction, PaintCtx, PropertiesMut,
-    PropertiesRef, RegisterCtx, UpdateCtx,
+    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PropertiesRef, RegisterCtx,
+    UpdateCtx,
 };
-use xilem::masonry::kurbo::{Affine, Rect, Size};
-use xilem::masonry::vello::peniko::{self, Brush, Fill};
-use xilem::masonry::vello::Scene;
+use xilem::masonry::imaging::Painter;
+use xilem::masonry::kurbo::{Axis, Rect, Size};
+use xilem::masonry::layout::{LenReq, Length};
+use xilem::masonry::peniko;
 
 // ═══════════════════════════════════════════════════════════════════
 // QRWidget — raw widget Masonry que pinta un código QR
@@ -103,16 +104,31 @@ impl Widget for QRWidget {
 
     fn property_changed(&mut self, _ctx: &mut UpdateCtx<'_>, _property_type: std::any::TypeId) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(self.size, self.size))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // El QR tiene tamaño propio fijo: lo respeta, pero se achica si el
+        // espacio disponible es menor (equivalente al `bc.constrain` anterior).
+        let fijo = Length::px(self.size);
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
         if self.modules.is_empty() || self.module_count == 0 {
             return;
         }
@@ -121,11 +137,11 @@ impl Widget for QRWidget {
 
         // Fondo blanco
         let bg_rect = Rect::new(0.0, 0.0, self.size, self.size);
-        let white = Brush::Solid(peniko::Color::from_rgba8(255, 255, 255, 255));
-        scene.fill(Fill::NonZero, Affine::IDENTITY, &white, None, &bg_rect);
+        let white = peniko::Color::from_rgba8(255, 255, 255, 255);
+        painter.fill_rect(bg_rect, white);
 
         // Módulos negros
-        let black = Brush::Solid(peniko::Color::from_rgba8(0, 0, 0, 255));
+        let black = peniko::Color::from_rgba8(0, 0, 0, 255);
 
         // Añadir margen de seguridad (quiet zone) de 4 módulos
         let quiet_zone = 4.0 * cell_size;
@@ -137,7 +153,7 @@ impl Widget for QRWidget {
                 let x = quiet_zone + col as f64 * cell_size;
                 let y = quiet_zone + row as f64 * cell_size;
                 let rect = Rect::new(x, y, x + cell_size, y + cell_size);
-                scene.fill(Fill::NonZero, Affine::IDENTITY, &black, None, &rect);
+                painter.fill_rect(rect, black);
             }
         }
     }
@@ -218,7 +234,7 @@ impl<State: 'static> View<State, (), ViewCtx> for QRView<State> {
     fn message(
         &self,
         _view_state: &mut (),
-        _message: &mut xilem::core::MessageContext,
+        _message: &mut crate::MessageContext,
         _element: Mut<'_, xilem::Pod<QRWidget>>,
         _app_state: &mut State,
     ) -> MessageResult<()> {

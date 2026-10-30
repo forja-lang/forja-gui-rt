@@ -5,8 +5,9 @@
 
 use crate::theme::elevation::Shadow;
 use xilem::masonry::kurbo::Point;
+use xilem::masonry::layout::AsUnit as _;
+use xilem::masonry::peniko::color::AlphaColor;
 use xilem::masonry::properties::BoxShadow;
-use xilem::masonry::vello::peniko::color::AlphaColor;
 
 /// Convierte un Shadow de ElevationSystem al BoxShadow nativo de Masonry.
 ///
@@ -23,14 +24,15 @@ pub fn shadow_to_box_shadow(shadow: &Shadow) -> BoxShadow {
         shadow.color.2,
         shadow.color.3,
     );
-    BoxShadow::new(color, Point::new(shadow.offset_x, shadow.offset_y)).blur(shadow.blur_radius)
+    BoxShadow::new(color, Point::new(shadow.offset_x, shadow.offset_y))
+        .blur(shadow.blur_radius.px())
 }
 
 /// Versión simplificada que crea un BoxShadow solo con blur y color,
 /// sin offset (adecuado para sombras interiores o glows).
 pub fn glow_box_shadow(color: (u8, u8, u8, u8), blur_radius: f64) -> BoxShadow {
     let alpha_color = AlphaColor::from_rgba8(color.0, color.1, color.2, color.3);
-    BoxShadow::new(alpha_color, Point::ZERO).blur(blur_radius)
+    BoxShadow::new(alpha_color, Point::ZERO).blur(blur_radius.px())
 }
 
 #[cfg(test)]
@@ -45,7 +47,7 @@ mod tests {
         let bs = shadow_to_box_shadow(&shadow);
         // Verificar que se crea correctamente
         assert!(
-            bs.blur_radius > 0.0,
+            bs.blur_radius.get() > 0.0,
             "blur_radius should be > 0 for level 2"
         );
     }
@@ -53,6 +55,6 @@ mod tests {
     #[test]
     fn test_glow_box_shadow() {
         let glow = glow_box_shadow((0, 0, 0, 100), 5.0);
-        assert!((glow.blur_radius - 5.0).abs() < 0.001);
+        assert!((glow.blur_radius.get() - 5.0).abs() < 0.001);
     }
 }

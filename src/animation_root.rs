@@ -4,13 +4,10 @@ use std::time::Instant;
 
 use crate::{
     accesskit::{Node, Role},
-    vello::{
-        kurbo::{Point, Size},
-        Scene,
-    },
-    AccessCtx, BoxConstraints, ChildrenIds, LayoutCtx, NewWidget, NoAction, PaintCtx,
-    PropertiesMut, PropertiesRef, RegisterCtx, Widget, WidgetPod,
+    AccessCtx, Axis, ChildrenIds, LayoutCtx, LenReq, Length, MeasureCtx, NewWidget, NoAction,
+    PaintCtx, Painter, Point, PropertiesRef, RegisterCtx, Size, Widget, WidgetPod,
 };
+use xilem::masonry::layout::LayoutSize;
 
 /// Widget raíz que envuelve todo el árbol y tickea el motor de animaciones
 /// en cada frame de pintura.
@@ -49,22 +46,38 @@ impl Widget for AnimationRoot {
         }
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        if let Some(ref mut child) = self.child {
-            let size = ctx.run_layout(child, bc);
-            ctx.place_child(child, Point::ORIGIN);
-            size
-        } else {
-            bc.constrain(Size::ZERO)
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (mismo comportamiento que el `layout` viejo,
+        // que devolvía el tamaño resultante del hijo).
+        match self.child.as_mut() {
+            Some(child) => {
+                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+            }
+            None => Length::ZERO,
         }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        if let Some(ref mut child) = self.child {
+            ctx.run_layout(child, size);
+            ctx.place_child(child, Point::ORIGIN);
+        }
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         let _delta_ms = self.delta_ms();
     }
 

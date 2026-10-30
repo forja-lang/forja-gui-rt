@@ -8,14 +8,11 @@ use std::time::Instant;
 
 use crate::{
     accesskit::{Node, Role},
-    vello::{
-        kurbo::{Affine, Circle, Point, Rect, Size},
-        peniko::color::AlphaColor,
-        peniko::{Brush, Fill},
-        Scene,
-    },
-    AccessCtx, BoxConstraints, ChildrenIds, LayoutCtx, NewWidget, NoAction, PaintCtx,
-    PropertiesMut, PropertiesRef, RegisterCtx, Widget, WidgetMut, WidgetPod,
+    kurbo::{Circle, Point, Size},
+    layout::{LayoutSize, LenReq, Length},
+    peniko::color::AlphaColor,
+    AccessCtx, Axis, ChildrenIds, LayoutCtx, MeasureCtx, NewWidget, NoAction, PaintCtx, Painter,
+    PropertiesRef, RegisterCtx, Widget, WidgetMut, WidgetPod,
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -63,40 +60,55 @@ impl Widget for AnimatedOpacity {
         }
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
         if self.auto_hide && self.opacity < 0.01 {
-            return bc.constrain(Size::ZERO);
+            return Length::ZERO;
         }
-        if let Some(ref mut child) = self.child {
-            let size = ctx.run_layout(child, bc);
-            ctx.place_child(child, Point::ORIGIN);
-            size
-        } else {
-            bc.constrain(Size::ZERO)
+        // Adopta el tamaño del hijo (como el `layout` viejo, que devolvía el del hijo).
+        match self.child.as_mut() {
+            Some(child) => {
+                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+            }
+            None => Length::ZERO,
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        if let Some(ref mut child) = self.child {
+            // Si está oculto, el hijo se colapsa a cero (antes no se hacía layout de él).
+            let child_size = if self.auto_hide && self.opacity < 0.01 {
+                Size::ZERO
+            } else {
+                size
+            };
+            ctx.run_layout(child, child_size);
+            ctx.place_child(child, Point::ORIGIN);
+        }
+    }
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
         if self.auto_hide && self.opacity < 0.01 {
             return;
         }
         if self.opacity < 0.999 && !self.auto_hide {
-            let size = ctx.size();
+            let size = ctx.border_box().size();
             let alpha = (1.0 - self.opacity) as f32;
             let overlay_color = AlphaColor::from_rgba8(0, 0, 0, (alpha * 255.0) as u8);
-            let rect = Rect::from_origin_size(Point::ORIGIN, size);
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                Brush::Solid(overlay_color),
-                None,
-                &rect,
-            );
+            let rect = crate::kurbo::Rect::from_origin_size(Point::ORIGIN, size);
+            painter.fill_rect(rect, overlay_color);
         }
     }
 
@@ -160,22 +172,36 @@ impl Widget for AnimatedSlide {
         }
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        if let Some(ref mut child) = self.child {
-            let size = ctx.run_layout(child, bc);
-            ctx.place_child(child, Point::ORIGIN);
-            size
-        } else {
-            bc.constrain(Size::ZERO)
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        match self.child.as_mut() {
+            Some(child) => {
+                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+            }
+            None => Length::ZERO,
         }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        if let Some(ref mut child) = self.child {
+            ctx.run_layout(child, size);
+            ctx.place_child(child, Point::ORIGIN);
+        }
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // El framework aplica el transform automáticamente
     }
 
@@ -239,22 +265,36 @@ impl Widget for AnimatedScale {
         }
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        if let Some(ref mut child) = self.child {
-            let size = ctx.run_layout(child, bc);
-            ctx.place_child(child, Point::ORIGIN);
-            size
-        } else {
-            bc.constrain(Size::ZERO)
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        match self.child.as_mut() {
+            Some(child) => {
+                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+            }
+            None => Length::ZERO,
         }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        if let Some(ref mut child) = self.child {
+            ctx.run_layout(child, size);
+            ctx.place_child(child, Point::ORIGIN);
+        }
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // El framework aplica el transform automáticamente
     }
 
@@ -312,7 +352,7 @@ impl RippleWidget {
     }
 
     pub fn trigger(this: &mut WidgetMut<'_, Self>) {
-        let size = this.ctx.size();
+        let size = this.ctx.border_box().size();
         let cx = size.width / 2.0;
         let cy = size.height / 2.0;
         let max_r = (cx * cx + cy * cy).sqrt();
@@ -337,22 +377,36 @@ impl Widget for RippleWidget {
         }
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        if let Some(ref mut child) = self.child {
-            let size = ctx.run_layout(child, bc);
-            ctx.place_child(child, Point::ORIGIN);
-            size
-        } else {
-            bc.constrain(Size::ZERO)
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        match self.child.as_mut() {
+            Some(child) => {
+                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+            }
+            None => Length::ZERO,
         }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        if let Some(ref mut child) = self.child {
+            ctx.run_layout(child, size);
+            ctx.place_child(child, Point::ORIGIN);
+        }
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
         if self.ripple_progress <= 0.0 || self.ripple_progress >= 1.0 {
             // Si la animación sigue activa, avanzar progreso
             if let Some(start) = self.anim_start {
@@ -377,13 +431,7 @@ impl Widget for RippleWidget {
             radius,
         );
 
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            Brush::Solid(color),
-            None,
-            &circle,
-        );
+        painter.fill(circle, color).draw();
     }
 
     fn accessibility_role(&self) -> Role {

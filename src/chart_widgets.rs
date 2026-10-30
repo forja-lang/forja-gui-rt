@@ -8,12 +8,13 @@
 use std::marker::PhantomData;
 
 use crate::accesskit::{Node, Role};
-use crate::vello::kurbo::{Affine, BezPath, Circle, Line, Point, Rect, Size, Stroke};
-use crate::vello::peniko::{self, Brush, Fill};
-use crate::vello::Scene;
+use crate::imaging::Painter;
+use crate::kurbo::{BezPath, Circle, Line, Point, Rect, Size, Stroke};
+use crate::layout::{LenReq, Length};
+use crate::peniko::{self, Brush};
 use crate::{
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx, PointerEvent,
-    PropertiesMut, PropertiesRef, RegisterCtx,
+    AccessCtx, Axis, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NoAction, PaintCtx,
+    PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
 };
 use crate::{MessageContext, MessageResult, Mut, Pod, View, ViewCtx, ViewMarker};
 use std::f64::consts::PI;
@@ -93,7 +94,7 @@ fn add_arc_to_path(
 
 /// Dibuja un segmento de pastel (centro → arco → centro) usando BezPath con segmentos de línea.
 fn draw_pie_segment(
-    scene: &mut Scene,
+    painter: &mut Painter<'_>,
     cx: f64,
     cy: f64,
     radius: f64,
@@ -118,13 +119,13 @@ fn draw_pie_segment(
     // Cerrar al centro
     path.close_path();
 
-    scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
+    painter.fill(&path, brush).draw();
 }
 
 /// Dibuja un arco grueso (anillo) usando BezPath con segmentos de línea.
 /// Útil para el gauge y donut avanzado.
 fn draw_thick_arc(
-    scene: &mut Scene,
+    painter: &mut Painter<'_>,
     cx: f64,
     cy: f64,
     radius: f64,
@@ -168,7 +169,7 @@ fn draw_thick_arc(
     add_arc_to_path(&mut path, cx, cy, inner_r, end_angle, -sweep_angle, num_seg);
 
     path.close_path();
-    scene.fill(Fill::NonZero, Affine::IDENTITY, brush, None, &path);
+    painter.fill(&path, brush).draw();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -229,17 +230,35 @@ impl crate::Widget for LineChartWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(300.0, 200.0))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // Tamaño propio fijo, achicado si el espacio disponible es menor
+        // (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(300.0),
+            Axis::Vertical => Length::px(200.0),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
         let padding = 30.0;
         let chart_w = size.width - padding * 2.0;
         let chart_h = size.height - padding * 2.0;
@@ -267,13 +286,7 @@ impl crate::Widget for LineChartWidget {
             for i in 0..=4 {
                 let y = padding + chart_h * (1.0 - i as f64 / 4.0);
                 let line = Line::new(Point::new(padding, y), Point::new(padding + chart_w, y));
-                scene.stroke(
-                    &Stroke::new(1.0),
-                    Affine::IDENTITY,
-                    &grid_brush,
-                    None,
-                    &line,
-                );
+                painter.stroke(&line, &Stroke::new(1.0), &grid_brush).draw();
             }
         }
 
@@ -289,13 +302,13 @@ impl crate::Widget for LineChartWidget {
             }
         }
 
-        scene.stroke(
-            &Stroke::new(self.line_width),
-            Affine::IDENTITY,
-            &self.line_color.to_brush(),
-            None,
-            &path,
-        );
+        painter
+            .stroke(
+                &path,
+                &Stroke::new(self.line_width),
+                &self.line_color.to_brush(),
+            )
+            .draw();
 
         // ── Puntos ──
         if self.show_points {
@@ -303,22 +316,16 @@ impl crate::Widget for LineChartWidget {
                 let x = padding + i as f64 * step_x;
                 let y = padding + chart_h - (point.value / max_val * chart_h);
                 let circle = Circle::new(Point::new(x, y), 4.0);
-                scene.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    &point.color.to_brush(),
-                    None,
-                    &circle,
-                );
+                painter.fill(&circle, &point.color.to_brush()).draw();
                 // Borde blanco
                 let border = Circle::new(Point::new(x, y), 4.0);
-                scene.stroke(
-                    &Stroke::new(1.5),
-                    Affine::IDENTITY,
-                    &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
-                    None,
-                    &border,
-                );
+                painter
+                    .stroke(
+                        &border,
+                        &Stroke::new(1.5),
+                        &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
+                    )
+                    .draw();
             }
         }
     }
@@ -381,17 +388,35 @@ impl crate::Widget for BarChartWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(300.0, 200.0))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // Tamaño propio fijo, achicado si el espacio disponible es menor
+        // (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(300.0),
+            Axis::Vertical => Length::px(200.0),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
         let padding = 30.0;
         let chart_w = size.width - padding * 2.0;
         let chart_h = size.height - padding * 2.0;
@@ -416,13 +441,13 @@ impl crate::Widget for BarChartWidget {
             Point::new(padding, axis_y),
             Point::new(padding + chart_w, axis_y),
         );
-        scene.stroke(
-            &Stroke::new(1.0),
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::from_rgba8(0xCC, 0xCC, 0xCC, 0xFF)),
-            None,
-            &axis,
-        );
+        painter
+            .stroke(
+                &axis,
+                &Stroke::new(1.0),
+                &Brush::Solid(peniko::Color::from_rgba8(0xCC, 0xCC, 0xCC, 0xFF)),
+            )
+            .draw();
 
         for (i, point) in self.data.iter().enumerate() {
             let bar_height = (point.value / max_val * chart_h).max(2.0);
@@ -430,22 +455,16 @@ impl crate::Widget for BarChartWidget {
             let y = padding + chart_h - bar_height;
             let rect = Rect::new(x, y, x + bar_w, padding + chart_h);
 
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                &point.color.to_brush(),
-                None,
-                &rect,
-            );
+            painter.fill(&rect, &point.color.to_brush()).draw();
 
             // Borde sutil
-            scene.stroke(
-                &Stroke::new(0.5),
-                Affine::IDENTITY,
-                &Brush::Solid(peniko::Color::from_rgba8(0x00, 0x00, 0x00, 0x20)),
-                None,
-                &rect,
-            );
+            painter
+                .stroke(
+                    &rect,
+                    &Stroke::new(0.5),
+                    &Brush::Solid(peniko::Color::from_rgba8(0x00, 0x00, 0x00, 0x20)),
+                )
+                .draw();
         }
     }
 
@@ -511,17 +530,35 @@ impl crate::Widget for PieChartWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(200.0, 200.0))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // Tamaño propio fijo, achicado si el espacio disponible es menor
+        // (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(200.0),
+            Axis::Vertical => Length::px(200.0),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
         let cx = size.width / 2.0;
         let cy = size.height / 2.0;
         let radius = size.width.min(size.height) / 2.0 * 0.8;
@@ -536,7 +573,7 @@ impl crate::Widget for PieChartWidget {
         for point in &self.data {
             let sweep = (point.value / total) * 2.0 * PI;
             draw_pie_segment(
-                scene,
+                painter,
                 cx,
                 cy,
                 radius,
@@ -551,31 +588,30 @@ impl crate::Widget for PieChartWidget {
         if self.donut {
             let inner_r = radius * self.donut_ratio;
             let inner_circle = Circle::new(Point::new(cx, cy), inner_r);
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
-                None,
-                &inner_circle,
-            );
-            scene.stroke(
-                &Stroke::new(1.0),
-                Affine::IDENTITY,
-                &Brush::Solid(peniko::Color::from_rgba8(0xDD, 0xDD, 0xDD, 0xFF)),
-                None,
-                &inner_circle,
-            );
+            painter
+                .fill(
+                    &inner_circle,
+                    &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
+                )
+                .draw();
+            painter
+                .stroke(
+                    &inner_circle,
+                    &Stroke::new(1.0),
+                    &Brush::Solid(peniko::Color::from_rgba8(0xDD, 0xDD, 0xDD, 0xFF)),
+                )
+                .draw();
         }
 
         // Borde exterior
         let outer_circle = Circle::new(Point::new(cx, cy), radius);
-        scene.stroke(
-            &Stroke::new(1.0),
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::from_rgba8(0x40, 0x40, 0x40, 0x30)),
-            None,
-            &outer_circle,
-        );
+        painter
+            .stroke(
+                &outer_circle,
+                &Stroke::new(1.0),
+                &Brush::Solid(peniko::Color::from_rgba8(0x40, 0x40, 0x40, 0x30)),
+            )
+            .draw();
     }
 
     fn accessibility_role(&self) -> Role {
@@ -645,17 +681,35 @@ impl crate::Widget for GaugeChartWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(200.0, 200.0))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // Tamaño propio fijo, achicado si el espacio disponible es menor
+        // (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(200.0),
+            Axis::Vertical => Length::px(200.0),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
         let cx = size.width / 2.0;
         let cy = size.height * 0.65;
         let radius = size.width.min(size.height) / 2.0 * 0.55;
@@ -677,7 +731,7 @@ impl crate::Widget for GaugeChartWidget {
 
         // Arco de fondo
         draw_thick_arc(
-            scene,
+            painter,
             cx,
             cy,
             radius,
@@ -690,7 +744,7 @@ impl crate::Widget for GaugeChartWidget {
         // Arco de progreso
         if progress > 0.0 {
             draw_thick_arc(
-                scene,
+                painter,
                 cx,
                 cy,
                 radius,
@@ -706,30 +760,29 @@ impl crate::Widget for GaugeChartWidget {
         let needle_len = radius * 0.65;
         let needle_end = Point::new(cx + angle.cos() * needle_len, cy + angle.sin() * needle_len);
         let needle = Line::new(Point::new(cx, cy), needle_end);
-        scene.stroke(
-            &Stroke::new(2.5),
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
-            None,
-            &needle,
-        );
+        painter
+            .stroke(
+                &needle,
+                &Stroke::new(2.5),
+                &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
+            )
+            .draw();
 
         // Círculo central
         let center = Circle::new(Point::new(cx, cy), 5.0);
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
-            None,
-            &center,
-        );
-        scene.stroke(
-            &Stroke::new(1.0),
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
-            None,
-            &center,
-        );
+        painter
+            .fill(
+                &center,
+                &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
+            )
+            .draw();
+        painter
+            .stroke(
+                &center,
+                &Stroke::new(1.0),
+                &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
+            )
+            .draw();
 
         // Marcas de referencia
         for i in 0..=4 {
@@ -739,13 +792,13 @@ impl crate::Widget for GaugeChartWidget {
             let outer_tick = radius - thickness - 10.0;
             let p1 = Point::new(cx + a.cos() * inner_tick, cy + a.sin() * inner_tick);
             let p2 = Point::new(cx + a.cos() * outer_tick, cy + a.sin() * outer_tick);
-            scene.stroke(
-                &Stroke::new(1.5),
-                Affine::IDENTITY,
-                &Brush::Solid(peniko::Color::from_rgba8(0x66, 0x66, 0x66, 0xFF)),
-                None,
-                &Line::new(p1, p2),
-            );
+            painter
+                .stroke(
+                    &Line::new(p1, p2),
+                    &Stroke::new(1.5),
+                    &Brush::Solid(peniko::Color::from_rgba8(0x66, 0x66, 0x66, 0xFF)),
+                )
+                .draw();
         }
     }
 
@@ -820,17 +873,35 @@ impl crate::Widget for SparklineWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(120.0, 30.0))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // Tamaño propio fijo, achicado si el espacio disponible es menor
+        // (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(120.0),
+            Axis::Vertical => Length::px(30.0),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
         let w = size.width;
         let h = size.height;
 
@@ -853,13 +924,7 @@ impl crate::Widget for SparklineWidget {
             }
             fill_path.line_to(Point::new(w, h));
             fill_path.close_path();
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                &fill_color.to_brush(),
-                None,
-                &fill_path,
-            );
+            painter.fill(&fill_path, &fill_color.to_brush()).draw();
         }
 
         // Línea
@@ -874,13 +939,13 @@ impl crate::Widget for SparklineWidget {
             }
         }
 
-        scene.stroke(
-            &Stroke::new(self.line_width),
-            Affine::IDENTITY,
-            &self.line_color.to_brush(),
-            None,
-            &path,
-        );
+        painter
+            .stroke(
+                &path,
+                &Stroke::new(self.line_width),
+                &self.line_color.to_brush(),
+            )
+            .draw();
     }
 
     fn accessibility_role(&self) -> Role {

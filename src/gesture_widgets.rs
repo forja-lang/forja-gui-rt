@@ -12,13 +12,10 @@ use std::time::Instant;
 
 use crate::{
     accesskit::{Node, Role},
-    vello::{
-        kurbo::{Affine, Point, Rect, Size},
-        peniko::color::AlphaColor,
-        peniko::{Brush, Fill},
-        Scene,
-    },
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NewWidget, PaintCtx,
+    kurbo::{Affine, Point, Rect, Size},
+    layout::{LayoutSize, LenReq, Length},
+    peniko::color::AlphaColor,
+    AccessCtx, Axis, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NewWidget, PaintCtx, Painter,
     PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerUpdate, PropertiesMut,
     PropertiesRef, RegisterCtx, Widget, WidgetPod,
 };
@@ -244,18 +241,36 @@ impl Widget for SwipeWidget {
         ctx.register_child(&mut self.child);
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        let size = ctx.run_layout(&mut self.child, bc);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
-        size
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (igual que el `layout` viejo).
+        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        ctx.compute_length(
+            &mut self.child,
+            len_req.into(),
+            context_size,
+            axis,
+            cross_length,
+        )
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        ctx.run_layout(&mut self.child, size);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // El framework pinta al hijo automáticamente
     }
 
@@ -365,18 +380,36 @@ impl Widget for PanWidget {
         ctx.register_child(&mut self.child);
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        let size = ctx.run_layout(&mut self.child, bc);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
-        size
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (igual que el `layout` viejo).
+        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        ctx.compute_length(
+            &mut self.child,
+            len_req.into(),
+            context_size,
+            axis,
+            cross_length,
+        )
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        ctx.run_layout(&mut self.child, size);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // El framework aplica el transform automáticamente
     }
 
@@ -517,19 +550,37 @@ impl Widget for PullToRefreshWidget {
         ctx.register_child(&mut self.child);
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        let size = ctx.run_layout(&mut self.child, bc);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
-        size
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (igual que el `layout` viejo).
+        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        ctx.compute_length(
+            &mut self.child,
+            len_req.into(),
+            context_size,
+            axis,
+            cross_length,
+        )
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        ctx.run_layout(&mut self.child, size);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+    }
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
 
         // Pintar indicador de pull-to-refresh si hay progreso
         if self.progress > 0.0 || self.refreshing {
@@ -545,13 +596,7 @@ impl Widget for PullToRefreshWidget {
             // Rectángulo de fondo del indicador
             let bg_rect = Rect::new(0.0, indicator_y, size.width, indicator_y + indicator_height);
             let bg_color = AlphaColor::from_rgba8(200, 200, 200, 180);
-            scene.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                Brush::Solid(bg_color),
-                None,
-                &bg_rect,
-            );
+            painter.fill_rect(bg_rect, bg_color);
 
             // Barra de progreso (mostrar avance hacia el umbral)
             if !self.refreshing && self.progress > 0.0 {
@@ -563,13 +608,7 @@ impl Widget for PullToRefreshWidget {
                     indicator_y + indicator_height,
                 );
                 let bar_color = AlphaColor::from_rgba8(100, 150, 255, 220);
-                scene.fill(
-                    Fill::NonZero,
-                    Affine::IDENTITY,
-                    Brush::Solid(bar_color),
-                    None,
-                    &bar_rect,
-                );
+                painter.fill_rect(bar_rect, bar_color);
             }
         }
     }
@@ -813,7 +852,7 @@ impl Widget for PinchZoomWidget {
                     {
                         self.scale =
                             (self.scale * scale_factor).clamp(self.min_scale, self.max_scale);
-                        let size = ctx.size();
+                        let size = ctx.border_box().size();
                         let center = Point::new(size.width / 2.0, size.height / 2.0);
                         let transform = Affine::translate(center.to_vec2())
                             .then_scale(self.scale)
@@ -841,18 +880,36 @@ impl Widget for PinchZoomWidget {
         ctx.register_child(&mut self.child);
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        let size = ctx.run_layout(&mut self.child, bc);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
-        size
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (igual que el `layout` viejo).
+        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        ctx.compute_length(
+            &mut self.child,
+            len_req.into(),
+            context_size,
+            axis,
+            cross_length,
+        )
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        ctx.run_layout(&mut self.child, size);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // La transformación se aplica via ctx.set_transform() en on_pointer_event
     }
 
@@ -930,7 +987,7 @@ impl Widget for RotateWidget {
 
                     if let Some(delta) = self.multi_touch.detect_rotate(&self.prev_multi_touch) {
                         self.angle += delta;
-                        let size = ctx.size();
+                        let size = ctx.border_box().size();
                         let center = Point::new(size.width / 2.0, size.height / 2.0);
                         let transform = Affine::translate(center.to_vec2())
                             .then_rotate(self.angle)
@@ -954,18 +1011,36 @@ impl Widget for RotateWidget {
         ctx.register_child(&mut self.child);
     }
 
-    fn layout(
+    fn measure(
         &mut self,
-        ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        let size = ctx.run_layout(&mut self.child, bc);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
-        size
+        ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        cross_length: Option<Length>,
+    ) -> Length {
+        // Adopta el tamaño del hijo (igual que el `layout` viejo).
+        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        ctx.compute_length(
+            &mut self.child,
+            len_req.into(),
+            context_size,
+            axis,
+            cross_length,
+        )
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
+        ctx.run_layout(&mut self.child, size);
+        ctx.place_child(&mut self.child, Point::ORIGIN);
+    }
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _painter: &mut Painter<'_>,
+    ) {
         // La transformación se aplica via ctx.set_transform() en on_pointer_event
     }
 

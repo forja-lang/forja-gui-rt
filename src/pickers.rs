@@ -4,8 +4,10 @@
 // consistentes con el resto de gui_nativa.rs.
 
 use crate::gui_nativa::{AppStateNativo, ValorGUI};
+use crate::layout::AsUnit as _;
 use crate::theme::{ColorScheme, MaterialTheme};
-use crate::view::{self, Axis};
+use crate::view;
+use crate::Axis;
 use crate::Length;
 use crate::*;
 use chrono::{Datelike, Local, NaiveDate, Timelike};
@@ -161,7 +163,7 @@ pub fn date_picker_view(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
-    _theme: &MaterialTheme,
+    theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
 
@@ -269,8 +271,8 @@ pub fn date_picker_view(
             Box::new(next_btn) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
-    .gap(Length::px(12.0))
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(12.0));
 
     // Días de la semana header
     let mut day_headers: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
@@ -282,8 +284,7 @@ pub fn date_picker_view(
                     .weight(FontWeight::BOLD)
                     .color(on_surface_variant),
             )
-            .width(Length::px(36.0))
-            .height(Length::px(36.0)),
+            .dims((Length::px(36.0), Length::px(36.0))),
         ) as Box<AnyWidgetView<AppStateNativo>>);
     }
     let day_header_row = view::flex(Axis::Horizontal, (day_headers,)).gap(Length::px(2.0));
@@ -304,8 +305,7 @@ pub fn date_picker_view(
                 // Celda vacía (día fuera del mes)
                 day_cells.push(Box::new(
                     view::sized_box(view::label(String::new()))
-                        .width(Length::px(36.0))
-                        .height(Length::px(36.0)),
+                        .dims((Length::px(36.0), Length::px(36.0))),
                 ) as Box<AnyWidgetView<AppStateNativo>>);
             } else {
                 let dia = (cell_idx - offset + 1) as u32;
@@ -320,10 +320,9 @@ pub fn date_picker_view(
                         .color(on_surface);
                     Box::new(
                         view::sized_box(lbl)
-                            .width(Length::px(36.0))
-                            .height(Length::px(36.0))
+                            .dims((Length::px(36.0), Length::px(36.0)))
                             .background(Background::Color(primary_container))
-                            .corner_radius(18.0),
+                            .corner_radius(shape_family(theme, "full").px()),
                     ) as Box<AnyWidgetView<AppStateNativo>>
                 } else {
                     let btn = view::button(
@@ -339,11 +338,8 @@ pub fn date_picker_view(
                             data.escribir(&var_cell, ValorGUI::Texto(fecha_str));
                         },
                     );
-                    Box::new(
-                        view::sized_box(btn)
-                            .width(Length::px(36.0))
-                            .height(Length::px(36.0)),
-                    ) as Box<AnyWidgetView<AppStateNativo>>
+                    Box::new(view::sized_box(btn).dims((Length::px(36.0), Length::px(36.0))))
+                        as Box<AnyWidgetView<AppStateNativo>>
                 };
                 day_cells.push(cell);
             }
@@ -356,12 +352,17 @@ pub fn date_picker_view(
 
     Box::new(
         view::flex(Axis::Vertical, (all_rows,))
-            .gap(Length::px(4.0))
-            .cross_axis_alignment(CrossAxisAlignment::Center),
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .gap(Length::px(4.0)),
     )
 }
 
 /// Parsea una fecha del formato "YYYY-MM-DD" o devuelve hoy
+/// Radio de forma del tema por nombre de familia ("full", "container", ...).
+fn shape_family(theme: &MaterialTheme, family: &str) -> f64 {
+    crate::helpers::get_shape_radius(&theme.shapes, family)
+}
+
 fn parse_fecha(val: &str, today: NaiveDate) -> (i32, u32, u32) {
     if val.len() == 10 && val.contains('-') {
         let parts: Vec<&str> = val.split('-').collect();
@@ -414,6 +415,7 @@ pub fn time_picker_view(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
+    theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
     let current_val = data.leer(variable).to_string();
@@ -473,10 +475,9 @@ pub fn time_picker_view(
         .weight(FontWeight::BOLD)
         .color(on_surface);
     let hour_box = view::sized_box(hour_label)
-        .width(Length::px(48.0))
-        .height(Length::px(48.0))
+        .dims((Length::px(48.0), Length::px(48.0)))
         .background(Background::Color(surface_variant))
-        .corner_radius(8.0);
+        .corner_radius(shape_family(theme, "container").px());
 
     // Columna hora
     let hour_col = view::flex(
@@ -487,8 +488,8 @@ pub fn time_picker_view(
             Box::new(hour_down) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
-    .gap(Length::px(2.0))
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(2.0));
 
     // Separador ":"
     let sep = view::label(":")
@@ -526,10 +527,9 @@ pub fn time_picker_view(
         .weight(FontWeight::BOLD)
         .color(on_surface);
     let min_box = view::sized_box(min_label)
-        .width(Length::px(48.0))
-        .height(Length::px(48.0))
+        .dims((Length::px(48.0), Length::px(48.0)))
         .background(Background::Color(surface_variant))
-        .corner_radius(8.0);
+        .corner_radius(shape_family(theme, "container").px());
 
     // Columna minuto
     let min_col = view::flex(
@@ -540,8 +540,8 @@ pub fn time_picker_view(
             Box::new(min_down) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
-    .gap(Length::px(2.0))
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(2.0));
 
     // Fila principal: hora : minuto
     let picker_row = view::flex(
@@ -552,8 +552,8 @@ pub fn time_picker_view(
             Box::new(min_col) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
-    .gap(Length::px(8.0))
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(8.0));
 
     Box::new(view::sized_box(picker_row))
 }
@@ -587,6 +587,7 @@ pub fn color_picker_view(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
+    theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
     let current_val = data.leer(variable).to_string();
@@ -621,18 +622,17 @@ pub fn color_picker_view(
         .width(Length::px(120.0))
         .background(Background::Color(surface_variant))
         .border_color(outline)
-        .border_width(1.0)
-        .corner_radius(4.0);
+        .border_width(1.0.px())
+        .corner_radius(shape_family(theme, "extra_small").px());
 
     // Preview del color actual
     let preview_color = hex_to_color(&current_hex);
     let preview = view::sized_box(view::label("  "))
-        .width(Length::px(32.0))
-        .height(Length::px(32.0))
+        .dims((Length::px(32.0), Length::px(32.0)))
         .background(Background::Color(preview_color))
-        .corner_radius(4.0)
+        .corner_radius(shape_family(theme, "extra_small").px())
         .border_color(outline)
-        .border_width(1.0);
+        .border_width(1.0.px());
 
     // Fila: preview + hex input
     let top_row = view::flex(
@@ -642,8 +642,8 @@ pub fn color_picker_view(
             Box::new(hex_input_box) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
-    .gap(Length::px(8.0))
-    .cross_axis_alignment(CrossAxisAlignment::Center);
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(8.0));
 
     // Grid de colores: 12 columnas × 4 filas
     let mut grid_rows: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
@@ -668,20 +668,18 @@ pub fn color_picker_view(
             if is_selected {
                 // Seleccionado: borde primary más grueso
                 let swatch = view::sized_box(view::label("").text_size(8.0))
-                    .width(Length::px(24.0))
-                    .height(Length::px(24.0))
+                    .dims((Length::px(24.0), Length::px(24.0)))
                     .background(Background::Color(swatch_color))
-                    .corner_radius(4.0)
+                    .corner_radius(shape_family(theme, "extra_small").px())
                     .border_color(scheme.primary.into())
-                    .border_width(2.0);
+                    .border_width(2.0.px());
                 row_widgets.push(Box::new(swatch) as Box<AnyWidgetView<AppStateNativo>>);
             } else {
                 let swatch_btn = view::button(
                     view::sized_box(view::label("").text_size(8.0))
-                        .width(Length::px(24.0))
-                        .height(Length::px(24.0))
+                        .dims((Length::px(24.0), Length::px(24.0)))
                         .background(Background::Color(swatch_color))
-                        .corner_radius(4.0),
+                        .corner_radius(shape_family(theme, "extra_small").px()),
                     move |data: &mut AppStateNativo| {
                         data.escribir(&var_click, ValorGUI::Texto(hex_str.clone()));
                     },

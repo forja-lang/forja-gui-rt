@@ -13,12 +13,12 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 
 use crate::accesskit::{Node, Role};
-use crate::vello::kurbo::{Affine, BezPath, Circle, Line, Point, Rect, Size, Stroke};
-use crate::vello::peniko::{self, Brush, Fill};
-use crate::vello::Scene;
+use crate::kurbo::{BezPath, Circle, Line, Point, Rect, Size, Stroke};
+use crate::layout::{LenReq, Length};
+use crate::peniko;
 use crate::{
-    AccessCtx, BoxConstraints, ChildrenIds, EventCtx, LayoutCtx, NoAction, PaintCtx, PointerEvent,
-    PropertiesMut, PropertiesRef, RegisterCtx,
+    AccessCtx, Axis, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NoAction, PaintCtx, Painter,
+    PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
 };
 use crate::{MessageResult, Mut, Pod, View, ViewCtx, ViewMarker};
 
@@ -189,27 +189,39 @@ impl crate::Widget for CanvasWidget {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(self.width, self.height))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // El lienzo tiene tamaño propio fijo: lo respeta, pero se achica si el
+        // espacio disponible es menor (equivalente al `bc.constrain` anterior).
+        let fijo = match axis {
+            Axis::Horizontal => Length::px(self.width),
+            Axis::Vertical => Length::px(self.height),
+        };
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
-        let size = ctx.size();
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
+        let size = ctx.border_box().size();
 
         // Limpiar el canvas con blanco (fondo por defecto)
         let bg_rect = Rect::new(0.0, 0.0, size.width, size.height);
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            &Brush::Solid(peniko::Color::WHITE),
-            None,
-            &bg_rect,
-        );
+        painter.fill(bg_rect, peniko::Color::WHITE).draw();
 
         // Resetear estado de painter
         self.fill_color = peniko::Color::BLACK;
@@ -220,13 +232,7 @@ impl crate::Widget for CanvasWidget {
             match cmd {
                 CanvasCommand::Clear { r, g, b, a } => {
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &bg_rect,
-                    );
+                    painter.fill(bg_rect, color).draw();
                 }
 
                 CanvasCommand::FillCircle {
@@ -240,13 +246,7 @@ impl crate::Widget for CanvasWidget {
                 } => {
                     let circle = Circle::new(Point::new(*x, *y), *radius);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &circle,
-                    );
+                    painter.fill(circle, color).draw();
                 }
 
                 CanvasCommand::StrokeCircle {
@@ -261,13 +261,7 @@ impl crate::Widget for CanvasWidget {
                 } => {
                     let circle = Circle::new(Point::new(*x, *y), *radius);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.stroke(
-                        &Stroke::new(*width),
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &circle,
-                    );
+                    painter.stroke(circle, &Stroke::new(*width), color).draw();
                 }
 
                 CanvasCommand::FillRect {
@@ -282,13 +276,7 @@ impl crate::Widget for CanvasWidget {
                 } => {
                     let rect = Rect::new(*x, *y, x + w, y + h);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &rect,
-                    );
+                    painter.fill(rect, color).draw();
                 }
 
                 CanvasCommand::StrokeRect {
@@ -304,13 +292,7 @@ impl crate::Widget for CanvasWidget {
                 } => {
                     let rect = Rect::new(*x, *y, x + w, y + h);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.stroke(
-                        &Stroke::new(*width),
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &rect,
-                    );
+                    painter.stroke(rect, &Stroke::new(*width), color).draw();
                 }
 
                 CanvasCommand::DrawLine {
@@ -326,13 +308,7 @@ impl crate::Widget for CanvasWidget {
                 } => {
                     let line = Line::new(Point::new(*x1, *y1), Point::new(*x2, *y2));
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.stroke(
-                        &Stroke::new(*width),
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &line,
-                    );
+                    painter.stroke(line, &Stroke::new(*width), color).draw();
                 }
 
                 CanvasCommand::FillPath {
@@ -355,13 +331,7 @@ impl crate::Widget for CanvasWidget {
                         path.close_path();
                     }
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &path,
-                    );
+                    painter.fill(path, color).draw();
                 }
 
                 CanvasCommand::StrokePath {
@@ -385,13 +355,7 @@ impl crate::Widget for CanvasWidget {
                         path.close_path();
                     }
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    scene.stroke(
-                        &Stroke::new(*width),
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &path,
-                    );
+                    painter.stroke(path, &Stroke::new(*width), color).draw();
                 }
 
                 CanvasCommand::DrawText {
@@ -409,13 +373,7 @@ impl crate::Widget for CanvasWidget {
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
                     let text_width = text.len() as f64 * size * 0.5;
                     let rect = Rect::new(*x, *y, x + text_width.min(200.0), y + *size * 1.2);
-                    scene.fill(
-                        Fill::NonZero,
-                        Affine::IDENTITY,
-                        &Brush::Solid(color),
-                        None,
-                        &rect,
-                    );
+                    painter.fill(rect, color).draw();
                 }
 
                 CanvasCommand::SetFillColor { r, g, b, a } => {
