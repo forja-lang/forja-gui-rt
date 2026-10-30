@@ -320,6 +320,7 @@ fn obtener_nativas() -> HashMap<&'static str, NativeFn> {
     m.insert("longitud", nativa_longitud);
     m.insert("tipo", nativa_tipo);
     m.insert("a_texto", nativa_a_texto);
+    m.insert("escribir", nativa_escribir);
     m.insert("empujar", nativa_empujar);
     // SQLite
     m.insert("_sqlite_abrir", sqlite_abrir);
@@ -549,6 +550,21 @@ fn nativa_a_texto(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valor
         .get(0)
         .ok_or("a_texto(valor) requiere 1 argumento".to_string())?;
     Ok(ValorGUI::Texto(val.to_display()))
+}
+
+/// `escribir(valor…)` — imprime los argumentos separados por espacio.
+///
+/// Las funciones Forja llamadas como callbacks se evalúan con este evaluador y
+/// no con la VM, así que `escribir` faltaba y todo callback que lo usara fallaba
+/// con «Función 'escribir' no encontrada».
+fn nativa_escribir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+    let texto = args
+        .iter()
+        .map(|v| v.to_display())
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("{}", texto);
+    Ok(ValorGUI::Nulo)
 }
 
 /// `empujar(array, elemento)` — agrega un elemento al final de un array JSON
@@ -1129,6 +1145,45 @@ pub fn ejecutar_funcion(
     })
 }
 
+/// Evalúa una condición contra el estado actual del store.
+///
+/// Lo usa el extractor de layout para resolver `si/sino` en el cuerpo de `main`
+/// con el estado inicial de la app (el layout se extrae una sola vez).
+pub fn evaluar_condicion(
+    expr: &Expresion,
+    store: &mut VariableStore,
+    declaraciones: &[Declaracion],
+) -> Result<bool, String> {
+    let mut ambito = Ambito::new();
+    let valor = evaluar_expresion(expr, &mut ambito, store, declaraciones)?;
+    Ok(valor_es_verdadero(&valor))
+}
+
+/// Evalúa una expresión y devuelve su valor, con el estado actual.
+///
+/// Lo usa el extractor de layout para resolver llamadas a **funciones de valor**
+/// (por ejemplo `titulo_categoria(pagina)`) en el momento de armar el árbol.
+pub fn evaluar_valor(
+    expr: &Expresion,
+    store: &mut VariableStore,
+    declaraciones: &[Declaracion],
+) -> Result<ValorGUI, String> {
+    let mut ambito = Ambito::new();
+    evaluar_expresion(expr, &mut ambito, store, declaraciones)
+}
+
+/// Verdad de un valor en un contexto booleano (condiciones de `si`/`mientras`).
+fn valor_es_verdadero(valor: &ValorGUI) -> bool {
+    match valor {
+        ValorGUI::Booleano(b) => *b,
+        ValorGUI::Entero(n) => *n != 0,
+        ValorGUI::Decimal(d) => *d != 0.0,
+        ValorGUI::Texto(s) => !s.is_empty(),
+        ValorGUI::Nulo => false,
+        _ => true,
+    }
+}
+
 /// Busca una declaración de función por nombre.
 /// Si no encuentra por nombre exacto, intenta sin el prefijo de módulo
 /// (ej: "estadisticas_gastos_por_categoria" → busca "gastos_por_categoria").
@@ -1473,6 +1528,23 @@ fn evaluar_expresion(
         Expresion::LiteralTexto(s) => Ok(ValorGUI::Texto(s.clone())),
         Expresion::LiteralBooleano(b) => Ok(ValorGUI::Booleano(*b)),
         Expresion::LiteralNulo => Ok(ValorGUI::Nulo),
+        // `si` como elemento de un layout: corre la rama elegida y no devuelve valor.
+        Expresion::Si {
+            condicion,
+            bloque_verdadero,
+            bloque_falso,
+        } => {
+            let cond = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let rama = if valor_es_verdadero(&cond) {
+                Some(bloque_verdadero)
+            } else {
+                bloque_falso.as_ref()
+            };
+            match rama {
+                Some(bloque) => evaluar_bloque(bloque, ambito, store, declaraciones),
+                None => Ok(ValorGUI::Nulo),
+            }
+        }
         Expresion::LiteralExacto(coeff, scale) => {
             let val = *coeff as f64 / (10f64).powi(*scale as i32);
             Ok(ValorGUI::Decimal(val))
@@ -1694,7 +1766,7 @@ fn evaluar_expresion(
         Expresion::Hilo { .. } => Err("Hilos ligeros no soportados en runtime GUI".to_string()),
 
         // ── Canal ─────────────────────────────────────────────
-        Expresion::CanalNuevo => Err("Canales no soportados en runtime GUI".to_string()),
+        Expresion::CanalNuevo(_) => Err("Canales no soportados en runtime GUI".to_string()),
 
         // ── Try (propagación de error) ────────────────────────
         Expresion::Try(inner) => {
