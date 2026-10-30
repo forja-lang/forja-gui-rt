@@ -5,9 +5,10 @@
 
 use crate::gui_nativa::{AppStateNativo, CardVariant, Layout, ValorGUI};
 use crate::helpers::*;
+use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
+use crate::{AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
 use forja_syntax::ast::Declaracion;
 use std::collections::HashMap;
 use xilem::style::Style;
@@ -24,29 +25,52 @@ pub(crate) fn render_card(
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let scheme = &theme.scheme;
     let inner = crate::gui_nativa::layout_a_view(child, data, prog, theme);
-    let padded = view::sized_box(inner).padding(16.0);
-    let base = view::sized_box(padded).corner_radius(12.0);
+    let padded = view::sized_box(inner).padding(16.0.px());
+    let base = view::sized_box(padded)
+        .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+    // Cada diseño tiene su propia superficie de tarjeta:
+    // - Liquid Glass: translúcida sobre el fondo vidrioso, con borde claro.
+    // - Fluent: fondo de superficie sólido y hairline de 1px (Windows 11).
+    // - Material You: las variantes de siempre.
+    let superficie = |solido: RgbColor, translucido: f64| -> crate::Color {
+        match theme.design {
+            DesignStyle::LiquidGlass => solido.with_alpha(translucido),
+            _ => solido.into(),
+        }
+    };
+    let borde: crate::Color = scheme.outline_variant.into();
     match variant {
         CardVariant::Filled => {
-            let bg: crate::Color = scheme.surface_variant.into();
-            Box::new(base.background(Background::Color(bg)))
+            if matches!(theme.design, DesignStyle::Fluent) {
+                // Fluent usa una capa translúcida sobre el fondo (CardBackgroundFillColorDefault):
+                // 70% de blanco en claro, 5% en oscuro. Así la tarjeta se lee como
+                // una capa y no como un bloque opaco.
+                let capa = RgbColor(255, 255, 255)
+                    .with_alpha(if theme.is_dark { 0.05 } else { 0.7 });
+                Box::new(
+                    base.background(Background::Color(capa))
+                        .border_color(borde)
+                        .border_width(1.0.px()),
+                )
+            } else {
+                let bg = superficie(scheme.surface_variant, 0.6);
+                Box::new(base.background(Background::Color(bg)))
+            }
         }
         CardVariant::Elevated => {
-            let bg: crate::Color = scheme.surface_variant.into();
-            let border: crate::Color = scheme.outline_variant.into();
+            let bg = superficie(scheme.surface_variant, 0.72);
             Box::new(
                 base.background(Background::Color(bg))
-                    .border_color(border)
-                    .border_width(0.5),
+                    .border_color(borde)
+                    .border_width(if matches!(theme.design, DesignStyle::Fluent) { 1.0 } else { 0.5 }.px()),
             )
         }
         CardVariant::Outlined => {
-            let bg: crate::Color = scheme.surface.into();
-            let border: crate::Color = scheme.outline_variant.into();
+            let bg = superficie(scheme.surface, 0.5);
             Box::new(
                 base.background(Background::Color(bg))
-                    .border_color(border)
-                    .border_width(1.0),
+                    .border_color(borde)
+                    .border_width(1.0.px()),
             )
         }
         CardVariant::Selectable => {
@@ -56,7 +80,7 @@ pub(crate) fn render_card(
                 Box::new(
                     base.background(Background::Color(bg))
                         .border_color(border)
-                        .border_width(1.0),
+                        .border_width(1.0.px()),
                 )
             } else {
                 let bg: crate::Color = scheme.surface_variant.into();
@@ -99,7 +123,7 @@ pub(crate) fn render_list_item(
     }
 
     let text_col =
-        Box::new(view::flex(crate::view::Axis::Vertical, (text_children,)).gap(Length::px(2.0)))
+        Box::new(view::flex(crate::Axis::Vertical, (text_children,)).gap(Length::px(2.0)))
             as Box<AnyWidgetView<AppStateNativo>>;
 
     let leading_view = leading
@@ -118,7 +142,7 @@ pub(crate) fn render_list_item(
         });
 
     let row = view::flex(
-        crate::view::Axis::Horizontal,
+        crate::Axis::Horizontal,
         (
             leading_view,
             xilem::view::FlexExt::flex(text_col, 1.0),
@@ -129,9 +153,9 @@ pub(crate) fn render_list_item(
     let bg: crate::Color = scheme.surface_variant.into();
     Box::new(
         view::sized_box(row)
-            .padding(12.0)
+            .padding(12.0.px())
             .background(Background::Color(bg))
-            .corner_radius(12.0),
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
     )
 }
 
@@ -153,7 +177,7 @@ pub(crate) fn render_list(
             ) as Box<AnyWidgetView<AppStateNativo>>);
         }
     }
-    Box::new(view::flex(crate::view::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
+    Box::new(view::flex(crate::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── MaterialListControl ────────────────────────────────────────
@@ -168,7 +192,7 @@ pub(crate) fn render_list_control(
     for item in items.iter() {
         widgets.push(crate::gui_nativa::layout_a_view(item, data, prog, theme));
     }
-    Box::new(view::flex(crate::view::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
+    Box::new(view::flex(crate::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── MaterialListSelection ──────────────────────────────────────
@@ -183,7 +207,7 @@ pub(crate) fn render_list_selection(
     for item in items.iter() {
         widgets.push(crate::gui_nativa::layout_a_view(item, data, prog, theme));
     }
-    Box::new(view::flex(crate::view::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
+    Box::new(view::flex(crate::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── DynamicList ────────────────────────────────────────────────
@@ -249,9 +273,9 @@ pub(crate) fn render_dynamic_list(
         }
     }
     Box::new(
-        view::flex(crate::view::Axis::Vertical, (widgets,))
-            .gap(Length::px(6.0))
-            .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
+        view::flex(crate::Axis::Vertical, (widgets,))
+            .cross_axis_alignment(crate::CrossAxisAlignment::Stretch)
+            .gap(Length::px(6.0)),
     )
 }
 
@@ -288,18 +312,19 @@ pub(crate) fn render_data_table(
             .text_size(label_style.font_size as f32)
             .weight(FontWeight::BOLD)
             .color(fg_header);
-        header_widgets.push(Box::new(view::sized_box(hdr).padding(8.0))
-            as Box<AnyWidgetView<AppStateNativo>>);
+        header_widgets
+            .push(Box::new(view::sized_box(hdr).padding(8.0.px()))
+                as Box<AnyWidgetView<AppStateNativo>>);
     }
 
     let header_row =
-        Box::new(view::flex(crate::view::Axis::Horizontal, (header_widgets,)).gap(Length::px(8.0)))
+        Box::new(view::flex(crate::Axis::Horizontal, (header_widgets,)).gap(Length::px(8.0)))
             as Box<AnyWidgetView<AppStateNativo>>;
 
     let header_container = Box::new(
         view::sized_box(header_row)
             .background(Background::Color(bg_header))
-            .corner_radius(4.0),
+            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
     );
 
     // Body rows
@@ -308,24 +333,22 @@ pub(crate) fn render_data_table(
         let mut cell_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
         for celda in fila.iter() {
             let cell = view::label(celda.clone()).text_size(14.0).color(fg_body);
-            cell_widgets
-                .push(Box::new(view::sized_box(cell).padding(8.0))
-                    as Box<AnyWidgetView<AppStateNativo>>);
+            cell_widgets.push(Box::new(view::sized_box(cell).padding(8.0.px()))
+                as Box<AnyWidgetView<AppStateNativo>>);
         }
         let row_bg = if row_idx % 2 == 0 { bg_row1 } else { bg_row2 };
-        let row = Box::new(
-            view::flex(crate::view::Axis::Horizontal, (cell_widgets,)).gap(Length::px(8.0)),
-        ) as Box<AnyWidgetView<AppStateNativo>>;
+        let row =
+            Box::new(view::flex(crate::Axis::Horizontal, (cell_widgets,)).gap(Length::px(8.0)))
+                as Box<AnyWidgetView<AppStateNativo>>;
         body_widgets.push(
             Box::new(view::sized_box(row).background(Background::Color(row_bg)))
                 as Box<AnyWidgetView<AppStateNativo>>,
         );
     }
 
-    let body =
-        Box::new(view::flex(crate::view::Axis::Vertical, (body_widgets,)).gap(Length::px(0.0)));
+    let body = Box::new(view::flex(crate::Axis::Vertical, (body_widgets,)).gap(Length::px(0.0)));
 
-    Box::new(view::flex(crate::view::Axis::Vertical, (header_container, body)).gap(Length::px(4.0)))
+    Box::new(view::flex(crate::Axis::Vertical, (header_container, body)).gap(Length::px(4.0)))
 }
 
 // ─── MaterialSurface ────────────────────────────────────────────
@@ -347,7 +370,7 @@ pub(crate) fn render_surface(
     Box::new(
         view::sized_box(inner)
             .background(Background::Color(bg))
-            .corner_radius(12.0),
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
     )
 }
 
@@ -379,12 +402,16 @@ pub(crate) fn render_scaffold(
         });
     Box::new(
         view::sized_box(
-            view::flex(crate::view::Axis::Vertical, (tv, body_flex, bv))
+            view::flex(crate::Axis::Vertical, (tv, body_flex, bv))
+                .cross_axis_alignment(crate::CrossAxisAlignment::Stretch)
                 .gap(Length::px(0.0))
-                .must_fill_major_axis(true)
-                .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
+                .dims(xilem::masonry::properties::Dimensions::height(
+                    xilem::masonry::layout::Dim::Stretch,
+                )),
         )
-        .width(Length::px(data.window_width.max(200.0)))
-        .height(Length::px(data.window_height.max(200.0))),
+        .dims((
+            Length::px(data.window_width.max(200.0)),
+            Length::px(data.window_height.max(200.0)),
+        )),
     )
 }
