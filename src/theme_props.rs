@@ -116,10 +116,7 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     props.insert::<Switch, _>(BorderColor { color: borde });
     props.insert::<Switch, _>(ThumbColor(Color::WHITE));
     let mut stack_switch = PropertyStack::new();
-    stack_switch.push_layer(
-        Selector::classes(&["#toggled"]),
-        Background::Color(acento),
-    );
+    stack_switch.push_layer(Selector::classes(&["#toggled"]), Background::Color(acento));
     stack_switch.push_layer(
         Selector::classes(&["#toggled"]),
         BorderColor { color: acento },

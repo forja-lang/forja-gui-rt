@@ -268,7 +268,10 @@ mod tests_cache_iconos {
     fn cachea_y_reutiliza() {
         let a = super::bez_paths_cacheados("home").expect("home existe");
         let b = super::bez_paths_cacheados("home").expect("home existe");
-        assert!(std::sync::Arc::ptr_eq(&a, &b), "debe reutilizar el mismo Arc");
+        assert!(
+            std::sync::Arc::ptr_eq(&a, &b),
+            "debe reutilizar el mismo Arc"
+        );
         assert!(super::bez_paths_cacheados("no_existe_xyz").is_none());
     }
 }

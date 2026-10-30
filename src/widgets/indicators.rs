@@ -28,9 +28,10 @@ pub(crate) fn render_linear_progress(
         Some((data.leer(variable).to_f64() / 100.0).clamp(0.0, 1.0))
     };
     let _ = theme; // los colores vienen de theme_props::default_properties
-    Box::new(view::sized_box(view::progress_bar(progreso)).width(Length::px(
-        (data.window_width - 64.0).max(120.0),
-    )))
+    Box::new(
+        view::sized_box(view::progress_bar(progreso))
+            .width(Length::px((data.window_width - 64.0).max(120.0))),
+    )
 }
 
 // ─── LinearProgressValue: barra con valor directo ───────────────────
@@ -238,14 +239,12 @@ pub(crate) fn render_error_state(
     let error_color: crate::Color = scheme.error.into();
     let p = prog.to_vec();
     let mut children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-    children.push(
-        Box::new(view::sized_box(crate::svg_icon::<AppStateNativo>(
-            "warning",
-            48.0,
-            scheme.error,
-            crate::IconStyle::Filled,
-        ))) as Box<AnyWidgetView<AppStateNativo>>,
-    );
+    children.push(Box::new(view::sized_box(crate::svg_icon::<AppStateNativo>(
+        "warning",
+        48.0,
+        scheme.error,
+        crate::IconStyle::Filled,
+    ))) as Box<AnyWidgetView<AppStateNativo>>);
     children.push(
         Box::new(view::label(mensaje.to_string()).text_size(16.0).color(fg))
             as Box<AnyWidgetView<AppStateNativo>>,

@@ -148,7 +148,10 @@ fn numero(expr: Option<&Expresion>) -> Option<f64> {
 /// Se puede mantener la consola con `FORJA_CONSOLA=1` (útil para ver panics).
 #[cfg(target_os = "windows")]
 pub fn ocultar_consola_si_corresponde() {
-    if std::env::var("FORJA_CONSOLA").map(|v| v != "0").unwrap_or(false) {
+    if std::env::var("FORJA_CONSOLA")
+        .map(|v| v != "0")
+        .unwrap_or(false)
+    {
         return;
     }
     // Si el proceso es dueño de la consola (lanzado con doble clic) o la heredó,

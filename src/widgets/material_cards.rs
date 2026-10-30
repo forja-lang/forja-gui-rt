@@ -8,7 +8,9 @@ use crate::helpers::*;
 use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
+use crate::{
+    AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, RgbColor, ShapeFamily,
+};
 use forja_syntax::ast::Declaracion;
 use std::collections::HashMap;
 use xilem::style::Style;
@@ -26,8 +28,8 @@ pub(crate) fn render_card(
     let scheme = &theme.scheme;
     let inner = crate::gui_nativa::layout_a_view(child, data, prog, theme);
     let padded = view::sized_box(inner).padding(16.0.px());
-    let base = view::sized_box(padded)
-        .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+    let base =
+        view::sized_box(padded).corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
     // Cada diseño tiene su propia superficie de tarjeta:
     // - Liquid Glass: translúcida sobre el fondo vidrioso, con borde claro.
     // - Fluent: fondo de superficie sólido y hairline de 1px (Windows 11).
@@ -45,8 +47,8 @@ pub(crate) fn render_card(
                 // Fluent usa una capa translúcida sobre el fondo (CardBackgroundFillColorDefault):
                 // 70% de blanco en claro, 5% en oscuro. Así la tarjeta se lee como
                 // una capa y no como un bloque opaco.
-                let capa = RgbColor(255, 255, 255)
-                    .with_alpha(if theme.is_dark { 0.05 } else { 0.7 });
+                let capa =
+                    RgbColor(255, 255, 255).with_alpha(if theme.is_dark { 0.05 } else { 0.7 });
                 Box::new(
                     base.background(Background::Color(capa))
                         .border_color(borde)
@@ -62,7 +64,14 @@ pub(crate) fn render_card(
             Box::new(
                 base.background(Background::Color(bg))
                     .border_color(borde)
-                    .border_width(if matches!(theme.design, DesignStyle::Fluent) { 1.0 } else { 0.5 }.px()),
+                    .border_width(
+                        if matches!(theme.design, DesignStyle::Fluent) {
+                            1.0
+                        } else {
+                            0.5
+                        }
+                        .px(),
+                    ),
             )
         }
         CardVariant::Outlined => {

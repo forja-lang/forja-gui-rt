@@ -13,7 +13,11 @@ fn main() -> Result<(), String> {
     // FORJA_FUENTE=ruta permite abrir otro .fa (diagnóstico).
     let ruta = std::env::var("FORJA_FUENTE").ok();
     let fuente: &str = match ruta.as_deref() {
-        Some(p) => Box::leak(std::fs::read_to_string(p).map_err(|e| e.to_string())?.into_boxed_str()),
+        Some(p) => Box::leak(
+            std::fs::read_to_string(p)
+                .map_err(|e| e.to_string())?
+                .into_boxed_str(),
+        ),
         None => include_str!("../../../ejemplos/208_gui_galeria.fa"),
     };
     // Ayuda de verificación visual: FORJA_DISENO=fluent|liquid_glass|... cambia el

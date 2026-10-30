@@ -6015,7 +6015,10 @@ pub fn layout_a_view<'a>(
         // directo con Pod cuando se requiera desde código Masonry nativo.
         Layout::RippleEffect { child, color: _ } => {
             let inner = layout_a_view(child, data, _prog, theme);
-            Box::new(view::sized_box(inner).corner_radius(get_shape_radius(&theme.shapes, "extra_small").px()))
+            Box::new(
+                view::sized_box(inner)
+                    .corner_radius(get_shape_radius(&theme.shapes, "extra_small").px()),
+            )
         }
 
         // ─── PullToRefresh ────────────────────────────────────────────
@@ -6037,10 +6040,10 @@ pub fn layout_a_view<'a>(
                 let refresh_row = view::flex(
                     Axis::Horizontal,
                     (vec![
-                        Box::new(view::sized_box(view::spinner()).dims((
-                            Length::px(18.0),
-                            Length::px(18.0),
-                        ))) as Box<AnyWidgetView<AppStateNativo>>,
+                        Box::new(
+                            view::sized_box(view::spinner())
+                                .dims((Length::px(18.0), Length::px(18.0))),
+                        ) as Box<AnyWidgetView<AppStateNativo>>,
                         Box::new(view::label("Actualizando...").text_size(14.0).color(fg)),
                     ],),
                 )
@@ -6079,9 +6082,7 @@ pub fn layout_a_view<'a>(
                 let scheme = &theme.scheme;
                 let fg: Color = scheme.on_surface.into();
                 let btn_fg: Color = scheme.primary.into();
-                let undo_label = view::label("Elemento descartado")
-                    .text_size(14.0)
-                    .color(fg);
+                let undo_label = view::label("Elemento descartado").text_size(14.0).color(fg);
                 let undo_btn = view::button(
                     view::label(action_text.clone())
                         .text_size(14.0)
@@ -7228,7 +7229,9 @@ fn tema_de_raiz(layout: &Layout, base: &MaterialTheme) -> MaterialTheme {
 /// Por defecto el runtime no imprime nada: en una app compilada esos logs sólo
 /// ensucian la consola y retrasan el arranque.
 fn debug_activo() -> bool {
-    std::env::var("FORJA_GUI_DEBUG").map(|v| v != "0").unwrap_or(false)
+    std::env::var("FORJA_GUI_DEBUG")
+        .map(|v| v != "0")
+        .unwrap_or(false)
 }
 
 /// Arma las `WindowOptions` con lo declarado en `ventana(...)`.
@@ -7301,7 +7304,11 @@ pub fn build_and_run(
         format!(
             "Forja GUI — {:?} {}",
             tema_ventana.design,
-            if tema_ventana.is_dark { "oscuro" } else { "claro" }
+            if tema_ventana.is_dark {
+                "oscuro"
+            } else {
+                "claro"
+            }
         )
     });
     if debug_activo() {
@@ -7311,9 +7318,17 @@ pub fn build_and_run(
         );
         println!(
             "  {} Diseño {:?} — modo {} (seed: {})",
-            if tema_ventana.is_dark { "🌙" } else { "☀️" },
+            if tema_ventana.is_dark {
+                "🌙"
+            } else {
+                "☀️"
+            },
             tema_ventana.design,
-            if tema_ventana.is_dark { "oscuro" } else { "claro" },
+            if tema_ventana.is_dark {
+                "oscuro"
+            } else {
+                "claro"
+            },
             tema_ventana.seed_color
         );
     }
@@ -8073,7 +8088,9 @@ mod tests_ejemplo_galeria {
                 assert_eq!(*gap, 16.0);
                 assert_eq!(celdas.len(), 6, "deben sobrevivir las 6 tarjetas");
                 assert!(
-                    celdas.iter().all(|c| matches!(c, Layout::MaterialCard { .. })),
+                    celdas
+                        .iter()
+                        .all(|c| matches!(c, Layout::MaterialCard { .. })),
                     "cada celda del grid debe ser una tarjeta"
                 );
             }
@@ -8082,11 +8099,15 @@ mod tests_ejemplo_galeria {
 
         // La barra superior y el botón final también deben estar presentes.
         assert!(
-            children.iter().any(|c| matches!(c, Layout::TopAppBar { .. })),
+            children
+                .iter()
+                .any(|c| matches!(c, Layout::TopAppBar { .. })),
             "falta la barra superior"
         );
         assert!(
-            children.iter().any(|c| matches!(c, Layout::MaterialButton { .. })),
+            children
+                .iter()
+                .any(|c| matches!(c, Layout::MaterialButton { .. })),
             "falta el botón de guardar"
         );
     }
@@ -8141,11 +8162,15 @@ mod tests_tema_de_ventana {
     fn las_formas_cambian_por_diseno() {
         let boton = |is_dark| {
             (
-                MaterialTheme::fluent(is_dark).shapes.for_family(ShapeFamily::Button),
+                MaterialTheme::fluent(is_dark)
+                    .shapes
+                    .for_family(ShapeFamily::Button),
                 MaterialTheme::liquid_glass(is_dark)
                     .shapes
                     .for_family(ShapeFamily::Button),
-                MaterialTheme::light().shapes.for_family(ShapeFamily::Button),
+                MaterialTheme::light()
+                    .shapes
+                    .for_family(ShapeFamily::Button),
             )
         };
         for is_dark in [false, true] {
@@ -8179,11 +8204,17 @@ mod tests_modo_claro_oscuro {
     #[test]
     fn el_sufijo_manda_sobre_el_modo_del_sistema() {
         let claro = MaterialTheme::named("fluent:light", true);
-        assert!(!claro.is_dark, "fluent:light debe ser claro aunque el SO sea oscuro");
+        assert!(
+            !claro.is_dark,
+            "fluent:light debe ser claro aunque el SO sea oscuro"
+        );
         assert_eq!(claro.design, DesignStyle::Fluent);
 
         let oscuro = MaterialTheme::named("fluent:dark", false);
-        assert!(oscuro.is_dark, "fluent:dark debe ser oscuro aunque el SO sea claro");
+        assert!(
+            oscuro.is_dark,
+            "fluent:dark debe ser oscuro aunque el SO sea claro"
+        );
 
         let vidrio = MaterialTheme::named("liquid_glass:light", true);
         assert!(!vidrio.is_dark);
@@ -8251,7 +8282,10 @@ funcion main() {
         assert_eq!(cfg.titulo.as_deref(), Some("Solo título"));
         assert_eq!((cfg.ancho, cfg.alto), (800.0, 600.0));
         assert_eq!(cfg.icono, None);
-        assert!(cfg.redimensionable, "por defecto la ventana se puede redimensionar");
+        assert!(
+            cfg.redimensionable,
+            "por defecto la ventana se puede redimensionar"
+        );
         assert!(cfg.decoraciones, "por defecto usa el marco del sistema");
     }
 

@@ -8,10 +8,10 @@
 // El material se pide al crear la ventana; en Windows 10 la llamada no existe y
 // winit la ignora, así que no se rompe nada.
 
-#[cfg(target_os = "windows")]
-use xilem::winit::platform::windows::Color as WinitColor;
 use crate::theme::{DesignStyle, MaterialTheme};
 use crate::WindowOptions;
+#[cfg(target_os = "windows")]
+use xilem::winit::platform::windows::Color as WinitColor;
 
 /// Aplica el material y los detalles de la ventana según el diseño del tema.
 ///
