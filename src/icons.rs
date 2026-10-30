@@ -3,11 +3,10 @@
 // Los SVG paths están embebidos para zero dependencias externas.
 //
 // Estilos soportados: Filled, Outlined, Rounded, Sharp, TwoTone
-// Fallback: emoji cuando el icono no está disponible
 //
-// NOTA: Xilem 0.4 no tiene renderizado SVG nativo fácil.
-// Por ahora los iconos se renderizan como emoji con tamaño y color.
-// El sistema está preparado para migrar a SVG real cuando Xilem lo soporte.
+// Los iconos se renderizan como paths SVG reales via Vello
+// (ver `crate::svg_icon_widget`). El emoji solo queda como fallback
+// de último recurso para nombres fuera del catálogo.
 
 use crate::theme::RgbColor;
 use xilem::style::Style;
@@ -80,14 +79,9 @@ impl MaterialIcon {
         self
     }
 
-    /// Renderiza este icono como un widget Xilem
-    ///
-    /// Por ahora usa emoji con tamaño y color.
-    /// Cuando Xilem soporte SVG, aquí se renderizará el path real.
+    /// Renderiza este icono como un widget Xilem con su path SVG real (Vello)
     pub fn to_widget(&self, size: f64, color: RgbColor) -> Box<AnyWidgetView<()>> {
-        let emoji = catalog::fallback_emoji(self.name);
-        let xilem_color: Color = color.into();
-        Box::new(view::label(emoji).text_size(size as f32).color(xilem_color))
+        self.to_widget_styled(size, color, self.style)
     }
 
     /// Renderiza con estilo específico
@@ -95,11 +89,11 @@ impl MaterialIcon {
         &self,
         size: f64,
         color: RgbColor,
-        _style: IconStyle,
+        style: IconStyle,
     ) -> Box<AnyWidgetView<()>> {
-        // Por ahora todas las variantes usan el mismo emoji
-        // En el futuro se pueden mapear a diferentes SVGs según el estilo
-        self.to_widget(size, color)
+        Box::new(crate::svg_icon_widget::svg_icon::<()>(
+            self.name, size, color, style,
+        ))
     }
 }
 
@@ -488,6 +482,12 @@ pub mod catalog {
         "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
     );
 
+    /// Tendencia a la baja (bajando)
+    pub const TRENDING_DOWN: MaterialIcon = MaterialIcon::new(
+        "trending_down",
+        "M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z",
+    );
+
     // ═══════════════════════════════════════════════════════════════════
     // SALUD / CIENCIA (Health/Science)
     // ═══════════════════════════════════════════════════════════════════
@@ -659,6 +659,7 @@ pub mod catalog {
             "account_balance" | "saldo" | "banco" => Some(&ACCOUNT_BALANCE),
             "store" | "tienda" => Some(&STORE),
             "trending_up" | "tendencia" | "creciendo" => Some(&TRENDING_UP),
+            "trending_down" | "bajando" | "decreciendo" => Some(&TRENDING_DOWN),
             // Salud / Ciencia
             "local_hospital" | "hospital" => Some(&LOCAL_HOSPITAL),
             "science" | "ciencia" | "laboratorio" => Some(&SCIENCE),
@@ -673,144 +674,16 @@ pub mod catalog {
         }
     }
 
-    /// Obtiene un emoji de fallback para un nombre de icono
-    /// Se usa cuando el icono no está en el catálogo o como placeholder
-    pub fn fallback_emoji(name: &str) -> &'static str {
-        match name {
-            // Navegación
-            "home" => "🏠",
-            "search" | "buscar" => "🔍",
-            "settings" | "configuracion" => "⚙️",
-            "menu" => "☰",
-            "arrow_back" | "atras" => "◀️",
-            "arrow_forward" | "adelante" => "▶️",
-            "arrow_up" | "arriba" => "⬆️",
-            "arrow_down" | "abajo" => "⬇️",
-            "close" | "cerrar" => "✖️",
-            "refresh" | "actualizar" => "🔄",
-            "more_vert" => "⋮",
-            "chevron_left" => "◀",
-            "chevron_right" => "▶",
-            // Acción
-            "add" | "anadir" | "añadir" => "➕",
-            "delete" | "eliminar" => "🗑️",
-            "edit" | "editar" => "✏️",
-            "save" | "guardar" => "💾",
-            "copy" | "copiar" => "📋",
-            "done" | "listo" => "✅",
-            "check" | "verificar" => "✅",
-            "cancel" | "cancelar" => "❌",
-            "print" | "imprimir" => "🖨️",
-            "share" | "compartir" => "📤",
-            "lock" | "bloquear" => "🔒",
-            "lock_open" | "desbloquear" => "🔓",
-            "visibility" | "ver" => "👁️",
-            "visibility_off" | "ocultar" => "👁️‍🗨️",
-            // Contenido
-            "filter" | "filtrar" => "🔽",
-            "sort" | "ordenar" => "↕️",
-            "send" | "enviar" => "📤",
-            "cloud" | "nube" => "☁️",
-            "link" | "enlace" => "🔗",
-            "flag" | "bandera" => "🚩",
-            // Comunicación
-            "email" | "correo" | "mail" => "✉️",
-            "phone" | "telefono" => "📞",
-            "chat" => "💬",
-            "notifications" | "notificaciones" => "🔔",
-            "person" | "persona" | "usuario" => "👤",
-            "group" | "grupo" => "👥",
-            "forum" | "foro" => "🗣️",
-            // Archivo
-            "file" | "archivo" => "📄",
-            "folder" | "carpeta" => "📁",
-            "folder_open" => "📂",
-            "download" | "descargar" => "⬇️",
-            "upload" | "subir" => "⬆️",
-            "image" | "imagen" => "🖼️",
-            "description" | "documento" => "📝",
-            "pdf" => "📕",
-            // Dispositivo
-            "wifi" => "📶",
-            "bluetooth" => "🔷",
-            "location" | "ubicacion" => "📍",
-            // Editor
-            "code" | "codigo" => "💻",
-            "undo" | "deshacer" => "↩️",
-            "redo" | "rehacer" => "↪️",
-            // Hardware
-            "computer" | "computadora" => "🖥️",
-            "laptop" | "portatil" => "💻",
-            "phone_android" | "movil" => "📱",
-            "tablet" => "📱",
-            "printer" | "impresora" => "🖨️",
-            // Imagen
-            "photo" | "foto" => "📷",
-            "camera" | "camara" => "📷",
-            "brush" | "pincel" => "🖌️",
-            "palette" | "paleta" => "🎨",
-            // Mapa
-            "place" | "lugar" | "pin" => "📍",
-            "directions" | "direcciones" => "🗺️",
-            "map" | "mapa" => "🗺️",
-            "restaurant" | "restaurante" => "🍽️",
-            "hotel" => "🏨",
-            // Notificación
-            "info" | "informacion" => "ℹ️",
-            "warning" | "advertencia" => "⚠️",
-            "error" => "❌",
-            "help" | "ayuda" => "❓",
-            "feedback" => "💬",
-            "new_releases" => "🆕",
-            // Lugar
-            "favorite" | "favorito" | "corazon" => "❤️",
-            "favorite_outline" => "🤍",
-            "star" | "estrella" => "⭐",
-            "star_half" => "🌟",
-            "star_outline" => "☆",
-            "thumb_up" | "me_gusta" => "👍",
-            "thumb_down" | "no_gusta" => "👎",
-            // Social
-            "public" | "mundo" => "🌐",
-            "school" | "escuela" => "🏫",
-            "work" | "trabajo" => "💼",
-            "celebration" => "🎉",
-            // Toggle
-            "check_box" => "☑️",
-            "check_box_outline" => "⬜",
-            "toggle_on" | "activo" => "🔵",
-            "toggle_off" | "inactivo" => "⚪",
-            // Fecha / Hora
-            "date" | "fecha" | "calendario" => "📅",
-            "calendar_today" | "hoy" => "📅",
-            "time" | "hora" | "reloj" => "⏰",
-            "alarm" | "alarma" => "⏰",
-            // Comercio
-            "shopping_cart" | "carrito" => "🛒",
-            "payment" | "pago" => "💳",
-            "account_balance" | "banco" => "🏦",
-            "store" | "tienda" => "🏪",
-            "trending_up" | "tendencia" => "📈",
-            // Salud / Ciencia
-            "local_hospital" | "hospital" => "🏥",
-            "science" => "🔬",
-            // Aplicacion
-            "dashboard" | "panel" => "📊",
-            "receipt_long" | "recibo" | "transacciones" => "🧾",
-            "category" | "categorias" => "📂",
-            "pie_chart" | "circular" | "presupuesto" => "🥧",
-            "bar_chart" | "barras" | "estadisticas" => "📊",
-            "savings" | "ahorro" | "metas" => "💰", // Fallback genérico
-            _ => "❓",
-        }
-    }
+
 }
 
 // ─── Función helper ──────────────────────────────────────────────────
 
 /// Crea un widget icono desde un nombre de icono
 ///
-/// Busca el icono en el catálogo. Si no existe, muestra un emoji de fallback.
+/// Busca el icono en el catálogo y lo renderiza como SVG real (Vello).
+/// Si el nombre no existe en el catálogo, muestra el nombre como texto
+/// (útil para depurar) en lugar de adivinar un emoji.
 ///
 /// # Parámetros
 /// - `name`: nombre del icono (ej: "home", "favorite", "settings")
@@ -820,10 +693,13 @@ pub fn icon_widget(name: &str, size: f64, color: RgbColor) -> Box<AnyWidgetView<
     if let Some(icon) = catalog::by_name(name) {
         icon.to_widget(size, color)
     } else {
-        // Fallback a emoji genérico
-        let emoji = catalog::fallback_emoji(name);
+        // Sin path vectorial para este nombre: mostrar el nombre como texto
         let xilem_color: Color = color.into();
-        Box::new(view::label(emoji).text_size(size as f32).color(xilem_color))
+        Box::new(
+            view::label(name.to_string())
+                .text_size((size * 0.5) as f32)
+                .color(xilem_color),
+        )
     }
 }
 
@@ -869,13 +745,6 @@ mod tests {
         assert!(catalog::by_name("buscar").is_some());
         assert!(catalog::by_name("correo").is_some());
         assert!(catalog::by_name("usuario").is_some());
-    }
-
-    #[test]
-    fn test_fallback_emoji() {
-        assert_eq!(catalog::fallback_emoji("home"), "🏠");
-        assert_eq!(catalog::fallback_emoji("favorite"), "❤️");
-        assert_eq!(catalog::fallback_emoji("unknown"), "❓");
     }
 
     #[test]

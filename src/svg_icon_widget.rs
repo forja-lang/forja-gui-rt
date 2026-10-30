@@ -9,13 +9,13 @@ use std::marker::PhantomData;
 use xilem::core::{MessageResult, Mut, View, ViewMarker};
 use xilem::masonry::core::Widget;
 use xilem::masonry::core::{
-    AccessCtx, BoxConstraints, ChildrenIds, LayoutCtx, NoAction, PaintCtx, PropertiesMut,
-    PropertiesRef, RegisterCtx,
+    AccessCtx, ChildrenIds, LayoutCtx, MeasureCtx, NoAction, PaintCtx, PropertiesRef, RegisterCtx,
 };
-use xilem::masonry::kurbo::{Affine, BezPath, Size, Stroke};
-use xilem::masonry::vello::peniko::color::AlphaColor;
-use xilem::masonry::vello::peniko::{Brush, Fill};
-use xilem::masonry::vello::Scene;
+use xilem::masonry::imaging::Painter;
+use xilem::masonry::kurbo::{Affine, Axis, BezPath, Size, Stroke};
+use xilem::masonry::layout::{LenReq, Length};
+use xilem::masonry::peniko::color::AlphaColor;
+use xilem::masonry::peniko::{Brush, Fill};
 use xilem::{Pod, ViewCtx};
 
 // ═══════════════════════════════════════════════════════════════════
@@ -58,15 +58,17 @@ impl MaterialSvgIcon {
     }
 
     /// Carga los paths SVG desde el catálogo de iconos y los cachea como BezPath
+    ///
+    /// El parseo del `d` del SVG cuesta ~20 µs por icono y este widget se
+    /// reconstruye en cada cambio de estado (arrastrar un slider, escribir en un
+    /// campo): sin caché, una pantalla con 6 iconos gastaba ~120 µs por frame sólo
+    /// en parsear paths. La caché es global y por nombre de icono.
     fn cargar_paths(&mut self) {
-        let icon_data = icons::catalog::by_name(&self.nombre);
-        if let Some(icon) = icon_data {
-            let path_str = icon.svg_path.to_string();
-            // Pre-parsear el BezPath una sola vez para evitar costo en cada paint
-            if let Ok(bez) = BezPath::from_svg(&path_str) {
-                self.bez_paths.push(bez);
+        if let Some(bez) = bez_paths_cacheados(&self.nombre) {
+            self.bez_paths = (*bez).clone();
+            if let Some(icon) = icons::catalog::by_name(&self.nombre) {
+                self.paths.push(icon.svg_path.to_string());
             }
-            self.paths.push(path_str);
         }
     }
 }
@@ -76,16 +78,31 @@ impl Widget for MaterialSvgIcon {
 
     fn register_children(&mut self, _ctx: &mut RegisterCtx<'_>) {}
 
-    fn layout(
+    fn measure(
         &mut self,
-        _ctx: &mut LayoutCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        bc: &BoxConstraints,
-    ) -> Size {
-        bc.constrain(Size::new(self.tamaño, self.tamaño))
+        _ctx: &mut MeasureCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        _axis: Axis,
+        len_req: LenReq,
+        _cross_length: Option<Length>,
+    ) -> Length {
+        // El icono tiene tamaño propio fijo: lo respeta, pero se achica si el
+        // espacio disponible es menor (equivalente al `bc.constrain` anterior).
+        let fijo = Length::px(self.tamaño);
+        match len_req {
+            LenReq::FitContent(space) => fijo.min(space),
+            _ => fijo,
+        }
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, scene: &mut Scene) {
+    fn layout(&mut self, _ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, _size: Size) {}
+
+    fn paint(
+        &mut self,
+        _ctx: &mut PaintCtx<'_>,
+        _props: &PropertiesRef<'_>,
+        painter: &mut Painter<'_>,
+    ) {
         if self.paths.is_empty() {
             return;
         }
@@ -101,11 +118,18 @@ impl Widget for MaterialSvgIcon {
                 IconStyle::Outlined => {
                     // Outlined: stroke con línea fina para efecto de contorno
                     let stroke = Stroke::new(1.5);
-                    scene.stroke(&stroke, transform, &brush, None, bez_path);
+                    painter
+                        .stroke(bez_path, &stroke, &brush)
+                        .transform(transform)
+                        .draw();
                 }
                 _ => {
                     // Filled, Rounded, Sharp, TwoTone: relleno sólido
-                    scene.fill(self.fill_rule, transform, &brush, None, bez_path);
+                    painter
+                        .fill(bez_path, &brush)
+                        .transform(transform)
+                        .fill_rule(self.fill_rule)
+                        .draw();
                 }
             }
         }
@@ -201,10 +225,50 @@ impl<State: 'static> View<State, (), ViewCtx> for SvgIconView<State> {
     fn message(
         &self,
         _view_state: &mut (),
-        _message: &mut xilem::core::MessageContext,
+        _message: &mut crate::MessageContext,
         _element: Mut<'_, Pod<MaterialSvgIcon>>,
         _app_state: &mut State,
     ) -> MessageResult<()> {
         MessageResult::Nop
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Caché de paths parseados
+// ═══════════════════════════════════════════════════════════════════
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Caché global `nombre de icono → BezPaths ya parseados`.
+fn cache() -> &'static Mutex<HashMap<String, Arc<Vec<BezPath>>>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<Vec<BezPath>>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn bez_paths_cacheados(nombre: &str) -> Option<Arc<Vec<BezPath>>> {
+    if let Some(hit) = cache().lock().ok()?.get(nombre) {
+        return Some(hit.clone());
+    }
+    let icon = icons::catalog::by_name(nombre)?;
+    let bez = BezPath::from_svg(icon.svg_path).ok()?;
+    let entrada = Arc::new(vec![bez]);
+    cache()
+        .lock()
+        .ok()?
+        .insert(nombre.to_string(), entrada.clone());
+    Some(entrada)
+}
+
+#[cfg(test)]
+mod tests_cache_iconos {
+    /// El contrato de la caché: el mismo nombre devuelve la misma instancia y no
+    /// re-parsea; un nombre desconocido no entra en la caché.
+    #[test]
+    fn cachea_y_reutiliza() {
+        let a = super::bez_paths_cacheados("home").expect("home existe");
+        let b = super::bez_paths_cacheados("home").expect("home existe");
+        assert!(std::sync::Arc::ptr_eq(&a, &b), "debe reutilizar el mismo Arc");
+        assert!(super::bez_paths_cacheados("no_existe_xyz").is_none());
     }
 }

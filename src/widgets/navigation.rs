@@ -7,10 +7,11 @@ use crate::gui_nativa::{
     ValorGUI,
 };
 use crate::helpers::*;
+use crate::layout::AsUnit as _;
 use crate::theme::motion::EASE_EMPHASIZED;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
@@ -150,11 +151,12 @@ pub(crate) fn render_navigator(
                     fg_rgb,
                     crate::IconStyle::Filled,
                 ))
-                .padding(8.0)
-                .corner_radius(20.0)
+                .padding(8.0.px())
+                .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px())
                 .background(Background::Color(pill_bg));
+                let titulo_valor = titulo.clone();
                 let w = view::flex(
-                    crate::view::Axis::Vertical,
+                    crate::Axis::Vertical,
                     (
                         icono_view,
                         view::label(titulo)
@@ -172,26 +174,33 @@ pub(crate) fn render_navigator(
                 let btn = view::button(w, move |data: &mut AppStateNativo| {
                     data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
                     data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
-                    ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
+                    ejecutar_callback_con_valor(
+                        &cb_inner,
+                        Some(ValorGUI::Texto((titulo_valor).to_string())),
+                        data,
+                        &p_clone,
+                    );
                 });
                 items.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
             }
             let bar = Box::new(
-                view::flex(crate::view::Axis::Horizontal, (items,))
-                    .gap(Length::px(0.0))
+                view::flex(crate::Axis::Horizontal, (items,))
                     .main_axis_alignment(crate::MainAxisAlignment::SpaceEvenly)
+                    .gap(Length::px(0.0))
                     .background(Background::Color(sc.surface.into()))
                     .border_color(sc.outline_variant.into())
-                    .border_width(1.0)
-                    .padding(0.0),
+                    .border_width(1.0.px())
+                    .padding(0.0.px()),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             let scrollable_content = view::portal(content);
             let spacer = xilem::view::FlexExt::flex(view::sized_box(view::label("")), 1.0);
             let nav_overlay = Box::new(
                 view::sized_box(
-                    view::flex(crate::view::Axis::Vertical, (spacer, bar))
-                        .must_fill_major_axis(true)
-                        .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
+                    view::flex(crate::Axis::Vertical, (spacer, bar))
+                        .cross_axis_alignment(crate::CrossAxisAlignment::Stretch)
+                        .dims(xilem::masonry::properties::Dimensions::height(
+                            xilem::masonry::layout::Dim::Stretch,
+                        )),
                 )
                 .height(Length::px(data.window_height)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
@@ -217,8 +226,9 @@ pub(crate) fn render_navigator(
                 } else {
                     sc.on_surface_variant.into()
                 };
+                let titulo_valor = titulo.clone();
                 let tab = view::flex(
-                    crate::view::Axis::Vertical,
+                    crate::Axis::Vertical,
                     (
                         view::label(titulo)
                             .text_size(label_style.font_size as f32)
@@ -246,26 +256,33 @@ pub(crate) fn render_navigator(
                 let btn = view::button(tab, move |data: &mut AppStateNativo| {
                     data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
                     data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
-                    ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
+                    ejecutar_callback_con_valor(
+                        &cb_inner,
+                        Some(ValorGUI::Texto((titulo_valor).to_string())),
+                        data,
+                        &p_clone,
+                    );
                 });
                 items.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
             }
             let tabs = Box::new(
-                view::flex(crate::view::Axis::Horizontal, (items,))
-                    .gap(Length::px(0.0))
+                view::flex(crate::Axis::Horizontal, (items,))
                     .main_axis_alignment(crate::MainAxisAlignment::SpaceEvenly)
+                    .gap(Length::px(0.0))
                     .background(Background::Color(sc.surface.into()))
                     .border_color(sc.outline_variant.into())
-                    .border_width(1.0)
-                    .padding(0.0),
+                    .border_width(1.0.px())
+                    .padding(0.0.px()),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             let scrollable_content = view::portal(content);
             let spacer = xilem::view::FlexExt::flex(view::sized_box(view::label("")), 1.0);
             let nav_overlay = Box::new(
                 view::sized_box(
-                    view::flex(crate::view::Axis::Vertical, (tabs, spacer))
-                        .must_fill_major_axis(true)
-                        .cross_axis_alignment(crate::CrossAxisAlignment::Fill),
+                    view::flex(crate::Axis::Vertical, (tabs, spacer))
+                        .cross_axis_alignment(crate::CrossAxisAlignment::Stretch)
+                        .dims(xilem::masonry::properties::Dimensions::height(
+                            xilem::masonry::layout::Dim::Stretch,
+                        )),
                 )
                 .height(Length::px(data.window_height)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
@@ -297,8 +314,9 @@ pub(crate) fn render_navigator(
                 } else {
                     crate::Color::TRANSPARENT
                 };
+                let titulo_valor = titulo.clone();
                 let w = view::flex(
-                    crate::view::Axis::Vertical,
+                    crate::Axis::Vertical,
                     (
                         crate::svg_icon::<AppStateNativo>(
                             &icono,
@@ -314,23 +332,31 @@ pub(crate) fn render_navigator(
                 let btn = view::button(w, move |data: &mut AppStateNativo| {
                     data.escribir(&cv_inner, ValorGUI::Entero(btn_idx as i64));
                     data.escribir("indice", ValorGUI::Entero(btn_idx as i64));
-                    ejecutar_callback_y_actualizar(&cb_inner, data, &p_clone);
+                    ejecutar_callback_con_valor(
+                        &cb_inner,
+                        Some(ValorGUI::Texto((titulo_valor).to_string())),
+                        data,
+                        &p_clone,
+                    );
                 });
                 items.push(Box::new(
                     view::sized_box(btn)
                         .background(Background::Color(bg))
-                        .corner_radius(16.0),
+                        .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>);
             }
             let rail = Box::new(
-                view::flex(crate::view::Axis::Vertical, (items,))
+                view::flex(crate::Axis::Vertical, (items,))
                     .gap(Length::px(4.0))
                     .background(Background::Color(sc.surface.into())),
             );
             let content_flex = xilem::view::FlexExt::flex(content, 1.0);
             Box::new(
-                view::flex(crate::view::Axis::Horizontal, (rail, content_flex))
-                    .must_fill_major_axis(true),
+                view::flex(crate::Axis::Horizontal, (rail, content_flex)).dims(
+                    xilem::masonry::properties::Dimensions::width(
+                        xilem::masonry::layout::Dim::Stretch,
+                    ),
+                ),
             )
         }
     }
@@ -341,11 +367,13 @@ pub(crate) fn render_navigator(
 pub(crate) fn render_navigation_bar(
     items: &[NavItem],
     seleccion: &usize,
+    variable_seleccion: Option<&str>,
     on_change: &str,
     _data: &mut AppStateNativo,
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let variable_seleccion: Option<String> = variable_seleccion.map(str::to_string);
     let scheme = &theme.scheme;
     let p = prog.to_vec();
     let cb = on_change.to_string();
@@ -353,8 +381,10 @@ pub(crate) fn render_navigation_bar(
     let mut nav_items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let cb_inner = cb.clone();
+        let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
+        let etiqueta_item = item.label.clone();
         let is_selected = i == *seleccion;
 
         let fg_color: crate::Color = if is_selected {
@@ -365,7 +395,7 @@ pub(crate) fn render_navigation_bar(
 
         let label_style = get_text_style(&theme.typography, "label_small");
         let item_widget = view::flex(
-            crate::view::Axis::Vertical,
+            crate::Axis::Vertical,
             (
                 view::label(item.icono.clone())
                     .text_size(24.0)
@@ -383,15 +413,23 @@ pub(crate) fn render_navigation_bar(
         .gap(Length::px(2.0));
 
         let btn = view::button(item_widget, move |data: &mut AppStateNativo| {
-            data.escribir(&cb_inner, ValorGUI::Entero(idx as i64));
-            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+            data.escribir(
+                variable_seleccion.as_deref().unwrap_or(&cb_inner),
+                ValorGUI::Entero(idx as i64),
+            );
+            ejecutar_callback_con_valor(
+                &cb_inner,
+                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                data,
+                &p_inner,
+            );
         });
 
         nav_items.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
     Box::new(
-        view::flex(crate::view::Axis::Horizontal, (nav_items,))
+        view::flex(crate::Axis::Horizontal, (nav_items,))
             .gap(Length::px(0.0))
             .background(Background::Color(scheme.surface.into())),
     )
@@ -402,12 +440,14 @@ pub(crate) fn render_navigation_bar(
 pub(crate) fn render_navigation_rail(
     items: &[NavItem],
     seleccion: &usize,
+    variable_seleccion: Option<&str>,
     on_change: &str,
     extended: &bool,
     _data: &mut AppStateNativo,
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let variable_seleccion: Option<String> = variable_seleccion.map(str::to_string);
     let scheme = &theme.scheme;
     let p = prog.to_vec();
     let cb = on_change.to_string();
@@ -415,8 +455,10 @@ pub(crate) fn render_navigation_rail(
     let mut nav_items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let cb_inner = cb.clone();
+        let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
+        let etiqueta_item = item.label.clone();
         let is_selected = i == *seleccion;
 
         let fg_color: crate::Color = if is_selected {
@@ -438,7 +480,7 @@ pub(crate) fn render_navigation_rail(
             let label_style = get_text_style(&theme.typography, "label_medium");
             Box::new(
                 view::flex(
-                    crate::view::Axis::Horizontal,
+                    crate::Axis::Horizontal,
                     (
                         icon,
                         view::label(item.label.clone())
@@ -451,7 +493,7 @@ pub(crate) fn render_navigation_rail(
         } else {
             Box::new(
                 view::flex(
-                    crate::view::Axis::Vertical,
+                    crate::Axis::Vertical,
                     (
                         icon,
                         view::label(item.label.clone())
@@ -464,21 +506,29 @@ pub(crate) fn render_navigation_rail(
         };
 
         let btn = view::button(content, move |data: &mut AppStateNativo| {
-            data.escribir(&cb_inner, ValorGUI::Entero(idx as i64));
-            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+            data.escribir(
+                variable_seleccion.as_deref().unwrap_or(&cb_inner),
+                ValorGUI::Entero(idx as i64),
+            );
+            ejecutar_callback_con_valor(
+                &cb_inner,
+                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                data,
+                &p_inner,
+            );
         });
 
         let styled_btn = view::sized_box(btn)
             .background(Background::Color(bg_color))
-            .corner_radius(16.0);
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
 
         nav_items.push(Box::new(styled_btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
     let axis = if *extended {
-        crate::view::Axis::Horizontal
+        crate::Axis::Horizontal
     } else {
-        crate::view::Axis::Vertical
+        crate::Axis::Vertical
     };
     Box::new(
         view::flex(axis, (nav_items,))
@@ -492,6 +542,7 @@ pub(crate) fn render_navigation_rail(
 pub(crate) fn render_navigation_drawer(
     items: &[NavItem],
     seleccion: &usize,
+    variable_seleccion: Option<&str>,
     on_change: &str,
     modal: &bool,
     visible: &str,
@@ -499,6 +550,7 @@ pub(crate) fn render_navigation_drawer(
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let variable_seleccion: Option<String> = variable_seleccion.map(str::to_string);
     let scheme = &theme.scheme;
     let p = prog.to_vec();
     let cb = on_change.to_string();
@@ -513,8 +565,10 @@ pub(crate) fn render_navigation_drawer(
     let mut nav_items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let cb_inner = cb.clone();
+        let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
+        let etiqueta_item = item.label.clone();
         let is_selected = i == *seleccion;
 
         let fg_color: crate::Color = if is_selected {
@@ -530,7 +584,7 @@ pub(crate) fn render_navigation_drawer(
 
         let label_style = get_text_style(&theme.typography, "label_large");
         let item_content = view::flex(
-            crate::view::Axis::Horizontal,
+            crate::Axis::Horizontal,
             (
                 view::label(item.icono.clone())
                     .text_size(24.0)
@@ -543,21 +597,29 @@ pub(crate) fn render_navigation_drawer(
         .gap(Length::px(16.0));
 
         let btn = view::button(item_content, move |data: &mut AppStateNativo| {
-            data.escribir(&cb_inner, ValorGUI::Entero(idx as i64));
-            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+            data.escribir(
+                variable_seleccion.as_deref().unwrap_or(&cb_inner),
+                ValorGUI::Entero(idx as i64),
+            );
+            ejecutar_callback_con_valor(
+                &cb_inner,
+                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                data,
+                &p_inner,
+            );
         });
 
         let styled_item = view::sized_box(btn)
             .background(Background::Color(bg_color))
-            .corner_radius(12.0);
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
 
         nav_items.push(Box::new(styled_item) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
     let drawer =
-        view::sized_box(view::flex(crate::view::Axis::Vertical, (nav_items,)).gap(Length::px(4.0)))
+        view::sized_box(view::flex(crate::Axis::Vertical, (nav_items,)).gap(Length::px(4.0)))
             .background(Background::Color(scheme.surface.into()))
-            .corner_radius(16.0);
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
 
     if *modal {
         let overlay_color: crate::Color = RgbColor(0, 0, 0).with_alpha(0.32);
@@ -609,10 +671,10 @@ pub(crate) fn render_top_app_bar(
     }
 
     let bar = view::flex(
-        crate::view::Axis::Horizontal,
+        crate::Axis::Horizontal,
         (
             title_label,
-            view::flex(crate::view::Axis::Horizontal, (action_widgets,)).gap(Length::px(4.0)),
+            view::flex(crate::Axis::Horizontal, (action_widgets,)).gap(Length::px(4.0)),
         ),
     )
     .gap(Length::px(8.0));
@@ -620,7 +682,7 @@ pub(crate) fn render_top_app_bar(
     Box::new(
         view::sized_box(bar)
             .background(Background::Color(scheme.surface.into()))
-            .padding(16.0),
+            .padding(16.0.px()),
     )
 }
 
@@ -655,7 +717,7 @@ pub(crate) fn render_bottom_app_bar(
 
     let mut children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     children.push(Box::new(
-        view::flex(crate::view::Axis::Horizontal, (action_widgets,)).gap(Length::px(8.0)),
+        view::flex(crate::Axis::Horizontal, (action_widgets,)).gap(Length::px(8.0)),
     ) as Box<AnyWidgetView<AppStateNativo>>);
 
     if let Some(f) = fab {
@@ -663,11 +725,9 @@ pub(crate) fn render_bottom_app_bar(
     }
 
     Box::new(
-        view::sized_box(
-            view::flex(crate::view::Axis::Horizontal, (children,)).gap(Length::px(16.0)),
-        )
-        .background(Background::Color(scheme.surface.into()))
-        .padding(8.0),
+        view::sized_box(view::flex(crate::Axis::Horizontal, (children,)).gap(Length::px(16.0)))
+            .background(Background::Color(scheme.surface.into()))
+            .padding(8.0.px()),
     )
 }
 
@@ -700,8 +760,9 @@ pub(crate) fn render_tabs(
         };
 
         let label_style = get_text_style(&theme.typography, "label_large");
+        let t_valor = t.clone();
         let tab_content = view::flex(
-            crate::view::Axis::Vertical,
+            crate::Axis::Vertical,
             (
                 view::label(t.clone())
                     .text_size(label_style.font_size as f32)
@@ -727,13 +788,18 @@ pub(crate) fn render_tabs(
 
         let btn = view::button(tab_content, move |data: &mut AppStateNativo| {
             data.escribir(&cb_inner, ValorGUI::Entero(idx as i64));
-            ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
+            ejecutar_callback_con_valor(
+                &cb_inner,
+                Some(ValorGUI::Texto(t_valor.clone())),
+                data,
+                &p_inner,
+            );
         });
 
         tab_widgets.push(Box::new(btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
-    Box::new(view::flex(crate::view::Axis::Horizontal, (tab_widgets,)).gap(Length::px(0.0)))
+    Box::new(view::flex(crate::Axis::Horizontal, (tab_widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── SearchBar ──────────────────────────────────────────────────
@@ -751,7 +817,6 @@ pub(crate) fn render_search_bar(
     let ph = placeholder.to_string();
 
     let bg: crate::Color = scheme.surface_variant.into();
-    let icon_fg: crate::Color = scheme.on_surface_variant.into();
 
     let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
         data.escribir(&var_name, ValorGUI::Texto(new_val));
@@ -760,13 +825,21 @@ pub(crate) fn render_search_bar(
 
     Box::new(
         view::flex(
-            crate::view::Axis::Horizontal,
-            (view::label("🔍 ").text_size(18.0).color(icon_fg), ti),
+            crate::Axis::Horizontal,
+            (
+                crate::svg_icon::<AppStateNativo>(
+                    "search",
+                    18.0,
+                    scheme.on_surface_variant,
+                    crate::IconStyle::Filled,
+                ),
+                ti,
+            ),
         )
         .gap(Length::px(8.0))
         .background(Background::Color(bg))
-        .corner_radius(24.0)
-        .padding(12.0),
+        .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px())
+        .padding(12.0.px()),
     )
 }
 
@@ -788,10 +861,10 @@ pub(crate) fn render_search_view(
         }
         Box::new(
             view::sized_box(
-                view::flex(crate::view::Axis::Vertical, (result_widgets,)).gap(Length::px(8.0)),
+                view::flex(crate::Axis::Vertical, (result_widgets,)).gap(Length::px(8.0)),
             )
             .background(Background::Color(scheme.surface.into()))
-            .corner_radius(16.0),
+            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
         )
     } else {
         Box::new(view::sized_box(view::label(String::new())))

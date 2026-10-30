@@ -3,8 +3,9 @@
 
 use crate::gui_nativa::{AppStateNativo, FabSize, IconButtonVariant};
 use crate::helpers::*;
+use crate::layout::AsUnit as _;
 use crate::view;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor};
+use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
@@ -31,25 +32,45 @@ pub(crate) fn render_fab(
     let fg_rgb: RgbColor = scheme.on_primary_container;
     let fg: crate::Color = fg_rgb.into();
     let bg: crate::Color = scheme.primary_container.into();
-    let icon_label = crate::icons::catalog::fallback_emoji(icono);
-    let texto_fab = match texto_extendido {
-        Some(ext) => format!("{} {}", icon_label, ext),
-        None => icon_label.to_string(),
-    };
-    let label = view::label(texto_fab)
-        .text_size(fab_icon_size)
-        .weight(FontWeight::MEDIUM)
-        .color(fg);
+    // Icono SVG real (Vello). Si el nombre no está en el catálogo (p. ej. el
+    // usuario pasó texto o un emoji propio), se muestra como etiqueta.
+    let icono_view: Box<AnyWidgetView<AppStateNativo>> =
+        if crate::icons::catalog::by_name(icono).is_some() {
+            Box::new(crate::svg_icon::<AppStateNativo>(
+                icono,
+                fab_icon_size,
+                fg_rgb,
+                crate::IconStyle::Filled,
+            ))
+        } else {
+            Box::new(
+                view::label(icono.to_string())
+                    .text_size(fab_icon_size as f32)
+                    .color(fg),
+            )
+        };
+    let mut partes: Vec<Box<AnyWidgetView<AppStateNativo>>> = vec![icono_view];
+    if let Some(ext) = texto_extendido {
+        partes.push(Box::new(
+            view::label(ext.clone())
+                .text_size(14.0)
+                .weight(FontWeight::MEDIUM)
+                .color(fg),
+        ));
+    }
+    let contenido = view::flex(crate::Axis::Horizontal, (partes,))
+        .cross_axis_alignment(crate::CrossAxisAlignment::Center)
+        .gap(crate::Length::px(8.0));
     let cb_log = cb.clone();
-    let btn = view::button(label, move |data: &mut AppStateNativo| {
+    let btn = view::button(contenido, move |data: &mut AppStateNativo| {
         eprintln!("[FAB] Click detectado, ejecutando callback '{}'", &cb_log);
         ejecutar_callback_y_actualizar(&cb, data, &prog);
     });
     // FAB flotante: botón con fondo, padding y esquinas redondeadas.
     Box::new(
-        btn.padding(16.0)
+        btn.padding(16.0.px())
             .background(Background::Color(bg))
-            .corner_radius(28.0),
+            .corner_radius(theme.shapes.extra_large.px()),
     )
 }
 
@@ -83,7 +104,10 @@ pub(crate) fn render_icon_button(
             let btn = view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });
-            Box::new(btn.background(Background::Color(bg)).corner_radius(20.0))
+            Box::new(
+                btn.background(Background::Color(bg))
+                    .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px()),
+            )
         }
         IconButtonVariant::Tonal => {
             let fg_rgb: RgbColor = scheme.on_secondary_container;
@@ -93,7 +117,10 @@ pub(crate) fn render_icon_button(
             let btn = view::button(icon_view, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb, data, &prog);
             });
-            Box::new(btn.background(Background::Color(bg)).corner_radius(20.0))
+            Box::new(
+                btn.background(Background::Color(bg))
+                    .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px()),
+            )
         }
         IconButtonVariant::Outlined => {
             let fg_rgb: RgbColor = scheme.primary;
@@ -105,8 +132,8 @@ pub(crate) fn render_icon_button(
             });
             Box::new(
                 btn.border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(20.0),
+                    .border_width(1.0.px())
+                    .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px()),
             )
         }
     }
@@ -146,7 +173,8 @@ pub(crate) fn render_segmented_button(
                 ejecutar_callback_y_actualizar(&cb_inner, data, &prog_inner);
             });
             widgets.push(Box::new(
-                btn.background(Background::Color(bg)).corner_radius(8.0),
+                btn.background(Background::Color(bg))
+                    .corner_radius(theme.shapes.small.px()),
             ));
         } else {
             let fg: crate::Color = scheme.on_surface.into();
@@ -160,11 +188,11 @@ pub(crate) fn render_segmented_button(
             });
             widgets.push(Box::new(
                 btn.border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(8.0),
+                    .border_width(1.0.px())
+                    .corner_radius(theme.shapes.small.px()),
             ));
         }
     }
 
-    Box::new(view::flex(crate::view::Axis::Horizontal, (widgets,)).gap(crate::Length::px(0.0)))
+    Box::new(view::flex(crate::Axis::Horizontal, (widgets,)).gap(crate::Length::px(0.0)))
 }

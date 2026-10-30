@@ -5,11 +5,26 @@
 
 use crate::gui_nativa::{AppStateNativo, TextFieldVariant};
 use crate::helpers::*;
+use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme};
+use crate::{AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, ShapeFamily};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
+
+// Superficie de un campo de entrada según el diseño del tema:
+// - Fluent: fondo de superficie sólido con hairline de 1px (Windows 11).
+// - Liquid Glass: fondo translúcido con borde claro.
+// - Material You: relleno tonal sin borde.
+fn superficie_campo(theme: &MaterialTheme) -> (crate::Color, crate::Color, f64) {
+    let scheme = &theme.scheme;
+    let borde: crate::Color = scheme.outline_variant.into();
+    match theme.design {
+        DesignStyle::LiquidGlass => (scheme.surface_variant.with_alpha(0.55), borde, 1.0),
+        DesignStyle::Fluent => (scheme.surface.into(), borde, 1.0),
+        DesignStyle::MaterialYou => (scheme.surface_variant.into(), borde, 0.0),
+    }
+}
 
 // ─── MaterialTextField ───────────────────────────────────────────
 
@@ -58,11 +73,13 @@ pub(crate) fn render_text_field(
     // Aplicar colores según variante
     let input_widget = match variant {
         TextFieldVariant::Filled => {
-            let bg: crate::Color = scheme.surface_variant.into();
+            let (bg, borde, ancho) = superficie_campo(theme);
             Box::new(
                 view::sized_box(ti)
                     .background(Background::Color(bg))
-                    .corner_radius(4.0),
+                    .border_color(borde)
+                    .border_width(ancho.px())
+                    .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
             ) as Box<AnyWidgetView<AppStateNativo>>
         }
         TextFieldVariant::Outlined => {
@@ -71,12 +88,23 @@ pub(crate) fn render_text_field(
             } else {
                 scheme.outline.into()
             };
-            Box::new(
-                view::sized_box(ti)
-                    .border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(4.0),
-            ) as Box<AnyWidgetView<AppStateNativo>>
+            let (bg, _, _) = superficie_campo(theme);
+            if matches!(theme.design, DesignStyle::LiquidGlass) {
+                Box::new(
+                    view::sized_box(ti)
+                        .border_color(border)
+                        .border_width(1.0.px())
+                        .background(Background::Color(bg))
+                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                ) as Box<AnyWidgetView<AppStateNativo>>
+            } else {
+                Box::new(
+                    view::sized_box(ti)
+                        .border_color(border)
+                        .border_width(1.0.px())
+                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                ) as Box<AnyWidgetView<AppStateNativo>>
+            }
         }
     };
 
@@ -107,7 +135,11 @@ pub(crate) fn render_text_field(
         }
     };
 
-    Box::new(view::flex(crate::view::Axis::Vertical, (children,)).gap(Length::px(4.0)))
+    Box::new(
+        view::flex(crate::Axis::Vertical, (children,))
+            .cross_axis_alignment(crate::CrossAxisAlignment::Start)
+            .gap(Length::px(4.0)),
+    )
 }
 
 // ─── MaterialPasswordField ───────────────────────────────────────
@@ -136,7 +168,7 @@ pub(crate) fn render_password_field(
     let input_widget = Box::new(
         view::sized_box(ti)
             .background(Background::Color(bg))
-            .corner_radius(4.0),
+            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
     ) as Box<AnyWidgetView<AppStateNativo>>;
 
     let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if label_text.is_empty() {
@@ -152,7 +184,11 @@ pub(crate) fn render_password_field(
         ]
     };
 
-    Box::new(view::flex(crate::view::Axis::Vertical, (children,)).gap(Length::px(4.0)))
+    Box::new(
+        view::flex(crate::Axis::Vertical, (children,))
+            .cross_axis_alignment(crate::CrossAxisAlignment::Start)
+            .gap(Length::px(4.0)),
+    )
 }
 
 // ─── MaterialNumberField ─────────────────────────────────────────
@@ -189,21 +225,21 @@ pub(crate) fn render_number_field(
         Box::new(
             view::sized_box(ti)
                 .border_color(border)
-                .border_width(1.0)
-                .corner_radius(4.0),
+                .border_width(1.0.px())
+                .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
         )
     } else {
         Box::new(
             view::flex(
-                crate::view::Axis::Vertical,
+                crate::Axis::Vertical,
                 (
                     view::label(label_text.clone())
                         .text_size(12.0)
                         .color(label_color),
                     view::sized_box(ti)
                         .border_color(border)
-                        .border_width(1.0)
-                        .corner_radius(4.0),
+                        .border_width(1.0.px())
+                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
                 ),
             )
             .gap(Length::px(4.0)),
@@ -235,14 +271,17 @@ pub(crate) fn render_search_field(
 
     Box::new(
         view::flex(
-            crate::view::Axis::Horizontal,
+            crate::Axis::Horizontal,
             (
-                view::label("🔍 ")
-                    .text_size(16.0)
-                    .color(scheme.on_surface_variant.into()),
+                crate::svg_icon::<AppStateNativo>(
+                    "search",
+                    16.0,
+                    scheme.on_surface_variant,
+                    crate::IconStyle::Filled,
+                ),
                 view::sized_box(ti)
                     .background(Background::Color(bg))
-                    .corner_radius(20.0),
+                    .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px()),
             ),
         )
         .gap(Length::px(4.0)),
@@ -277,8 +316,8 @@ pub(crate) fn render_dropdown(
         view::button(view::label(display_text).text_size(14.0).color(fg), cb_btn)
             .background(Background::Color(bg))
             .border_color(border)
-            .border_width(1.0)
-            .corner_radius(4.0),
+            .border_width(1.0.px())
+            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
     )
 }
 
@@ -307,7 +346,7 @@ pub(crate) fn render_select(
 
     Box::new(
         view::flex(
-            crate::view::Axis::Vertical,
+            crate::Axis::Vertical,
             (
                 view::label(label_text.clone())
                     .text_size(12.0)
@@ -319,8 +358,8 @@ pub(crate) fn render_select(
                     },
                 )
                 .border_color(border)
-                .border_width(1.0)
-                .corner_radius(4.0),
+                .border_width(1.0.px())
+                .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
             ),
         )
         .gap(Length::px(4.0)),
@@ -348,8 +387,8 @@ pub(crate) fn render_autocomplete(
     Box::new(
         view::sized_box(ti)
             .border_color(border)
-            .border_width(1.0)
-            .corner_radius(4.0),
+            .border_width(1.0.px())
+            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
     )
 }
 
@@ -389,15 +428,14 @@ pub(crate) fn render_radio_group(
         };
 
         let radio_widget = view::flex(
-            crate::view::Axis::Horizontal,
+            crate::Axis::Horizontal,
             (
                 view::sized_box(
                     view::label(if is_selected { "◉" } else { "○" }.to_string())
                         .text_size(20.0)
                         .color(radio_color),
                 )
-                .width(Length::px(24.0))
-                .height(Length::px(24.0)),
+                .dims((Length::px(24.0), Length::px(24.0))),
                 view::label(t.clone()).text_size(14.0).color(fg),
             ),
         )
@@ -411,9 +449,9 @@ pub(crate) fn render_radio_group(
     }
 
     let ax = if direction == "horizontal" {
-        crate::view::Axis::Horizontal
+        crate::Axis::Horizontal
     } else {
-        crate::view::Axis::Vertical
+        crate::Axis::Vertical
     };
     Box::new(view::flex(ax, (radios,)).gap(Length::px(8.0)))
 }
@@ -432,24 +470,25 @@ pub(crate) fn render_switch(
     let lbl = label.to_string();
     let checked = data.leer(variable).to_bool();
 
-    let track_color: crate::Color = if checked {
-        scheme.primary.into()
-    } else {
-        scheme.surface_variant.into()
-    };
-
-    let checkbox = view::checkbox(
-        lbl.clone(),
-        checked,
-        move |data: &mut AppStateNativo, new_checked: bool| {
-            data.escribir(&var_name, crate::ValorGUI::Booleano(new_checked));
-        },
-    );
-
+    // Switch nativo de Masonry: toma sus colores del property set del tema
+    // (riel, borde y thumb). Antes esto era un checkbox metido en una caja
+    // pintada con el color primario, que se estiraba a todo el ancho.
+    let interruptor = view::switch(checked, move |data: &mut AppStateNativo, on: bool| {
+        data.escribir(&var_name, crate::ValorGUI::Booleano(on));
+    });
+    let etiqueta: crate::Color = scheme.on_surface.into();
     Box::new(
-        view::sized_box(checkbox)
-            .background(Background::Color(track_color))
-            .corner_radius(12.0),
+        view::flex(
+            crate::Axis::Horizontal,
+            (
+                Box::new(interruptor) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(view::label(lbl).text_size(14.0).color(etiqueta))
+                    as Box<AnyWidgetView<AppStateNativo>>,
+            ),
+        )
+        .main_axis_alignment(crate::MainAxisAlignment::Start)
+        .cross_axis_alignment(crate::CrossAxisAlignment::Center)
+        .gap(Length::px(10.0)),
     )
 }
 
@@ -483,7 +522,7 @@ pub(crate) fn render_slider_discrete(
 
     Box::new(
         view::flex(
-            crate::view::Axis::Vertical,
+            crate::Axis::Vertical,
             (view::label(display_val).text_size(12.0).color(fg), slider),
         )
         .gap(Length::px(4.0)),
@@ -530,7 +569,7 @@ pub(crate) fn render_slider_range(
 
     Box::new(
         view::flex(
-            crate::view::Axis::Vertical,
+            crate::Axis::Vertical,
             (
                 view::label(format!("Inicio: {:.1}", val1))
                     .text_size(11.0)
@@ -579,10 +618,10 @@ pub(crate) fn render_chip_group(
             let btn = view::button(label, move |data: &mut AppStateNativo| {
                 ejecutar_callback_y_actualizar(&cb_inner, data, &prog_inner);
             });
-            chip_widgets.push(
-                Box::new(btn.background(Background::Color(bg)).corner_radius(8.0))
-                    as Box<AnyWidgetView<AppStateNativo>>,
-            );
+            chip_widgets.push(Box::new(
+                btn.background(Background::Color(bg))
+                    .corner_radius(theme.shapes.small.px()),
+            ) as Box<AnyWidgetView<AppStateNativo>>);
         } else {
             let fg: crate::Color = scheme.on_surface.into();
             let border: crate::Color = scheme.outline.into();
@@ -595,11 +634,11 @@ pub(crate) fn render_chip_group(
             });
             chip_widgets.push(Box::new(
                 btn.border_color(border)
-                    .border_width(1.0)
-                    .corner_radius(8.0),
+                    .border_width(1.0.px())
+                    .corner_radius(theme.shapes.small.px()),
             ) as Box<AnyWidgetView<AppStateNativo>>);
         }
     }
 
-    Box::new(view::flex(crate::view::Axis::Horizontal, (chip_widgets,)).gap(Length::px(8.0)))
+    Box::new(view::flex(crate::Axis::Horizontal, (chip_widgets,)).gap(Length::px(8.0)))
 }
