@@ -15,8 +15,7 @@ struct Estado {
 }
 
 fn main() -> Result<(), String> {
-    let mut estado = Estado::default();
-    estado.valor = 30.0;
+    let estado = Estado { valor: 30.0 };
 
     let app = Xilem::new_simple(
         estado,

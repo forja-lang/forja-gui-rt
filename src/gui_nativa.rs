@@ -33,24 +33,21 @@ pub enum ValorGUI {
     Mapa(HashMap<String, ValorGUI>),
 }
 
-impl ValorGUI {
-    pub(crate) fn to_string(&self) -> String {
+impl std::fmt::Display for ValorGUI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValorGUI::Texto(s) => s.clone(),
-            ValorGUI::Entero(n) => n.to_string(),
-            ValorGUI::Decimal(f) => f.to_string(),
-            ValorGUI::Booleano(b) => {
-                if *b {
-                    "verdadero".to_string()
-                } else {
-                    "falso".to_string()
-                }
-            }
-            ValorGUI::Nulo => "nulo".to_string(),
-            ValorGUI::Mapa(m) => format!("Mapa({:?})", m),
+            ValorGUI::Texto(s) => f.write_str(s),
+            ValorGUI::Entero(n) => write!(f, "{}", n),
+            ValorGUI::Decimal(d) => write!(f, "{}", d),
+            ValorGUI::Booleano(true) => f.write_str("verdadero"),
+            ValorGUI::Booleano(false) => f.write_str("falso"),
+            ValorGUI::Nulo => f.write_str("nulo"),
+            ValorGUI::Mapa(m) => write!(f, "Mapa({:?})", m),
         }
     }
+}
 
+impl ValorGUI {
     pub(crate) fn to_f64(&self) -> f64 {
         match self {
             ValorGUI::Entero(n) => *n as f64,
@@ -189,8 +186,8 @@ impl AppStateNativo {
     pub fn anim_progress(&self, var_name: &str, duracion_ms: f64) -> f64 {
         if let Some(start) = self.anim_start_time.get(var_name) {
             let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-            let progress = (elapsed / duracion_ms).clamp(0.0, 1.0);
-            progress
+
+            (elapsed / duracion_ms).clamp(0.0, 1.0)
         } else {
             0.0
         }
@@ -1725,10 +1722,10 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "pila" | "gui_pila" | "zstack" => Some(Layout::ZStack(procesar_args(argumentos))),
                 "desplazable" | "gui_desplazable" | "scroll" => argumentos
                     .first()
-                    .and_then(|a| expr_a_layout(a))
+                    .and_then(expr_a_layout)
                     .map(|child| Layout::Portal(Box::new(child))),
                 "contenedor" | "container" | "caja" => {
-                    let child = argumentos.first().and_then(|a| expr_a_layout(a));
+                    let child = argumentos.first().and_then(expr_a_layout);
                     let max_width = argumentos
                         .get(1)
                         .and_then(|a| match a {
@@ -1911,7 +1908,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     })
                 }
                 "adaptable" | "responsive" => {
-                    let compact = argumentos.get(0).and_then(expr_a_layout);
+                    let compact = argumentos.first().and_then(expr_a_layout);
                     let medium = argumentos.get(1).and_then(expr_a_layout);
                     let expanded = argumentos.get(2).and_then(expr_a_layout);
                     match (compact, medium, expanded) {
@@ -2775,7 +2772,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     })
                 }
                 "andamio" | "scaffold" => {
-                    let top = argumentos.get(0).and_then(expr_a_layout).map(Box::new);
+                    let top = argumentos.first().and_then(expr_a_layout).map(Box::new);
                     let body = argumentos.get(1).and_then(expr_a_layout);
                     let bottom = argumentos.get(2).and_then(expr_a_layout).map(Box::new);
                     body.map(|b| Layout::MaterialScaffold {
@@ -4318,7 +4315,7 @@ pub fn layout_a_view<'a>(
             // Ancho dinámico: en portrait usa el ancho completo, en landscape limita a 720dp máximo
             let ancho = match data.orientation {
                 Orientation::Portrait => (data.window_width - 16.0).max(200.0),
-                Orientation::Landscape => (data.window_width - 16.0).min(720.0).max(200.0),
+                Orientation::Landscape => (data.window_width - 16.0).clamp(200.0, 720.0),
             };
             Box::new(
                 view::sized_box(
@@ -4339,7 +4336,7 @@ pub fn layout_a_view<'a>(
             // Ancho dinámico: en portrait usa el ancho completo, en landscape limita a 720dp máximo
             let ancho = match data.orientation {
                 Orientation::Portrait => (data.window_width - 16.0).max(200.0),
-                Orientation::Landscape => (data.window_width - 16.0).min(720.0).max(200.0),
+                Orientation::Landscape => (data.window_width - 16.0).clamp(200.0, 720.0),
             };
             Box::new(
                 view::sized_box(
@@ -4747,7 +4744,7 @@ pub fn layout_a_view<'a>(
             if overlay_alpha > 0.0 {
                 let overlay_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
                 Box::new(view::zstack((Box::new(
-                    view::sized_box(inner).background(Background::Color(overlay_color.into())),
+                    view::sized_box(inner).background(Background::Color(overlay_color)),
                 )
                     as Box<AnyWidgetView<AppStateNativo>>,)))
             } else {
@@ -4932,9 +4929,11 @@ pub fn layout_a_view<'a>(
             match variant {
                 ButtonVariant::Filled => make_material_button(
                     texto,
-                    scheme.on_primary.into(),
-                    Some(scheme.primary.into()),
-                    None,
+                    ColoresBoton {
+                        fg: scheme.on_primary.into(),
+                        bg: Some(scheme.primary.into()),
+                        border: None,
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -4942,9 +4941,11 @@ pub fn layout_a_view<'a>(
                 ),
                 ButtonVariant::Tonal => make_material_button(
                     texto,
-                    scheme.on_secondary_container.into(),
-                    Some(scheme.secondary_container.into()),
-                    None,
+                    ColoresBoton {
+                        fg: scheme.on_secondary_container.into(),
+                        bg: Some(scheme.secondary_container.into()),
+                        border: None,
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -4952,9 +4953,11 @@ pub fn layout_a_view<'a>(
                 ),
                 ButtonVariant::Outlined => make_material_button(
                     texto,
-                    scheme.primary.into(),
-                    None,
-                    Some(scheme.outline.into()),
+                    ColoresBoton {
+                        fg: scheme.primary.into(),
+                        bg: None,
+                        border: Some(scheme.outline.into()),
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -4962,9 +4965,11 @@ pub fn layout_a_view<'a>(
                 ),
                 ButtonVariant::Text => make_material_button(
                     texto,
-                    scheme.primary.into(),
-                    None,
-                    None,
+                    ColoresBoton {
+                        fg: scheme.primary.into(),
+                        bg: None,
+                        border: None,
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -4972,9 +4977,11 @@ pub fn layout_a_view<'a>(
                 ),
                 ButtonVariant::Elevated => make_material_button(
                     texto,
-                    scheme.primary.into(),
-                    Some(scheme.surface.into()),
-                    None,
+                    ColoresBoton {
+                        fg: scheme.primary.into(),
+                        bg: Some(scheme.surface.into()),
+                        border: None,
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -5037,9 +5044,11 @@ pub fn layout_a_view<'a>(
             match variant {
                 ChipVariant::Assist | ChipVariant::Suggestion => make_chip_button(
                     texto,
-                    scheme.on_surface.into(),
-                    None,
-                    Some(scheme.outline.into()),
+                    ColoresBoton {
+                        fg: scheme.on_surface.into(),
+                        bg: None,
+                        border: Some(scheme.outline.into()),
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -5049,9 +5058,11 @@ pub fn layout_a_view<'a>(
                     if *activo {
                         make_chip_button(
                             texto,
-                            scheme.on_secondary_container.into(),
-                            Some(scheme.secondary_container.into()),
-                            None,
+                            ColoresBoton {
+                                fg: scheme.on_secondary_container.into(),
+                                bg: Some(scheme.secondary_container.into()),
+                                border: None,
+                            },
                             label_style,
                             callback,
                             _prog,
@@ -5060,9 +5071,11 @@ pub fn layout_a_view<'a>(
                     } else {
                         make_chip_button(
                             texto,
-                            scheme.on_surface.into(),
-                            None,
-                            Some(scheme.outline.into()),
+                            ColoresBoton {
+                                fg: scheme.on_surface.into(),
+                                bg: None,
+                                border: Some(scheme.outline.into()),
+                            },
                             label_style,
                             callback,
                             _prog,
@@ -5072,9 +5085,11 @@ pub fn layout_a_view<'a>(
                 }
                 ChipVariant::Input => make_chip_button(
                     texto,
-                    scheme.on_secondary_container.into(),
-                    Some(scheme.secondary_container.into()),
-                    None,
+                    ColoresBoton {
+                        fg: scheme.on_secondary_container.into(),
+                        bg: Some(scheme.secondary_container.into()),
+                        border: None,
+                    },
                     label_style,
                     callback,
                     _prog,
@@ -5100,9 +5115,11 @@ pub fn layout_a_view<'a>(
             placeholder,
             variant,
             error,
-            data,
-            _prog,
-            theme,
+            ContextoRender {
+                data,
+                prog: _prog,
+                theme,
+            },
         ),
 
         // ─── MaterialPasswordField ─────────────────────────────────────
@@ -5309,7 +5326,16 @@ pub fn layout_a_view<'a>(
             col_orden,
             orden_asc,
         } => crate::widgets::material_cards::render_data_table(
-            columnas, filas, ordenable, col_orden, orden_asc, data, _prog, theme,
+            columnas,
+            filas,
+            ordenable,
+            col_orden,
+            orden_asc,
+            ContextoRender {
+                data,
+                prog: _prog,
+                theme,
+            },
         ),
 
         Layout::MaterialSurface { child, color_role } => {
@@ -5740,7 +5766,6 @@ pub fn layout_a_view<'a>(
                 let scheme = &theme.scheme;
                 let surface_bg: Color = scheme.surface.into();
                 let fg: Color = scheme.on_surface.into();
-                let _prog = _prog;
                 let prog = _prog.to_vec();
                 let cb = on_select.clone();
 
@@ -5793,9 +5818,11 @@ pub fn layout_a_view<'a>(
             nav_type,
             anim,
             on_change,
-            data,
-            _prog,
-            theme,
+            ContextoRender {
+                data,
+                prog: _prog,
+                theme,
+            },
         ),
 
         // ─── NavigationBar ───────────────────────────────────────────
@@ -5827,9 +5854,11 @@ pub fn layout_a_view<'a>(
             variable_seleccion.as_deref(),
             on_change,
             extended,
-            data,
-            _prog,
-            theme,
+            ContextoRender {
+                data,
+                prog: _prog,
+                theme,
+            },
         ),
 
         // ─── NavigationDrawer ────────────────────────────────────────
@@ -5847,9 +5876,11 @@ pub fn layout_a_view<'a>(
             on_change,
             modal,
             visible,
-            data,
-            _prog,
-            theme,
+            ContextoRender {
+                data,
+                prog: _prog,
+                theme,
+            },
         ),
 
         // ─── TopAppBar ───────────────────────────────────────────────
@@ -6051,9 +6082,7 @@ pub fn layout_a_view<'a>(
                 .gap(Length::px(8.0));
                 let header = Box::new(view::sized_box(refresh_row).padding(8.0.px()))
                     as Box<AnyWidgetView<AppStateNativo>>;
-                let mut column_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-                column_children.push(header);
-                column_children.push(inner);
+                let column_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = vec![header, inner];
                 Box::new(view::portal(
                     view::flex(Axis::Vertical, (column_children,)).gap(Length::px(4.0)),
                 ))
@@ -6092,12 +6121,12 @@ pub fn layout_a_view<'a>(
                         data.escribir(&dismiss_var, ValorGUI::Booleano(false));
                     },
                 );
-                let mut row_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-                row_children.push(Box::new(undo_label) as Box<AnyWidgetView<AppStateNativo>>);
-                row_children.push(Box::new(
-                    view::sized_box(view::label(String::new())).width(Length::px(8.0)),
-                ) as Box<AnyWidgetView<AppStateNativo>>);
-                row_children.push(Box::new(undo_btn) as Box<AnyWidgetView<AppStateNativo>>);
+                let row_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = vec![
+                    Box::new(undo_label) as Box<AnyWidgetView<AppStateNativo>>,
+                    Box::new(view::sized_box(view::label(String::new())).width(Length::px(8.0)))
+                        as Box<AnyWidgetView<AppStateNativo>>,
+                    Box::new(undo_btn) as Box<AnyWidgetView<AppStateNativo>>,
+                ];
                 Box::new(
                     view::sized_box(
                         view::flex(Axis::Horizontal, (row_children,)).gap(Length::px(4.0)),
@@ -6526,7 +6555,7 @@ pub fn layout_a_view<'a>(
 
             // Generar grilla de días con datos reales
             let total_cells = first_weekday + num_dias;
-            let num_rows = (total_cells + 6) / 7;
+            let num_rows = total_cells.div_ceil(7);
             let mut all_rows: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             all_rows.push(Box::new(header_row) as Box<AnyWidgetView<AppStateNativo>>);
             all_rows.push(Box::new(day_header) as Box<AnyWidgetView<AppStateNativo>>);
@@ -6983,7 +7012,7 @@ pub fn layout_a_view<'a>(
                 .or_else(|| parse_color(color))
                 .unwrap_or(scheme.primary);
             let icon_size = *tamaño;
-            let icon_estilo = IconStyle::from_str(estilo);
+            let icon_estilo = IconStyle::desde_str(estilo);
 
             // Si el nombre no está en el catálogo, mostrar el nombre en texto:
             // un icono inexistente tiene que verse, no desaparecer.

@@ -187,12 +187,7 @@ pub fn date_picker_view(
     };
 
     // Validar mes
-    if month < 1 {
-        month = 1;
-    }
-    if month > 12 {
-        month = 12;
-    }
+    month = month.clamp(1, 12);
 
     // Calcular días del mes y primer día de la semana
     let days_in_month = calc_days_in_month(year, month);
@@ -295,7 +290,7 @@ pub fn date_picker_view(
     all_rows.push(Box::new(day_header_row) as Box<AnyWidgetView<AppStateNativo>>);
 
     let total_cells = offset + days_in_month as usize;
-    let num_rows = (total_cells + 6) / 7; // ceiling division
+    let num_rows = total_cells.div_ceil(7); // ceiling division
 
     for row in 0..num_rows {
         let mut day_cells: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
@@ -371,13 +366,8 @@ fn parse_fecha(val: &str, today: NaiveDate) -> (i32, u32, u32) {
             let m = parts[1]
                 .parse::<u32>()
                 .unwrap_or(today.month())
-                .max(1)
-                .min(12);
-            let d = parts[2]
-                .parse::<u32>()
-                .unwrap_or(today.day())
-                .max(1)
-                .min(31);
+                .clamp(1, 12);
+            let d = parts[2].parse::<u32>().unwrap_or(today.day()).clamp(1, 31);
             return (y, m, d);
         }
     }

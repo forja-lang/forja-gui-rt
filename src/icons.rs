@@ -38,7 +38,7 @@ impl IconStyle {
     }
 
     /// Parsea un string a IconStyle
-    pub fn from_str(s: &str) -> Self {
+    pub fn desde_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "outlined" | "outline" | "perfilado" | "contorno" => IconStyle::Outlined,
             "rounded" | "round" | "redondo" | "redondeado" => IconStyle::Rounded,
@@ -747,15 +747,15 @@ mod tests {
 
     #[test]
     fn test_icon_style_from_str() {
-        assert_eq!(IconStyle::from_str("filled"), IconStyle::Filled);
-        assert_eq!(IconStyle::from_str("outlined"), IconStyle::Outlined);
-        assert_eq!(IconStyle::from_str("perfilado"), IconStyle::Outlined);
-        assert_eq!(IconStyle::from_str("rounded"), IconStyle::Rounded);
-        assert_eq!(IconStyle::from_str("redondo"), IconStyle::Rounded);
-        assert_eq!(IconStyle::from_str("sharp"), IconStyle::Sharp);
-        assert_eq!(IconStyle::from_str("agudo"), IconStyle::Sharp);
-        assert_eq!(IconStyle::from_str("twotone"), IconStyle::TwoTone);
-        assert_eq!(IconStyle::from_str("dos_tonos"), IconStyle::TwoTone);
+        assert_eq!(IconStyle::desde_str("filled"), IconStyle::Filled);
+        assert_eq!(IconStyle::desde_str("outlined"), IconStyle::Outlined);
+        assert_eq!(IconStyle::desde_str("perfilado"), IconStyle::Outlined);
+        assert_eq!(IconStyle::desde_str("rounded"), IconStyle::Rounded);
+        assert_eq!(IconStyle::desde_str("redondo"), IconStyle::Rounded);
+        assert_eq!(IconStyle::desde_str("sharp"), IconStyle::Sharp);
+        assert_eq!(IconStyle::desde_str("agudo"), IconStyle::Sharp);
+        assert_eq!(IconStyle::desde_str("twotone"), IconStyle::TwoTone);
+        assert_eq!(IconStyle::desde_str("dos_tonos"), IconStyle::TwoTone);
     }
 
     #[test]

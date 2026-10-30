@@ -239,43 +239,37 @@ pub(crate) fn render_dynamic_list(
             serde_json::Value::String(s) => s.clone(),
             other => other.to_string(),
         };
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) {
-            if let serde_json::Value::Array(arr) = json {
-                for decl in prog {
-                    if let forja_syntax::ast::Declaracion::Funcion {
-                        nombre,
-                        parametros,
-                        cuerpo,
-                        ..
-                    } = decl
-                    {
-                        if nombre == &fn_name {
-                            if let Some(forja_syntax::ast::Declaracion::Retornar { valor }) =
-                                cuerpo.iter().find(|d| {
-                                    matches!(d, forja_syntax::ast::Declaracion::Retornar { .. })
-                                })
-                            {
-                                if let Some(expr) = valor {
-                                    for item in &arr {
-                                        let mut params = HashMap::new();
-                                        if let Some(param) = parametros.first() {
-                                            params.insert(
-                                                param.nombre.clone(),
-                                                ValorGUI::from_serde(item),
-                                            );
-                                        }
-                                        if let Some(layout) = crate::gui_nativa::expr_a_layout_item(
-                                            expr, &params, &store, &p,
-                                        ) {
-                                            widgets.push(crate::gui_nativa::layout_a_view(
-                                                &layout, data, &p, theme,
-                                            ));
-                                        }
-                                    }
+        if let Ok(serde_json::Value::Array(arr)) = serde_json::from_str::<serde_json::Value>(&s) {
+            for decl in prog {
+                if let forja_syntax::ast::Declaracion::Funcion {
+                    nombre,
+                    parametros,
+                    cuerpo,
+                    ..
+                } = decl
+                {
+                    if nombre == &fn_name {
+                        if let Some(forja_syntax::ast::Declaracion::Retornar {
+                            valor: Some(expr),
+                        }) = cuerpo
+                            .iter()
+                            .find(|d| matches!(d, forja_syntax::ast::Declaracion::Retornar { .. }))
+                        {
+                            for item in &arr {
+                                let mut params = HashMap::new();
+                                if let Some(param) = parametros.first() {
+                                    params.insert(param.nombre.clone(), ValorGUI::from_serde(item));
+                                }
+                                if let Some(layout) =
+                                    crate::gui_nativa::expr_a_layout_item(expr, &params, &store, &p)
+                                {
+                                    widgets.push(crate::gui_nativa::layout_a_view(
+                                        &layout, data, &p, theme,
+                                    ));
                                 }
                             }
-                            break;
                         }
+                        break;
                     }
                 }
             }
@@ -296,10 +290,13 @@ pub(crate) fn render_data_table(
     ordenable: &bool,
     col_orden: &usize,
     orden_asc: &bool,
-    _data: &mut AppStateNativo,
-    _prog: &[Declaracion],
-    theme: &MaterialTheme,
+    ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ContextoRender {
+        data: _data,
+        prog: _prog,
+        theme,
+    } = ctx;
     let scheme = &theme.scheme;
     let label_style = get_text_style(&theme.typography, "label_small");
     let fg_header: crate::Color = scheme.on_surface.into();

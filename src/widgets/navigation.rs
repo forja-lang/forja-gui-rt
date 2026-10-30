@@ -23,10 +23,9 @@ pub(crate) fn render_navigator(
     nav_type: &NavigatorType,
     anim: &NavigatorAnim,
     on_change: &Option<String>,
-    data: &mut AppStateNativo,
-    prog: &[Declaracion],
-    theme: &MaterialTheme,
+    ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ContextoRender { data, prog, theme } = ctx;
     let scheme = &theme.scheme;
     let p = prog.to_vec();
 
@@ -49,19 +48,18 @@ pub(crate) fn render_navigator(
         for decl in prog {
             if let forja_syntax::ast::Declaracion::Funcion { nombre, cuerpo, .. } = decl {
                 if nombre == fn_name {
-                    if let Some(forja_syntax::ast::Declaracion::Retornar { valor }) = cuerpo
-                        .iter()
-                        .find(|d| matches!(d, forja_syntax::ast::Declaracion::Retornar { .. }))
+                    if let Some(forja_syntax::ast::Declaracion::Retornar { valor: Some(expr) }) =
+                        cuerpo
+                            .iter()
+                            .find(|d| matches!(d, forja_syntax::ast::Declaracion::Retornar { .. }))
                     {
-                        if let Some(expr) = valor {
-                            match crate::gui_nativa::expr_a_layout(expr) {
-                                Some(layout) => {
-                                    deferred_layout = layout;
-                                    found = true;
-                                }
-                                None => {
-                                    eprintln!("[Navigator] content_fn '{}' retornar expr no convertible a layout", fn_name);
-                                }
+                        match crate::gui_nativa::expr_a_layout(expr) {
+                            Some(layout) => {
+                                deferred_layout = layout;
+                                found = true;
+                            }
+                            None => {
+                                eprintln!("[Navigator] content_fn '{}' retornar expr no convertible a layout", fn_name);
                             }
                         }
                     }
@@ -103,7 +101,7 @@ pub(crate) fn render_navigator(
                 content
             } else {
                 let overlay_alpha = 1.0 - eased;
-                let fade_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha as f64 * 0.5);
+                let fade_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha * 0.5);
                 Box::new(view::sized_box(content).background(Background::Color(fade_color)))
             }
         }
@@ -215,10 +213,10 @@ pub(crate) fn render_navigator(
             let sc = scheme.clone();
             let label_style = get_text_style(&theme.typography, "label_large");
             let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            for i in 0..screens.len() {
+            for (i, titulo) in nav_titles.iter().enumerate().take(screens.len()) {
                 let cv_inner = cv.clone();
                 let cb_inner = cb.clone();
-                let titulo = nav_titles[i].clone();
+                let titulo = titulo.clone();
                 let sel = i == idx;
                 let btn_idx = i;
                 let fg: crate::Color = if sel {
@@ -443,10 +441,13 @@ pub(crate) fn render_navigation_rail(
     variable_seleccion: Option<&str>,
     on_change: &str,
     extended: &bool,
-    _data: &mut AppStateNativo,
-    prog: &[Declaracion],
-    theme: &MaterialTheme,
+    ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ContextoRender {
+        data: _data,
+        prog,
+        theme,
+    } = ctx;
     let variable_seleccion: Option<String> = variable_seleccion.map(str::to_string);
     let scheme = &theme.scheme;
     let p = prog.to_vec();
@@ -546,10 +547,9 @@ pub(crate) fn render_navigation_drawer(
     on_change: &str,
     modal: &bool,
     visible: &str,
-    data: &mut AppStateNativo,
-    prog: &[Declaracion],
-    theme: &MaterialTheme,
+    ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ContextoRender { data, prog, theme } = ctx;
     let variable_seleccion: Option<String> = variable_seleccion.map(str::to_string);
     let scheme = &theme.scheme;
     let p = prog.to_vec();

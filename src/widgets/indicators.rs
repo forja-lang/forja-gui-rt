@@ -338,8 +338,8 @@ pub(crate) fn render_avatar_group(
     let overlap = 12.0;
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     let count = avatares.len().min(*max);
-    for i in 0..count {
-        let initials: String = avatares[i].chars().take(2).collect();
+    for (i, avatar_nombre) in avatares.iter().take(count).enumerate() {
+        let initials: String = avatar_nombre.chars().take(2).collect();
         let avatar = view::sized_box(
             view::label(initials)
                 .text_size(12.0)

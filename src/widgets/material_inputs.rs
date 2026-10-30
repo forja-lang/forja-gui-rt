@@ -34,10 +34,13 @@ pub(crate) fn render_text_field(
     placeholder: &str,
     variant: &TextFieldVariant,
     error: &str,
-    data: &mut AppStateNativo,
-    _prog: &[Declaracion],
-    theme: &MaterialTheme,
+    ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ContextoRender {
+        data,
+        prog: _prog,
+        theme,
+    } = ctx;
     let scheme = &theme.scheme;
     let var_name = variable.to_string();
     let val = data.leer(variable).to_string();

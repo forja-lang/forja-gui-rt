@@ -124,16 +124,25 @@ fn draw_pie_segment(
 
 /// Dibuja un arco grueso (anillo) usando BezPath con segmentos de línea.
 /// Útil para el gauge y donut avanzado.
-fn draw_thick_arc(
-    painter: &mut Painter<'_>,
+/// Arco de un gauge: centro, radio, grosor y barrido (radianes).
+struct Arco {
     cx: f64,
     cy: f64,
     radius: f64,
     thickness: f64,
     start_angle: f64,
     sweep_angle: f64,
-    brush: &Brush,
-) {
+}
+
+fn draw_thick_arc(painter: &mut Painter<'_>, arco: &Arco, brush: &Brush) {
+    let Arco {
+        cx,
+        cy,
+        radius,
+        thickness,
+        start_angle,
+        sweep_angle,
+    } = *arco;
     if sweep_angle.abs() < 0.001 {
         return;
     }
@@ -286,7 +295,7 @@ impl crate::Widget for LineChartWidget {
             for i in 0..=4 {
                 let y = padding + chart_h * (1.0 - i as f64 / 4.0);
                 let line = Line::new(Point::new(padding, y), Point::new(padding + chart_w, y));
-                painter.stroke(&line, &Stroke::new(1.0), &grid_brush).draw();
+                painter.stroke(line, &Stroke::new(1.0), &grid_brush).draw();
             }
         }
 
@@ -316,12 +325,12 @@ impl crate::Widget for LineChartWidget {
                 let x = padding + i as f64 * step_x;
                 let y = padding + chart_h - (point.value / max_val * chart_h);
                 let circle = Circle::new(Point::new(x, y), 4.0);
-                painter.fill(&circle, &point.color.to_brush()).draw();
+                painter.fill(circle, &point.color.to_brush()).draw();
                 // Borde blanco
                 let border = Circle::new(Point::new(x, y), 4.0);
                 painter
                     .stroke(
-                        &border,
+                        border,
                         &Stroke::new(1.5),
                         &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
                     )
@@ -443,7 +452,7 @@ impl crate::Widget for BarChartWidget {
         );
         painter
             .stroke(
-                &axis,
+                axis,
                 &Stroke::new(1.0),
                 &Brush::Solid(peniko::Color::from_rgba8(0xCC, 0xCC, 0xCC, 0xFF)),
             )
@@ -455,12 +464,12 @@ impl crate::Widget for BarChartWidget {
             let y = padding + chart_h - bar_height;
             let rect = Rect::new(x, y, x + bar_w, padding + chart_h);
 
-            painter.fill(&rect, &point.color.to_brush()).draw();
+            painter.fill(rect, &point.color.to_brush()).draw();
 
             // Borde sutil
             painter
                 .stroke(
-                    &rect,
+                    rect,
                     &Stroke::new(0.5),
                     &Brush::Solid(peniko::Color::from_rgba8(0x00, 0x00, 0x00, 0x20)),
                 )
@@ -590,13 +599,13 @@ impl crate::Widget for PieChartWidget {
             let inner_circle = Circle::new(Point::new(cx, cy), inner_r);
             painter
                 .fill(
-                    &inner_circle,
+                    inner_circle,
                     &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
                 )
                 .draw();
             painter
                 .stroke(
-                    &inner_circle,
+                    inner_circle,
                     &Stroke::new(1.0),
                     &Brush::Solid(peniko::Color::from_rgba8(0xDD, 0xDD, 0xDD, 0xFF)),
                 )
@@ -607,7 +616,7 @@ impl crate::Widget for PieChartWidget {
         let outer_circle = Circle::new(Point::new(cx, cy), radius);
         painter
             .stroke(
-                &outer_circle,
+                outer_circle,
                 &Stroke::new(1.0),
                 &Brush::Solid(peniko::Color::from_rgba8(0x40, 0x40, 0x40, 0x30)),
             )
@@ -732,12 +741,14 @@ impl crate::Widget for GaugeChartWidget {
         // Arco de fondo
         draw_thick_arc(
             painter,
-            cx,
-            cy,
-            radius,
-            thickness,
-            gauge_start,
-            gauge_sweep,
+            &Arco {
+                cx,
+                cy,
+                radius,
+                thickness,
+                start_angle: gauge_start,
+                sweep_angle: gauge_sweep,
+            },
             &Brush::Solid(peniko::Color::from_rgba8(0xE8, 0xE8, 0xE8, 0xFF)),
         );
 
@@ -745,12 +756,14 @@ impl crate::Widget for GaugeChartWidget {
         if progress > 0.0 {
             draw_thick_arc(
                 painter,
-                cx,
-                cy,
-                radius,
-                thickness,
-                gauge_start,
-                gauge_sweep * progress,
+                &Arco {
+                    cx,
+                    cy,
+                    radius,
+                    thickness,
+                    start_angle: gauge_start,
+                    sweep_angle: gauge_sweep * progress,
+                },
                 &color.to_brush(),
             );
         }
@@ -762,7 +775,7 @@ impl crate::Widget for GaugeChartWidget {
         let needle = Line::new(Point::new(cx, cy), needle_end);
         painter
             .stroke(
-                &needle,
+                needle,
                 &Stroke::new(2.5),
                 &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
             )
@@ -772,13 +785,13 @@ impl crate::Widget for GaugeChartWidget {
         let center = Circle::new(Point::new(cx, cy), 5.0);
         painter
             .fill(
-                &center,
+                center,
                 &Brush::Solid(peniko::Color::from_rgba8(0x33, 0x33, 0x33, 0xFF)),
             )
             .draw();
         painter
             .stroke(
-                &center,
+                center,
                 &Stroke::new(1.0),
                 &Brush::Solid(peniko::Color::from_rgba8(0xFF, 0xFF, 0xFF, 0xFF)),
             )
@@ -794,7 +807,7 @@ impl crate::Widget for GaugeChartWidget {
             let p2 = Point::new(cx + a.cos() * outer_tick, cy + a.sin() * outer_tick);
             painter
                 .stroke(
-                    &Line::new(p1, p2),
+                    Line::new(p1, p2),
                     &Stroke::new(1.5),
                     &Brush::Solid(peniko::Color::from_rgba8(0x66, 0x66, 0x66, 0xFF)),
                 )

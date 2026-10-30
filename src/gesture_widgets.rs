@@ -75,6 +75,12 @@ pub struct GestureTracker {
     pub threshold_crossed: bool,
 }
 
+impl Default for GestureTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GestureTracker {
     pub fn new() -> Self {
         let now = Instant::now();
@@ -225,13 +231,11 @@ impl Widget for SwipeWidget {
                     ctx.request_render();
                 }
             }
-            PointerEvent::Cancel(_) => {
-                if ctx.is_active() {
-                    ctx.release_pointer();
-                    self.tracker.end();
-                    self.offset_x = 0.0;
-                    ctx.request_render();
-                }
+            PointerEvent::Cancel(_) if ctx.is_active() => {
+                ctx.release_pointer();
+                self.tracker.end();
+                self.offset_x = 0.0;
+                ctx.request_render();
             }
             _ => {}
         }
@@ -363,14 +367,12 @@ impl Widget for PanWidget {
                     ctx.request_render();
                 }
             }
-            PointerEvent::Cancel(_) => {
-                if ctx.is_active() {
-                    ctx.release_pointer();
-                    self.tracker.end();
-                    self.offset_x = 0.0;
-                    self.offset_y = 0.0;
-                    ctx.request_render();
-                }
+            PointerEvent::Cancel(_) if ctx.is_active() => {
+                ctx.release_pointer();
+                self.tracker.end();
+                self.offset_x = 0.0;
+                self.offset_y = 0.0;
+                ctx.request_render();
             }
             _ => {}
         }
@@ -533,14 +535,12 @@ impl Widget for PullToRefreshWidget {
                     ctx.request_render();
                 }
             }
-            PointerEvent::Cancel(_) => {
-                if ctx.is_active() {
-                    ctx.release_pointer();
-                    self.tracker.end();
-                    self.pull_distance = 0.0;
-                    self.progress = 0.0;
-                    ctx.request_render();
-                }
+            PointerEvent::Cancel(_) if ctx.is_active() => {
+                ctx.release_pointer();
+                self.tracker.end();
+                self.pull_distance = 0.0;
+                self.progress = 0.0;
+                ctx.request_render();
             }
             _ => {}
         }

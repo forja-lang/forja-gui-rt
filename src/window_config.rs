@@ -73,10 +73,8 @@ pub fn extraer_config_ventana(decls: &[Declaracion]) -> WindowConfig {
     let mut cfg = WindowConfig::default();
 
     for decl in decls {
-        match decl {
-            // `ventana(...)` suelto a nivel superior
-            otra => aplicar(&mut cfg, otra),
-        }
+        // `ventana(...)` suelto a nivel superior
+        aplicar(&mut cfg, decl);
         if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
             if nombre == "main" {
                 for sentencia in cuerpo {

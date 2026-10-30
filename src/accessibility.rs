@@ -83,7 +83,7 @@ pub fn descripcion_accesible(tipo: &str, label: &str, valor: &str, estado: &str)
         _ => tipo,
     };
 
-    let mut desc = format!("{}", tipo_desc);
+    let mut desc = tipo_desc.to_string();
     if !label.is_empty() {
         desc.push_str(&format!(": {}", label));
     }

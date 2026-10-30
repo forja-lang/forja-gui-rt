@@ -56,7 +56,7 @@ impl QRWidget {
             }
         };
 
-        let module_count = code.width() as usize;
+        let module_count = code.width();
         // qrcode 0.14 usa into_colors() para obtener Vec<Color>
         // Donde Color::Dark = true (módulo negro), Color::Light = false
         let modules: Vec<bool> = code
@@ -88,7 +88,7 @@ impl QRWidget {
                     )
                     .unwrap_or_else(|_| qrcode::QrCode::new(b"error").unwrap())
                 });
-        self.module_count = code.width() as usize;
+        self.module_count = code.width();
         self.modules = code
             .into_colors()
             .iter()

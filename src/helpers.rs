@@ -537,19 +537,32 @@ pub(crate) fn ejecutar_callback_con_valor(
 // ─── Builders de botones Material Design 3 ──────────────────────────
 
 /// Crea un botón Material Design 3 unificado.
+/// Estado compartido que necesitan casi todos los widgets al renderizar.
+pub(crate) struct ContextoRender<'a> {
+    pub data: &'a mut AppStateNativo,
+    pub prog: &'a [Declaracion],
+    pub theme: &'a MaterialTheme,
+}
+
+/// Colores de un botón/chip Material 3.
+pub(crate) struct ColoresBoton {
+    pub fg: Color,
+    pub bg: Option<Color>,
+    pub border: Option<Color>,
+}
+
 /// Reemplaza las 5 variantes repetidas de MaterialButton.
 /// Nota: El builder de xilem usa type-state, así que cada branch
 /// construye y hace Box independientemente.
 pub(crate) fn make_material_button(
     texto: &str,
-    fg: Color,
-    bg: Option<Color>,
-    border: Option<Color>,
+    colores: ColoresBoton,
     label_style: TextStyle,
     cb: &str,
     prog: &[Declaracion],
     corner_radius: f64,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
+    let ColoresBoton { fg, bg, border } = colores;
     let label = view::label(texto.to_string())
         .text_size(label_style.font_size as f32)
         .weight(FontWeight::MEDIUM)
@@ -580,14 +593,12 @@ pub(crate) fn make_material_button(
 /// Reemplaza las 4 variantes repetidas de Chip.
 pub(crate) fn make_chip_button(
     texto: &str,
-    fg: Color,
-    bg: Option<Color>,
-    border: Option<Color>,
+    colores: ColoresBoton,
     label_style: TextStyle,
     cb: &str,
     prog: &[Declaracion],
     corner_radius: f64,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     // Chips usan la misma lógica que material buttons
-    make_material_button(texto, fg, bg, border, label_style, cb, prog, corner_radius)
+    make_material_button(texto, colores, label_style, cb, prog, corner_radius)
 }
