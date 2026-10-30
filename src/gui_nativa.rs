@@ -7406,6 +7406,9 @@ pub fn build_and_run_android(
     } else {
         theme.unwrap_or_else(MaterialTheme::light)
     };
+    // El closure de render se queda con `theme`; la copia sobrevive para el
+    // property set de los widgets nativos.
+    let tema_ventana = theme.clone();
 
     let mut state = AppStateNativo::new();
     inicializar_estado(&programa.declaraciones, &mut state);
@@ -7446,7 +7449,7 @@ pub fn build_and_run_android(
             .with_initial_inner_size(LogicalSize::new(initial_width, 800.0)),
     );
 
-    let app = app.with_default_properties(crate::theme_props::default_properties(&theme));
+    let app = app.with_default_properties(crate::theme_props::default_properties(&tema_ventana));
     let mut event_loop = EventLoop::with_user_event();
     event_loop.with_android_app(android_app);
 
