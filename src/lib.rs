@@ -76,7 +76,7 @@ pub mod chrome;
 pub mod window_config;
 // Medición del costo de armar cada frame (FORJA_GUI_PERF=1).
 pub mod perf;
-// Módulo de tema Material You — extraído al crate `forja-theme` (F3-T2).
+// Módulo de tema Material You — extraído al crate `forja-theme`.
 // Se re-exporta para preservar la API pública histórica `forja_gui_rt::theme::*`.
 pub use forja_theme as theme;
 // Módulo de iconos Material Design
