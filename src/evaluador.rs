@@ -1790,6 +1790,30 @@ fn evaluar_expresion(
             Ok(val)
         }
 
+        // ── Asignación compuesta ─────────────────────────────
+        Expresion::AsignacionCompuesta {
+            objetivo,
+            operador,
+            valor,
+        } => {
+            let viejo = evaluar_expresion(objetivo, ambito, store, declaraciones)?;
+            let der = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let nuevo = evaluar_binaria(viejo, operador, der)?;
+            match objetivo.as_ref() {
+                Expresion::Identificador { nombre, .. } => {
+                    ambito.asignar(nombre.clone(), nuevo.clone());
+                    store.set(nombre, nuevo.to_json_value());
+                }
+                Expresion::AccesoMiembro { objeto, miembro } => {
+                    let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
+                    let key = format!("{}_{}", obj.to_display(), miembro);
+                    store.set(&key, nuevo.to_json_value());
+                }
+                _ => return Err("Asignación compuesta por índice no soportada en GUI".to_string()),
+            }
+            Ok(nuevo)
+        }
+
         // ── Asignación a campo como expresión ────────────────
         Expresion::AsignacionCampo {
             objeto,
