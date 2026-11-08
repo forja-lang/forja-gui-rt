@@ -3,7 +3,7 @@
 // Ejecutar con:
 //     cargo run --example galeria_nativa -p forja-gui-rt
 //
-// El layout sale de `ejemplos/208_gui_galeria.fa`, el mismo archivo que ejecuta
+// El layout sale de `ejemplos/gui/208_gui_galeria.fa`, el mismo archivo que ejecuta
 // `forja ejecutar --native`. El diseño (Fluent / Liquid Glass, claro u oscuro)
 // lo decide el `tema_*` con el que arranca ese archivo.
 
@@ -18,7 +18,7 @@ fn main() -> Result<(), String> {
                 .map_err(|e| e.to_string())?
                 .into_boxed_str(),
         ),
-        None => include_str!("../../../ejemplos/208_gui_galeria.fa"),
+        None => include_str!("../../../ejemplos/gui/208_gui_galeria.fa"),
     };
     // Ayuda de verificación visual: FORJA_DISENO=fluent|liquid_glass|... cambia el
     // `tema_fluent(...)` del ejemplo sin tocar el archivo.

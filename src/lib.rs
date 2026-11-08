@@ -1,4 +1,5 @@
 // Forja GUI Runtime (forja-gui-rt)
+#![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
 extern crate self as forja_gui_rt;
 // Pre-compila xilem para que las apps GUI de Forja compilen en segundos.
 // Este crate se compila UNA SOLA VEZ; las apps generadas solo enlazan contra él.

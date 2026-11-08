@@ -8084,7 +8084,7 @@ mod tests_ejemplo_galeria {
     /// parser, ese widget desaparece del árbol y este test falla.
     #[test]
     fn galeria_extrae_tema_grid_y_tarjetas() {
-        let src = include_str!("../../../ejemplos/208_gui_galeria.fa");
+        let src = include_str!("../../../ejemplos/gui/208_gui_galeria.fa");
         let mut lexer = Lexer::new(src);
         let tokens = lexer.tokenize().expect("lex");
         let mut parser = Parser::new(tokens);
