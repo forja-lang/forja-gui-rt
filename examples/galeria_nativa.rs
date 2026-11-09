@@ -7,7 +7,7 @@
 // `forja ejecutar --native`. El diseño (Fluent / Liquid Glass, claro u oscuro)
 // lo decide el `tema_*` con el que arranca ese archivo.
 
-use forja_gui_rt::gui_nativa::{build_and_run, extraer_layout};
+use forja_gui_rt::gui_nativa::{construir_y_ejecutar, extraer_layout};
 
 fn main() -> Result<(), String> {
     // FORJA_FUENTE=ruta permite abrir otro .fa (diagnóstico).
@@ -28,15 +28,15 @@ fn main() -> Result<(), String> {
     } else {
         fuente.replace("tema_fluent(", &format!("tema_{}(", diseno))
     };
-    let mut lexer = forja_syntax::lexer::Lexer::new(&fuente);
+    let mut lexer = forja_syntax::lexer::Lexer::nuevo(&fuente);
     let tokens = lexer.tokenize().map_err(|e| format!("{:?}", e))?;
     let mut parser = forja_syntax::parser::Parser::nuevo(tokens);
-    let programa = parser.parse().map_err(|e| format!("{:?}", e))?;
+    let programa = parser.parsear().map_err(|e| format!("{:?}", e))?;
 
     // Chequeo previo sin ventana: si el layout sale vacío, no tiene sentido abrir.
-    let mut store = forja_gui_rt::VariableStore::new();
-    let layout = extraer_layout(&programa.declaraciones, &mut store);
+    let mut almacen = forja_gui_rt::VariableAlmacen::nuevo();
+    let layout = extraer_layout(&programa.declaraciones, &mut almacen);
     eprintln!("[ejemplo] raíz del layout: {:?}", layout);
 
-    build_and_run(&programa, None, None, true)
+    construir_y_ejecutar(&programa, None, None, true)
 }

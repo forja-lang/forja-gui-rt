@@ -47,7 +47,7 @@ pub fn material_role(tipo: &str) -> Role {
 // ─── Descripción accesible para widgets ─────────────────────────
 
 /// Genera una descripción textual accesible para un widget
-pub fn descripcion_accesible(tipo: &str, label: &str, valor: &str, estado: &str) -> String {
+pub fn descripcion_accesible(tipo: &str, etiqueta: &str, valor: &str, estado: &str) -> String {
     let tipo_desc = match tipo {
         "button" | "boton" => "Botón",
         "filled_button" => "Botón relleno",
@@ -84,8 +84,8 @@ pub fn descripcion_accesible(tipo: &str, label: &str, valor: &str, estado: &str)
     };
 
     let mut desc = tipo_desc.to_string();
-    if !label.is_empty() {
-        desc.push_str(&format!(": {}", label));
+    if !etiqueta.is_empty() {
+        desc.push_str(&format!(": {}", etiqueta));
     }
     if !valor.is_empty() {
         desc.push_str(&format!(". Valor: {}", valor));
@@ -188,16 +188,16 @@ pub struct AccessibilityManager {
     /// ID del widget con foco
     focused_id: Arc<AtomicU64>,
     /// Último widget anunciado (para evitar repeticiones)
-    last_announced: Arc<std::sync::RwLock<String>>,
+    ultimo_announced: Arc<std::sync::RwLock<String>>,
 }
 
 impl AccessibilityManager {
-    pub fn new() -> Self {
+    pub fn nuevo() -> Self {
         AccessibilityManager {
             enabled: true,
             announcements: Arc::new(std::sync::RwLock::new(Vec::new())),
             focused_id: Arc::new(AtomicU64::new(0)),
-            last_announced: Arc::new(std::sync::RwLock::new(String::new())),
+            ultimo_announced: Arc::new(std::sync::RwLock::new(String::new())),
         }
     }
 
@@ -207,7 +207,7 @@ impl AccessibilityManager {
             return;
         }
         // Verificar que no sea el mismo mensaje que el último
-        if let Ok(mut last) = self.last_announced.write() {
+        if let Ok(mut last) = self.ultimo_announced.write() {
             if *last == mensaje {
                 return; // Evita repeticiones
             }
@@ -241,7 +241,7 @@ impl AccessibilityManager {
     }
 
     /// Activa o desactiva el screen reader
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub fn fijar_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if enabled {
             println!("  ♿ [TalkBack] Activado");
@@ -252,23 +252,23 @@ impl AccessibilityManager {
 
     /// Alterna el estado del screen reader
     pub fn toggle(&mut self) {
-        self.set_enabled(!self.enabled);
+        self.fijar_enabled(!self.enabled);
     }
 
     /// 5.2: Establece el ID del widget con foco
-    pub fn set_focused(&self, widget_id: u64) {
+    pub fn fijar_focused(&self, widget_id: u64) {
         self.focused_id.store(widget_id, Ordering::SeqCst);
     }
 
     /// 5.2: Obtiene el ID del widget con foco
-    pub fn get_focused(&self) -> u64 {
+    pub fn obtener_focused(&self) -> u64 {
         self.focused_id.load(Ordering::SeqCst)
     }
 }
 
 impl Default for AccessibilityManager {
     fn default() -> Self {
-        Self::new()
+        Self::nuevo()
     }
 }
 
@@ -280,9 +280,9 @@ pub struct A11yData {
     /// Rol AccessKit
     pub role: Role,
     /// Nombre descriptivo del widget
-    pub label: String,
+    pub etiqueta: String,
     /// Valor actual (para inputs, sliders, etc.)
-    pub value: String,
+    pub valor: String,
     /// Descripción adicional
     pub description: String,
     /// Si el widget está deshabilitado
@@ -290,41 +290,41 @@ pub struct A11yData {
 }
 
 impl A11yData {
-    pub fn new(role: Role, label: &str) -> Self {
+    pub fn nuevo(role: Role, etiqueta: &str) -> Self {
         A11yData {
             role,
-            label: label.to_string(),
-            value: String::new(),
+            etiqueta: etiqueta.to_string(),
+            valor: String::new(),
             description: String::new(),
             disabled: false,
         }
     }
 
-    pub fn with_value(mut self, value: &str) -> Self {
-        self.value = value.to_string();
+    pub fn con_valor(mut self, valor: &str) -> Self {
+        self.valor = valor.to_string();
         self
     }
 
-    pub fn with_description(mut self, desc: &str) -> Self {
+    pub fn con_description(mut self, desc: &str) -> Self {
         self.description = desc.to_string();
         self
     }
 
-    pub fn with_disabled(mut self, disabled: bool) -> Self {
+    pub fn con_disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
     /// Genera un anuncio TalkBack completo
     pub fn to_announcement(&self) -> String {
-        let mut msg = self.label.clone();
-        if !self.value.is_empty() {
-            msg.push_str(&format!(". {}", self.value));
+        let mut mensaje = self.etiqueta.clone();
+        if !self.valor.is_empty() {
+            mensaje.push_str(&format!(". {}", self.valor));
         }
         if !self.description.is_empty() {
-            msg.push_str(&format!(". {}", self.description));
+            mensaje.push_str(&format!(". {}", self.description));
         }
-        msg
+        mensaje
     }
 }
 
@@ -337,15 +337,15 @@ pub mod atajos {
     /// Navegar al siguiente widget
     pub const NEXT_WIDGET: &str = "Tab";
     /// Navegar al widget anterior
-    pub const PREV_WIDGET: &str = "Shift+Tab";
+    pub const WIDGET_ANTERIOR: &str = "Shift+Tab";
     /// Activar widget enfocado
     pub const ACTIVATE: &str = "Enter";
     /// Cerrar diálogo/menú
     pub const CLOSE: &str = "Escape";
     /// Leer descripción del widget enfocado
-    pub const READ_FOCUSED: &str = "Ctrl+F";
+    pub const LEER_ENFOCADO: &str = "Ctrl+F";
     /// Leer título de la ventana
-    pub const READ_TITLE: &str = "Ctrl+T";
+    pub const LEER_TITULO: &str = "Ctrl+T";
 }
 
 // ─── Tests ──────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_anuncio() {
-        let mgr = AccessibilityManager::new();
+        let mgr = AccessibilityManager::nuevo();
         mgr.announce("Hola mundo");
         let cola = mgr.drain_announcements();
         assert_eq!(cola.len(), 1);
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_anuncio_no_repite() {
-        let mgr = AccessibilityManager::new();
+        let mgr = AccessibilityManager::nuevo();
         mgr.announce("Prueba");
         mgr.announce("Prueba"); // No debería añadirse
         let cola = mgr.drain_announcements();
@@ -389,12 +389,12 @@ mod tests {
 
     #[test]
     fn test_a11y_data() {
-        let data = A11yData::new(Role::Button, "Enviar")
-            .with_value("")
-            .with_description("Envía el formulario");
-        let msg = data.to_announcement();
-        assert!(msg.contains("Enviar"));
-        assert!(msg.contains("Envía el formulario"));
+        let data = A11yData::nuevo(Role::Button, "Enviar")
+            .con_valor("")
+            .con_description("Envía el formulario");
+        let mensaje = data.to_announcement();
+        assert!(mensaje.contains("Enviar"));
+        assert!(mensaje.contains("Envía el formulario"));
     }
 
     #[test]

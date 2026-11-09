@@ -26,7 +26,7 @@ use crate::{
 
 /// Resultado de un gesto reconocido
 #[derive(Debug, Clone)]
-pub enum GestureResult {
+pub enum GestureResultado {
     /// Swipe horizontal completado (direction: -1 left, +1 right, distance, velocity)
     Swipe {
         direction: f64,
@@ -56,18 +56,18 @@ pub struct GestureTracker {
     /// ¿Está capturando el puntero?
     pub active: bool,
     /// Posición inicial del gesto (coordenadas locales)
-    pub start_x: f64,
-    pub start_y: f64,
+    pub inicio_x: f64,
+    pub inicio_y: f64,
     /// Posición actual
-    pub current_x: f64,
-    pub current_y: f64,
+    pub actual_x: f64,
+    pub actual_y: f64,
     /// Posición del frame anterior (para velocidad)
-    pub last_x: f64,
-    pub last_y: f64,
+    pub ultimo_x: f64,
+    pub ultimo_y: f64,
     /// Tiempo de inicio
-    pub start_time: Instant,
+    pub inicio_time: Instant,
     /// Tiempo del frame anterior
-    pub last_time: Instant,
+    pub ultimo_time: Instant,
     /// Desplazamiento acumulado
     pub total_dx: f64,
     pub total_dy: f64,
@@ -77,40 +77,40 @@ pub struct GestureTracker {
 
 impl Default for GestureTracker {
     fn default() -> Self {
-        Self::new()
+        Self::nuevo()
     }
 }
 
 impl GestureTracker {
-    pub fn new() -> Self {
+    pub fn nuevo() -> Self {
         let now = Instant::now();
         Self {
             active: false,
-            start_x: 0.0,
-            start_y: 0.0,
-            current_x: 0.0,
-            current_y: 0.0,
-            last_x: 0.0,
-            last_y: 0.0,
-            start_time: now,
-            last_time: now,
+            inicio_x: 0.0,
+            inicio_y: 0.0,
+            actual_x: 0.0,
+            actual_y: 0.0,
+            ultimo_x: 0.0,
+            ultimo_y: 0.0,
+            inicio_time: now,
+            ultimo_time: now,
             total_dx: 0.0,
             total_dy: 0.0,
             threshold_crossed: false,
         }
     }
 
-    pub fn start(&mut self, x: f64, y: f64) {
+    pub fn inicio(&mut self, x: f64, y: f64) {
         let now = Instant::now();
         self.active = true;
-        self.start_x = x;
-        self.start_y = y;
-        self.current_x = x;
-        self.current_y = y;
-        self.last_x = x;
-        self.last_y = y;
-        self.start_time = now;
-        self.last_time = now;
+        self.inicio_x = x;
+        self.inicio_y = y;
+        self.actual_x = x;
+        self.actual_y = y;
+        self.ultimo_x = x;
+        self.ultimo_y = y;
+        self.inicio_time = now;
+        self.ultimo_time = now;
         self.total_dx = 0.0;
         self.total_dy = 0.0;
         self.threshold_crossed = false;
@@ -118,13 +118,13 @@ impl GestureTracker {
 
     pub fn update(&mut self, x: f64, y: f64) {
         let now = Instant::now();
-        self.last_x = self.current_x;
-        self.last_y = self.current_y;
-        self.current_x = x;
-        self.current_y = y;
-        self.last_time = now;
-        self.total_dx = self.current_x - self.start_x;
-        self.total_dy = self.current_y - self.start_y;
+        self.ultimo_x = self.actual_x;
+        self.ultimo_y = self.actual_y;
+        self.actual_x = x;
+        self.actual_y = y;
+        self.ultimo_time = now;
+        self.total_dx = self.actual_x - self.inicio_x;
+        self.total_dy = self.actual_y - self.inicio_y;
     }
 
     pub fn end(&mut self) {
@@ -133,13 +133,13 @@ impl GestureTracker {
 
     /// Velocidad actual en px/ms
     pub fn velocity(&self) -> f64 {
-        let dt = self.last_time.saturating_duration_since(self.start_time);
+        let dt = self.ultimo_time.saturating_duration_since(self.inicio_time);
         let ms = dt.as_secs_f64() * 1000.0;
         if ms <= 0.0 {
             return 0.0;
         }
-        let dx = self.current_x - self.start_x;
-        let dy = self.current_y - self.start_y;
+        let dx = self.actual_x - self.inicio_x;
+        let dy = self.actual_y - self.inicio_y;
         dx.hypot(dy) / ms
     }
 
@@ -156,7 +156,7 @@ impl GestureTracker {
 /// Widget wrapper que detecta swipe horizontal.
 /// Emite `GestureResult::Swipe` cuando se completa un swipe.
 pub struct SwipeWidget {
-    child: WidgetPod<dyn Widget>,
+    hijo: WidgetPod<dyn Widget>,
     tracker: GestureTracker,
     /// Distancia mínima en px para considerar swipe
     threshold: f64,
@@ -165,23 +165,23 @@ pub struct SwipeWidget {
 }
 
 impl SwipeWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: child.erased().to_pod(),
-            tracker: GestureTracker::new(),
+            hijo: hijo.erased().to_pod(),
+            tracker: GestureTracker::nuevo(),
             threshold: 50.0,
             offset_x: 0.0,
         }
     }
 
-    pub fn with_threshold(mut self, threshold: f64) -> Self {
+    pub fn con_threshold(mut self, threshold: f64) -> Self {
         self.threshold = threshold;
         self
     }
 }
 
 impl Widget for SwipeWidget {
-    type Action = GestureResult;
+    type Action = GestureResultado;
 
     fn on_pointer_event(
         &mut self,
@@ -197,7 +197,7 @@ impl Widget for SwipeWidget {
             }) => {
                 ctx.capture_pointer();
                 let pos = ctx.local_position(state.position);
-                self.tracker.start(pos.x, pos.y);
+                self.tracker.inicio(pos.x, pos.y);
                 self.offset_x = 0.0;
             }
             PointerEvent::Move(PointerUpdate { current, .. }) => {
@@ -220,7 +220,7 @@ impl Widget for SwipeWidget {
                     if self.tracker.total_dx.abs() > self.threshold {
                         let direction = self.tracker.total_dx.signum();
                         let velocity = self.tracker.velocity();
-                        ctx.submit_action::<GestureResult>(GestureResult::Swipe {
+                        ctx.submit_action::<GestureResultado>(GestureResultado::Swipe {
                             direction,
                             distance: self.tracker.total_dx.abs(),
                             velocity,
@@ -242,7 +242,7 @@ impl Widget for SwipeWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.hijo);
     }
 
     fn measure(
@@ -250,23 +250,23 @@ impl Widget for SwipeWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo).
-        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
         ctx.compute_length(
-            &mut self.child,
-            len_req.into(),
-            context_size,
+            &mut self.hijo,
+            longitud_req.into(),
+            context_tamano,
             axis,
-            cross_length,
+            cross_longitud,
         )
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        ctx.run_layout(&mut self.child, size);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        ctx.run_layout(&mut self.hijo, tamano);
+        ctx.place_child(&mut self.hijo, Point::ORIGIN);
     }
 
     fn paint(
@@ -286,12 +286,12 @@ impl Widget for SwipeWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.hijo.id()])
     }
 }
 
@@ -302,17 +302,17 @@ impl Widget for SwipeWidget {
 /// Widget wrapper que detecta pan/arrastre continuo.
 /// Emite `GestureResult::Pan` en CADA movimiento.
 pub struct PanWidget {
-    child: WidgetPod<dyn Widget>,
+    hijo: WidgetPod<dyn Widget>,
     tracker: GestureTracker,
     offset_x: f64,
     offset_y: f64,
 }
 
 impl PanWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: child.erased().to_pod(),
-            tracker: GestureTracker::new(),
+            hijo: hijo.erased().to_pod(),
+            tracker: GestureTracker::nuevo(),
             offset_x: 0.0,
             offset_y: 0.0,
         }
@@ -320,7 +320,7 @@ impl PanWidget {
 }
 
 impl Widget for PanWidget {
-    type Action = GestureResult;
+    type Action = GestureResultado;
 
     fn on_pointer_event(
         &mut self,
@@ -336,7 +336,7 @@ impl Widget for PanWidget {
             }) => {
                 ctx.capture_pointer();
                 let pos = ctx.local_position(state.position);
-                self.tracker.start(pos.x, pos.y);
+                self.tracker.inicio(pos.x, pos.y);
                 self.offset_x = 0.0;
                 self.offset_y = 0.0;
             }
@@ -346,9 +346,9 @@ impl Widget for PanWidget {
                     self.tracker.update(pos.x, pos.y);
                     self.offset_x = self.tracker.total_dx;
                     self.offset_y = self.tracker.total_dy;
-                    ctx.submit_action::<GestureResult>(GestureResult::Pan {
-                        dx: self.tracker.current_x - self.tracker.last_x,
-                        dy: self.tracker.current_y - self.tracker.last_y,
+                    ctx.submit_action::<GestureResultado>(GestureResultado::Pan {
+                        dx: self.tracker.actual_x - self.tracker.ultimo_x,
+                        dy: self.tracker.actual_y - self.tracker.ultimo_y,
                         total_dx: self.tracker.total_dx,
                         total_dy: self.tracker.total_dy,
                     });
@@ -379,7 +379,7 @@ impl Widget for PanWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.hijo);
     }
 
     fn measure(
@@ -387,23 +387,23 @@ impl Widget for PanWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo).
-        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
         ctx.compute_length(
-            &mut self.child,
-            len_req.into(),
-            context_size,
+            &mut self.hijo,
+            longitud_req.into(),
+            context_tamano,
             axis,
-            cross_length,
+            cross_longitud,
         )
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        ctx.run_layout(&mut self.child, size);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        ctx.run_layout(&mut self.hijo, tamano);
+        ctx.place_child(&mut self.hijo, Point::ORIGIN);
     }
 
     fn paint(
@@ -423,12 +423,12 @@ impl Widget for PanWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.hijo.id()])
     }
 }
 
@@ -438,7 +438,7 @@ impl Widget for PanWidget {
 
 /// Widget que implementa Pull-to-Refresh: tirar hacia abajo para recargar.
 pub struct PullToRefreshWidget {
-    child: WidgetPod<dyn Widget>,
+    hijo: WidgetPod<dyn Widget>,
     tracker: GestureTracker,
     /// Cuánto se ha tirado hacia abajo
     pull_distance: f64,
@@ -451,10 +451,10 @@ pub struct PullToRefreshWidget {
 }
 
 impl PullToRefreshWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: child.erased().to_pod(),
-            tracker: GestureTracker::new(),
+            hijo: hijo.erased().to_pod(),
+            tracker: GestureTracker::nuevo(),
             pull_distance: 0.0,
             threshold: 80.0,
             refreshing: false,
@@ -462,13 +462,13 @@ impl PullToRefreshWidget {
         }
     }
 
-    pub fn with_threshold(mut self, threshold: f64) -> Self {
+    pub fn con_threshold(mut self, threshold: f64) -> Self {
         self.threshold = threshold;
         self
     }
 
     /// Marcar como refrescando (llamar cuando se inicia la recarga)
-    pub fn set_refreshing(&mut self, refreshing: bool) {
+    pub fn fijar_refreshing(&mut self, refreshing: bool) {
         self.refreshing = refreshing;
         if !refreshing {
             self.progress = 0.0;
@@ -478,7 +478,7 @@ impl PullToRefreshWidget {
 }
 
 impl Widget for PullToRefreshWidget {
-    type Action = GestureResult;
+    type Action = GestureResultado;
 
     fn on_pointer_event(
         &mut self,
@@ -498,7 +498,7 @@ impl Widget for PullToRefreshWidget {
             }) => {
                 ctx.capture_pointer();
                 let pos = ctx.local_position(state.position);
-                self.tracker.start(pos.x, pos.y);
+                self.tracker.inicio(pos.x, pos.y);
                 self.pull_distance = 0.0;
                 self.progress = 0.0;
             }
@@ -526,7 +526,7 @@ impl Widget for PullToRefreshWidget {
                     self.tracker.end();
                     if self.pull_distance >= self.threshold && !self.refreshing {
                         self.refreshing = true;
-                        ctx.submit_action::<GestureResult>(GestureResult::PullToRefresh {
+                        ctx.submit_action::<GestureResultado>(GestureResultado::PullToRefresh {
                             distance: self.pull_distance,
                         });
                     }
@@ -547,7 +547,7 @@ impl Widget for PullToRefreshWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.hijo);
     }
 
     fn measure(
@@ -555,23 +555,23 @@ impl Widget for PullToRefreshWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo).
-        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
         ctx.compute_length(
-            &mut self.child,
-            len_req.into(),
-            context_size,
+            &mut self.hijo,
+            longitud_req.into(),
+            context_tamano,
             axis,
-            cross_length,
+            cross_longitud,
         )
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        ctx.run_layout(&mut self.child, size);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        ctx.run_layout(&mut self.hijo, tamano);
+        ctx.place_child(&mut self.hijo, Point::ORIGIN);
     }
 
     fn paint(
@@ -580,32 +580,32 @@ impl Widget for PullToRefreshWidget {
         _props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        let size = ctx.border_box().size();
+        let tamano = ctx.border_box().size();
 
         // Pintar indicador de pull-to-refresh si hay progreso
         if self.progress > 0.0 || self.refreshing {
-            let indicator_height = 40.0;
+            let indicator_alto = 40.0;
             let indicator_y = if self.refreshing {
                 // Mostrar spinner en la parte superior
-                -indicator_height
+                -indicator_alto
             } else {
                 // Mostrar indicador según el progreso
-                -indicator_height + (self.progress * indicator_height)
+                -indicator_alto + (self.progress * indicator_alto)
             };
 
             // Rectángulo de fondo del indicador
-            let bg_rect = Rect::new(0.0, indicator_y, size.width, indicator_y + indicator_height);
+            let bg_rect = Rect::new(0.0, indicator_y, tamano.width, indicator_y + indicator_alto);
             let bg_color = AlphaColor::from_rgba8(200, 200, 200, 180);
             painter.fill_rect(bg_rect, bg_color);
 
             // Barra de progreso (mostrar avance hacia el umbral)
             if !self.refreshing && self.progress > 0.0 {
-                let bar_width = size.width * self.progress;
+                let bar_ancho = tamano.width * self.progress;
                 let bar_rect = Rect::new(
                     0.0,
-                    indicator_y + indicator_height - 4.0,
-                    bar_width,
-                    indicator_y + indicator_height,
+                    indicator_y + indicator_alto - 4.0,
+                    bar_ancho,
+                    indicator_y + indicator_alto,
                 );
                 let bar_color = AlphaColor::from_rgba8(100, 150, 255, 220);
                 painter.fill_rect(bar_rect, bar_color);
@@ -621,12 +621,12 @@ impl Widget for PullToRefreshWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.hijo.id()])
     }
 }
 
@@ -635,26 +635,26 @@ impl Widget for PullToRefreshWidget {
 // ═══════════════════════════════════════════════════════════════════
 
 impl SwipeWidget {
-    pub fn child_mut<'a>(
+    pub fn hijo_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {
-        this.ctx.get_mut(&mut this.widget.child)
+        this.ctx.get_mut(&mut this.widget.hijo)
     }
 }
 
 impl PanWidget {
-    pub fn child_mut<'a>(
+    pub fn hijo_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {
-        this.ctx.get_mut(&mut this.widget.child)
+        this.ctx.get_mut(&mut this.widget.hijo)
     }
 }
 
 impl PullToRefreshWidget {
-    pub fn child_mut<'a>(
+    pub fn hijo_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {
-        this.ctx.get_mut(&mut this.widget.child)
+        this.ctx.get_mut(&mut this.widget.hijo)
     }
 }
 
@@ -670,7 +670,7 @@ pub struct MultiTouchState {
 }
 
 impl MultiTouchState {
-    pub fn new() -> Self {
+    pub fn nuevo() -> Self {
         Self {
             active_pointers: HashMap::new(),
         }
@@ -688,38 +688,38 @@ impl MultiTouchState {
 
     /// Detectar gesto de pellizco (pinch). Retorna factor de escala relativo.
     /// Se llama en cada Move, comparando con el frame anterior.
-    pub fn detect_pinch(&self, prev: &Self) -> Option<f64> {
-        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 {
+    pub fn detect_pinch(&self, anterior: &Self) -> Option<f64> {
+        if self.active_pointers.len() < 2 || anterior.active_pointers.len() < 2 {
             return None;
         }
 
-        let current_dists = self.pointer_distances();
-        let prev_dists = prev.pointer_distances();
+        let actual_dists = self.pointer_distances();
+        let anterior_dists = anterior.pointer_distances();
 
-        if current_dists.is_empty() || prev_dists.is_empty() {
+        if actual_dists.is_empty() || anterior_dists.is_empty() {
             return None;
         }
 
-        let curr_dist = current_dists[0];
-        let prev_dist = prev_dists[0];
+        let curr_dist = actual_dists[0];
+        let anterior_dist = anterior_dists[0];
 
-        if prev_dist > 0.0 {
-            Some(curr_dist / prev_dist)
+        if anterior_dist > 0.0 {
+            Some(curr_dist / anterior_dist)
         } else {
             None
         }
     }
 
     /// Detectar gesto de rotación. Retorna ángulo en radianes.
-    pub fn detect_rotate(&self, prev: &Self) -> Option<f64> {
-        if self.active_pointers.len() < 2 || prev.active_pointers.len() < 2 {
+    pub fn detect_rotate(&self, anterior: &Self) -> Option<f64> {
+        if self.active_pointers.len() < 2 || anterior.active_pointers.len() < 2 {
             return None;
         }
 
         let curr_angle = self.angle_between_pointers();
-        let prev_angle = prev.angle_between_pointers();
+        let anterior_angle = anterior.angle_between_pointers();
 
-        if let (Some(ca), Some(pa)) = (curr_angle, prev_angle) {
+        if let (Some(ca), Some(pa)) = (curr_angle, anterior_angle) {
             Some(ca - pa)
         } else {
             None
@@ -753,15 +753,15 @@ impl MultiTouchState {
 
     /// Centroide de todos los puntos activos
     pub fn centroid(&self) -> Option<Point> {
-        let count = self.active_pointers.len();
-        if count == 0 {
+        let cantidad = self.active_pointers.len();
+        if cantidad == 0 {
             return None;
         }
         let sum: Point = self
             .active_pointers
             .values()
             .fold(Point::ZERO, |acc, p| Point::new(acc.x + p.x, acc.y + p.y));
-        Some(Point::new(sum.x / count as f64, sum.y / count as f64))
+        Some(Point::new(sum.x / cantidad as f64, sum.y / cantidad as f64))
     }
 }
 
@@ -771,37 +771,37 @@ impl MultiTouchState {
 
 /// Widget que aplica zoom por gesto de pellizco (pinch) a su hijo
 pub struct PinchZoomWidget {
-    child: WidgetPod<dyn Widget>,
+    hijo: WidgetPod<dyn Widget>,
     multi_touch: MultiTouchState,
-    prev_multi_touch: MultiTouchState,
+    anterior_multi_touch: MultiTouchState,
     scale: f64,
     min_scale: f64,
     max_scale: f64,
 }
 
 impl PinchZoomWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: child.erased().to_pod(),
-            multi_touch: MultiTouchState::new(),
-            prev_multi_touch: MultiTouchState::new(),
+            hijo: hijo.erased().to_pod(),
+            multi_touch: MultiTouchState::nuevo(),
+            anterior_multi_touch: MultiTouchState::nuevo(),
             scale: 1.0,
             min_scale: 0.5,
             max_scale: 3.0,
         }
     }
 
-    pub fn with_min_scale(mut self, min: f64) -> Self {
+    pub fn con_min_scale(mut self, min: f64) -> Self {
         self.min_scale = min;
         self
     }
 
-    pub fn with_max_scale(mut self, max: f64) -> Self {
+    pub fn con_max_scale(mut self, max: f64) -> Self {
         self.max_scale = max;
         self
     }
 
-    fn get_pointer_id(event: &PointerEvent) -> Option<PointerId> {
+    fn obtener_pointer_id(event: &PointerEvent) -> Option<PointerId> {
         match event {
             PointerEvent::Down(btn) => btn.pointer.pointer_id,
             PointerEvent::Move(upd) => upd.pointer.pointer_id,
@@ -811,7 +811,7 @@ impl PinchZoomWidget {
         }
     }
 
-    fn get_position(event: &PointerEvent) -> Option<Point> {
+    fn obtener_position(event: &PointerEvent) -> Option<Point> {
         match event {
             PointerEvent::Down(btn) => Some(Point::new(btn.state.position.x, btn.state.position.y)),
             PointerEvent::Move(upd) => {
@@ -832,28 +832,28 @@ impl Widget for PinchZoomWidget {
         _props: &mut PropertiesMut<'_>,
         event: &PointerEvent,
     ) {
-        let id = Self::get_pointer_id(event);
-        let pos = Self::get_position(event);
+        let id = Self::obtener_pointer_id(event);
+        let pos = Self::obtener_position(event);
 
         match event {
             PointerEvent::Down(_) => {
                 if let (Some(id), Some(pos)) = (id, pos) {
-                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.anterior_multi_touch = self.multi_touch.clone();
                     self.multi_touch.update(id, pos);
                 }
             }
             PointerEvent::Move { .. } => {
                 if let (Some(id), Some(pos)) = (id, pos) {
-                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.anterior_multi_touch = self.multi_touch.clone();
                     self.multi_touch.update(id, pos);
 
                     if let Some(scale_factor) =
-                        self.multi_touch.detect_pinch(&self.prev_multi_touch)
+                        self.multi_touch.detect_pinch(&self.anterior_multi_touch)
                     {
                         self.scale =
                             (self.scale * scale_factor).clamp(self.min_scale, self.max_scale);
-                        let size = ctx.border_box().size();
-                        let center = Point::new(size.width / 2.0, size.height / 2.0);
+                        let tamano = ctx.border_box().size();
+                        let center = Point::new(tamano.width / 2.0, tamano.height / 2.0);
                         let transform = Affine::translate(center.to_vec2())
                             .then_scale(self.scale)
                             .then_translate(-center.to_vec2());
@@ -877,7 +877,7 @@ impl Widget for PinchZoomWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.hijo);
     }
 
     fn measure(
@@ -885,23 +885,23 @@ impl Widget for PinchZoomWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo).
-        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
         ctx.compute_length(
-            &mut self.child,
-            len_req.into(),
-            context_size,
+            &mut self.hijo,
+            longitud_req.into(),
+            context_tamano,
             axis,
-            cross_length,
+            cross_longitud,
         )
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        ctx.run_layout(&mut self.child, size);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        ctx.run_layout(&mut self.hijo, tamano);
+        ctx.place_child(&mut self.hijo, Point::ORIGIN);
     }
 
     fn paint(
@@ -921,12 +921,12 @@ impl Widget for PinchZoomWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut crate::accesskit::Node,
+        _nodo: &mut crate::accesskit::Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.hijo.id()])
     }
 }
 
@@ -936,28 +936,28 @@ impl Widget for PinchZoomWidget {
 
 /// Widget que aplica rotación por gesto multi-touch a su hijo
 pub struct RotateWidget {
-    child: WidgetPod<dyn Widget>,
+    hijo: WidgetPod<dyn Widget>,
     multi_touch: MultiTouchState,
-    prev_multi_touch: MultiTouchState,
+    anterior_multi_touch: MultiTouchState,
     angle: f64,
 }
 
 impl RotateWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: child.erased().to_pod(),
-            multi_touch: MultiTouchState::new(),
-            prev_multi_touch: MultiTouchState::new(),
+            hijo: hijo.erased().to_pod(),
+            multi_touch: MultiTouchState::nuevo(),
+            anterior_multi_touch: MultiTouchState::nuevo(),
             angle: 0.0,
         }
     }
 
-    fn get_pointer_id(event: &PointerEvent) -> Option<PointerId> {
-        PinchZoomWidget::get_pointer_id(event)
+    fn obtener_pointer_id(event: &PointerEvent) -> Option<PointerId> {
+        PinchZoomWidget::obtener_pointer_id(event)
     }
 
-    fn get_position(event: &PointerEvent) -> Option<Point> {
-        PinchZoomWidget::get_position(event)
+    fn obtener_position(event: &PointerEvent) -> Option<Point> {
+        PinchZoomWidget::obtener_position(event)
     }
 }
 
@@ -970,25 +970,26 @@ impl Widget for RotateWidget {
         _props: &mut PropertiesMut<'_>,
         event: &PointerEvent,
     ) {
-        let id = Self::get_pointer_id(event);
-        let pos = Self::get_position(event);
+        let id = Self::obtener_pointer_id(event);
+        let pos = Self::obtener_position(event);
 
         match event {
             PointerEvent::Down(_) => {
                 if let (Some(id), Some(pos)) = (id, pos) {
-                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.anterior_multi_touch = self.multi_touch.clone();
                     self.multi_touch.update(id, pos);
                 }
             }
             PointerEvent::Move { .. } => {
                 if let (Some(id), Some(pos)) = (id, pos) {
-                    self.prev_multi_touch = self.multi_touch.clone();
+                    self.anterior_multi_touch = self.multi_touch.clone();
                     self.multi_touch.update(id, pos);
 
-                    if let Some(delta) = self.multi_touch.detect_rotate(&self.prev_multi_touch) {
+                    if let Some(delta) = self.multi_touch.detect_rotate(&self.anterior_multi_touch)
+                    {
                         self.angle += delta;
-                        let size = ctx.border_box().size();
-                        let center = Point::new(size.width / 2.0, size.height / 2.0);
+                        let tamano = ctx.border_box().size();
+                        let center = Point::new(tamano.width / 2.0, tamano.height / 2.0);
                         let transform = Affine::translate(center.to_vec2())
                             .then_rotate(self.angle)
                             .then_translate(-center.to_vec2());
@@ -1008,7 +1009,7 @@ impl Widget for RotateWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        ctx.register_child(&mut self.child);
+        ctx.register_child(&mut self.hijo);
     }
 
     fn measure(
@@ -1016,23 +1017,23 @@ impl Widget for RotateWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo).
-        let context_size = LayoutSize::maybe(axis.cross(), cross_length);
+        let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
         ctx.compute_length(
-            &mut self.child,
-            len_req.into(),
-            context_size,
+            &mut self.hijo,
+            longitud_req.into(),
+            context_tamano,
             axis,
-            cross_length,
+            cross_longitud,
         )
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        ctx.run_layout(&mut self.child, size);
-        ctx.place_child(&mut self.child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        ctx.run_layout(&mut self.hijo, tamano);
+        ctx.place_child(&mut self.hijo, Point::ORIGIN);
     }
 
     fn paint(
@@ -1052,12 +1053,12 @@ impl Widget for RotateWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut crate::accesskit::Node,
+        _nodo: &mut crate::accesskit::Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        ChildrenIds::from_slice(&[self.child.id()])
+        ChildrenIds::from_slice(&[self.hijo.id()])
     }
 }
 
@@ -1066,17 +1067,17 @@ impl Widget for RotateWidget {
 // ═══════════════════════════════════════════════════════════════════
 
 impl PinchZoomWidget {
-    pub fn child_mut<'a>(
+    pub fn hijo_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {
-        this.ctx.get_mut(&mut this.widget.child)
+        this.ctx.get_mut(&mut this.widget.hijo)
     }
 }
 
 impl RotateWidget {
-    pub fn child_mut<'a>(
+    pub fn hijo_mut<'a>(
         this: &'a mut crate::WidgetMut<'_, Self>,
     ) -> crate::WidgetMut<'a, dyn Widget> {
-        this.ctx.get_mut(&mut this.widget.child)
+        this.ctx.get_mut(&mut this.widget.hijo)
     }
 }

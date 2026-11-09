@@ -9,7 +9,7 @@
 // los widgets que no tocamos siguen funcionando igual.
 
 use crate::layout::AsUnit as _;
-use crate::theme::{MaterialTheme, RgbColor, ShapeFamily};
+use crate::theme::{FormaFamily, MaterialTheme, RgbColor};
 use xilem::masonry::core::{DefaultProperties, PropertyStack, Selector};
 use xilem::masonry::properties::{
     Background, BorderColor, BorderWidth, CaretColor, CheckmarkColor, ContentColor, CornerRadius,
@@ -39,7 +39,7 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     let (texto, texto_suave, borde, acento, relleno) = paleta(theme);
     let s = &theme.scheme;
     let superficie: Color = s.surface.into();
-    let radio_control = theme.shapes.for_family(ShapeFamily::TextField);
+    let radio_control = theme.shapes.for_family(FormaFamily::TextField);
 
     // Label y texto en general
     props.insert::<Label, _>(ContentColor::new(texto));
@@ -64,26 +64,26 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     props.insert::<Button, _>(BorderColor { color: borde });
     props.insert::<Button, _>(BorderWidth { width: 1.0.px() });
     props.insert::<Button, _>(CornerRadius {
-        radius: theme.shapes.for_family(ShapeFamily::Button).px(),
+        radius: theme.shapes.for_family(FormaFamily::Button).px(),
     });
 
     // Estados de interacción: Fluent aclara el fondo al pasar el mouse y lo
     // oscurece al presionar (antes los controles no daban ninguna señal).
     let claro = RgbColor(255, 255, 255);
-    let mut stack_boton = PropertyStack::new();
-    stack_boton.push_layer(
+    let mut pila_boton = PropertyStack::new();
+    pila_boton.push_layer(
         Selector::new().with_hovered(true),
-        Background::Color(claro.with_alpha(if theme.is_dark { 0.09 } else { 0.6 })),
+        Background::Color(claro.con_alpha(if theme.es_dark { 0.09 } else { 0.6 })),
     );
-    stack_boton.push_layer(
+    pila_boton.push_layer(
         Selector::new().with_active(true),
-        Background::Color(claro.with_alpha(if theme.is_dark { 0.04 } else { 0.4 })),
+        Background::Color(claro.con_alpha(if theme.es_dark { 0.04 } else { 0.4 })),
     );
-    stack_boton.push_layer(
+    pila_boton.push_layer(
         Selector::new().with_focused(true),
         BorderColor { color: acento },
     );
-    props.insert_stack::<Button>(stack_boton);
+    props.insert_stack::<Button>(pila_boton);
 
     // Checkbox
     props.insert::<Checkbox, _>(Background::Color(superficie));
@@ -94,16 +94,16 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     });
 
     // Foco en campos de texto: subrayado de acento (Fluent pinta 2px abajo).
-    let mut stack_campo = PropertyStack::new();
-    stack_campo.push_layer(
+    let mut pila_campo = PropertyStack::new();
+    pila_campo.push_layer(
         Selector::new().with_focused(true),
         BorderColor { color: acento },
     );
-    stack_campo.push_layer(
+    pila_campo.push_layer(
         Selector::new().with_focused(true),
         BorderWidth { width: 2.0.px() },
     );
-    props.insert_stack::<TextInput>(stack_campo);
+    props.insert_stack::<TextInput>(pila_campo);
 
     // RadioButton
     props.insert::<RadioButton, _>(Background::Color(superficie));
@@ -115,13 +115,13 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     props.insert::<Switch, _>(Background::Color(relleno));
     props.insert::<Switch, _>(BorderColor { color: borde });
     props.insert::<Switch, _>(ThumbColor(Color::WHITE));
-    let mut stack_switch = PropertyStack::new();
-    stack_switch.push_layer(Selector::classes(&["#toggled"]), Background::Color(acento));
-    stack_switch.push_layer(
+    let mut pila_switch = PropertyStack::new();
+    pila_switch.push_layer(Selector::classes(&["#toggled"]), Background::Color(acento));
+    pila_switch.push_layer(
         Selector::classes(&["#toggled"]),
         BorderColor { color: acento },
     );
-    props.insert_stack::<Switch>(stack_switch);
+    props.insert_stack::<Switch>(pila_switch);
 
     // Slider
     props.insert::<Slider, _>(TrackColor {

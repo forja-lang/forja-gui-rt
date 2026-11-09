@@ -103,7 +103,7 @@ pub(crate) fn extraer_array_arrays_strings(args: &[Expresion], index: usize) -> 
         .unwrap_or_default()
 }
 
-pub(crate) fn extraer_nav_items(args: &[Expresion], index: usize) -> Vec<NavItem> {
+pub(crate) fn extraer_nav_items(args: &[Expresion], index: usize) -> Vec<NavElemento> {
     args.get(index)
         .and_then(|a| match a {
             Expresion::Arreglo(exprs) => Some(
@@ -120,7 +120,7 @@ pub(crate) fn extraer_nav_items(args: &[Expresion], index: usize) -> Vec<NavItem
                                     _ => String::new(),
                                 })
                                 .unwrap_or_default();
-                            let label = argumentos
+                            let etiqueta = argumentos
                                 .get(1)
                                 .map(|a| match a {
                                     Expresion::LiteralTexto(s) => s.clone(),
@@ -134,9 +134,9 @@ pub(crate) fn extraer_nav_items(args: &[Expresion], index: usize) -> Vec<NavItem
                                     _ => None,
                                 })
                                 .unwrap_or(None);
-                            Some(NavItem {
+                            Some(NavElemento {
                                 icono,
-                                label,
+                                etiqueta,
                                 badge,
                             })
                         }
@@ -253,7 +253,7 @@ pub(crate) fn extraer_icon_actions(args: &[Expresion], index: usize) -> Vec<Icon
                     .collect::<Vec<_>>(),
             ),
             _ => {
-                let result = args.get(index).and_then(|e| match e {
+                let resultado = args.get(index).and_then(|e| match e {
                     Expresion::LlamadaFuncion { nombre, argumentos }
                         if nombre == "boton_icono" || nombre == "icon_button" =>
                     {
@@ -279,7 +279,7 @@ pub(crate) fn extraer_icon_actions(args: &[Expresion], index: usize) -> Vec<Icon
                     }
                     _ => None,
                 });
-                result
+                resultado
             }
         })
         .unwrap_or_default()
@@ -362,14 +362,14 @@ pub(crate) fn color_de_rol(scheme: &ColorScheme, role: &str) -> Option<RgbColor>
     Some(color)
 }
 
-pub(crate) fn get_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
+pub(crate) fn obtener_color_role(scheme: &ColorScheme, role: &str) -> RgbColor {
     color_de_rol(scheme, role).unwrap_or(scheme.primary)
 }
 
 /// Convierte un color role (string) a Rgba para usar con chart_widgets
 pub(crate) fn color_role_to_rgba(scheme: &ColorScheme, role: &str) -> Rgba {
-    let rgb = get_color_role(scheme, role);
-    Rgba::new(rgb.0, rgb.1, rgb.2, 255)
+    let rgb = obtener_color_role(scheme, role);
+    Rgba::nuevo(rgb.0, rgb.1, rgb.2, 255)
 }
 
 /// Devuelve un color según el signo del texto del monto:
@@ -386,7 +386,7 @@ pub(crate) fn color_segun_monto(scheme: &ColorScheme, texto: &str) -> Color {
 }
 
 /// Obtiene el TextStyle de la escala tipográfica por nombre de estilo
-pub(crate) fn get_text_style(typography: &TypeScale, style: &str) -> TextStyle {
+pub(crate) fn obtener_texto_style(typography: &TipoScale, style: &str) -> TextoStyle {
     match style {
         "display_large" => typography.display_large,
         "display_medium" => typography.display_medium,
@@ -400,15 +400,15 @@ pub(crate) fn get_text_style(typography: &TypeScale, style: &str) -> TextStyle {
         "body_large" => typography.body_large,
         "body_medium" => typography.body_medium,
         "body_small" => typography.body_small,
-        "label_large" => typography.label_large,
-        "label_medium" => typography.label_medium,
-        "label_small" => typography.label_small,
+        "label_large" => typography.etiqueta_large,
+        "label_medium" => typography.etiqueta_medium,
+        "label_small" => typography.etiqueta_small,
         _ => typography.body_medium,
     }
 }
 
 /// Obtiene el radio de forma del sistema por nombre de familia
-pub(crate) fn get_shape_radius(shapes: &ShapeSystem, family: &str) -> f64 {
+pub(crate) fn obtener_forma_radius(shapes: &FormaSystem, family: &str) -> f64 {
     match family {
         "none" => shapes.none,
         "extra_small" | "extrasmall" => shapes.extra_small,
@@ -417,9 +417,9 @@ pub(crate) fn get_shape_radius(shapes: &ShapeSystem, family: &str) -> f64 {
         "large" => shapes.large,
         "extra_large" | "extralarge" => shapes.extra_large,
         "full" => shapes.full,
-        "button" => shapes.for_family(ShapeFamily::Button),
-        "surface" => shapes.for_family(ShapeFamily::Surface),
-        "container" => shapes.for_family(ShapeFamily::Container),
+        "button" => shapes.for_family(FormaFamily::Button),
+        "surface" => shapes.for_family(FormaFamily::Surface),
+        "container" => shapes.for_family(FormaFamily::Container),
         _ => shapes.small,
     }
 }
@@ -427,7 +427,7 @@ pub(crate) fn get_shape_radius(shapes: &ShapeSystem, family: &str) -> f64 {
 // ─── Helpers de alineación ─────────────────────────────────────────
 
 /// Parsea un string de alineación a MainAxisAlignment de Xilem
-pub(crate) fn parse_alignment(s: &str) -> MainAxisAlignment {
+pub(crate) fn parsear_alignment(s: &str) -> MainAxisAlignment {
     match s.to_lowercase().as_str() {
         "start" | "inicio" | "izquierda" => MainAxisAlignment::Start,
         "center" | "centro" | "centrado" => MainAxisAlignment::Center,
@@ -468,7 +468,7 @@ pub(crate) fn color_desde_nombre(nombre: &str) -> Option<Color> {
 
 /// Parsea un string de color (hex #RRGGBB o nombre/role del tema) a RgbColor.
 /// Soporta roles del tema: "primary", "secondary", "tertiary", etc.
-pub(crate) fn parse_color(s: &str) -> Option<RgbColor> {
+pub(crate) fn parsear_color(s: &str) -> Option<RgbColor> {
     if s.starts_with('#') {
         return RgbColor::from_hex(s);
     }
@@ -517,16 +517,16 @@ pub(crate) fn ejecutar_callback_con_valor(
     state: &mut AppStateNativo,
     programa: &[Declaracion],
 ) {
-    crate::debug::log_callback_start(nombre_fn);
+    crate::debug::registrar_callback_inicio(nombre_fn);
     let args: Vec<ValorGUI> = valor.into_iter().collect();
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &args, programa, &mut state.store) {
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &args, programa, &mut state.almacen) {
         Ok(valor) => {
-            crate::debug::log_callback_success(nombre_fn, &valor.to_display());
-            state.store.set("resultado", valor.to_json_value());
+            crate::debug::registrar_callback_exito(nombre_fn, &valor.to_display());
+            state.almacen.fijar("resultado", valor.to_json_valor());
         }
         Err(e) => {
             crate::debug::log_callback_error(nombre_fn, &e);
-            state.store.set(
+            state.almacen.fijar(
                 "resultado",
                 serde_json::Value::String(format!("Error: {}", e)),
             );
@@ -554,22 +554,22 @@ pub(crate) struct ColoresBoton {
 /// Reemplaza las 5 variantes repetidas de MaterialButton.
 /// Nota: El builder de xilem usa type-state, así que cada branch
 /// construye y hace Box independientemente.
-pub(crate) fn make_material_button(
+pub(crate) fn crear_material_button(
     texto: &str,
     colores: ColoresBoton,
-    label_style: TextStyle,
+    etiqueta_style: TextoStyle,
     cb: &str,
     prog: &[Declaracion],
     corner_radius: f64,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let ColoresBoton { fg, bg, border } = colores;
-    let label = view::label(texto.to_string())
-        .text_size(label_style.font_size as f32)
+    let etiqueta = view::label(texto.to_string())
+        .text_size(etiqueta_style.font_tamano as f32)
         .weight(FontWeight::MEDIUM)
         .color(fg);
     let cb_owned = cb.to_string();
     let prog_owned = prog.to_vec();
-    let btn = view::button(label, move |data: &mut AppStateNativo| {
+    let btn = view::button(etiqueta, move |data: &mut AppStateNativo| {
         ejecutar_callback_y_actualizar(&cb_owned, data, &prog_owned);
     });
     // corner_radius SIEMPRE debe ser el último en la cadena builder
@@ -591,14 +591,14 @@ pub(crate) fn make_material_button(
 
 /// Crea un chip Material Design 3 unificado.
 /// Reemplaza las 4 variantes repetidas de Chip.
-pub(crate) fn make_chip_button(
+pub(crate) fn crear_chip_button(
     texto: &str,
     colores: ColoresBoton,
-    label_style: TextStyle,
+    etiqueta_style: TextoStyle,
     cb: &str,
     prog: &[Declaracion],
     corner_radius: f64,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     // Chips usan la misma lógica que material buttons
-    make_material_button(texto, colores, label_style, cb, prog, corner_radius)
+    crear_material_button(texto, colores, etiqueta_style, cb, prog, corner_radius)
 }

@@ -9,13 +9,13 @@
 // Se activa mediante la variable de entorno FORJA_GUI_DEBUG=1 o FORJA_DEBUG=1
 
 /// Retorna true si el modo depuración de GUI está activo
-pub fn is_debug_enabled() -> bool {
+pub fn es_depuracion_enabled() -> bool {
     true // FORZADO PARA DEPURACIÓN INTEGRAL EN ANDROID
 }
 
 /// Imprime un mensaje formateado con prefijo si el modo debug está activo
-pub fn debug_log(category: &str, message: &str) {
-    if is_debug_enabled() {
+pub fn depuracion_registrar(category: &str, message: &str) {
+    if es_depuracion_enabled() {
         log::debug!("[Forja GUI::{}] {}", category, message);
         eprintln!("🔍 [Forja GUI::{}] {}", category, message);
     }
@@ -25,31 +25,31 @@ pub fn debug_log(category: &str, message: &str) {
 pub fn log_state_change(
     var_name: &str,
     old_val: Option<&serde_json::Value>,
-    new_val: &serde_json::Value,
+    nuevo_val: &serde_json::Value,
 ) {
-    if is_debug_enabled() {
+    if es_depuracion_enabled() {
         match old_val {
             Some(old) => {
                 log::info!(
                     "[GUI State] Variable '{}' cambió: {} ──→ {}",
                     var_name,
                     old,
-                    new_val
+                    nuevo_val
                 );
                 eprintln!(
                     "⚡ [GUI State] Variable '{}' cambió: {} ──→ {}",
-                    var_name, old, new_val
+                    var_name, old, nuevo_val
                 );
             }
             None => {
                 log::info!(
                     "[GUI State] Variable '{}' inicializada: {}",
                     var_name,
-                    new_val
+                    nuevo_val
                 );
                 eprintln!(
                     "⚡ [GUI State] Variable '{}' inicializada: {}",
-                    var_name, new_val
+                    var_name, nuevo_val
                 );
             }
         }
@@ -57,16 +57,16 @@ pub fn log_state_change(
 }
 
 /// Registra el inicio de ejecución de un callback
-pub fn log_callback_start(nombre_fn: &str) {
-    if is_debug_enabled() {
+pub fn registrar_callback_inicio(nombre_fn: &str) {
+    if es_depuracion_enabled() {
         log::info!("[GUI Callback] Ejecutando callback '{}'...", nombre_fn);
         eprintln!("▶️ [GUI Callback] Ejecutando callback '{}'...", nombre_fn);
     }
 }
 
 /// Registra el éxito de un callback
-pub fn log_callback_success(nombre_fn: &str, resultado: &str) {
-    if is_debug_enabled() {
+pub fn registrar_callback_exito(nombre_fn: &str, resultado: &str) {
+    if es_depuracion_enabled() {
         log::info!(
             "[GUI Callback] Callback '{}' completado con éxito: {}",
             nombre_fn,
@@ -90,7 +90,7 @@ pub fn log_callback_error(nombre_fn: &str, error: &str) {
 }
 
 /// Registra una advertencia de conversión de layout
-pub fn log_layout_warning(widget_name: &str, reason: &str) {
+pub fn registrar_layout_aviso(widget_name: &str, reason: &str) {
     log::warn!("[GUI Layout Warning] Widget '{}': {}", widget_name, reason);
     eprintln!(
         "⚠️ [GUI Layout Warning] Widget '{}': {}",
@@ -99,8 +99,8 @@ pub fn log_layout_warning(widget_name: &str, reason: &str) {
 }
 
 /// Convierte un Layout a una representación textual en árbol con sangría
-pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> String {
-    let indent = "  ".repeat(depth);
+pub fn formato_layout_arbol(layout: &crate::gui_nativa::Layout, depth: usize) -> String {
+    let sangria = "  ".repeat(depth);
     use crate::gui_nativa::Layout::*;
 
     match layout {
@@ -109,16 +109,16 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
             gap,
             alignment,
         } => {
-            let mut out = format!("{}Column (gap: {}, align: {})\n", indent, gap, alignment);
+            let mut out = format!("{}Column (gap: {}, align: {})\n", sangria, gap, alignment);
             for c in children {
-                out.push_str(&format_layout_tree(c, depth + 1));
+                out.push_str(&formato_layout_arbol(c, depth + 1));
             }
             out
         }
         CenteredColumn(children) => {
-            let mut out = format!("{}CenteredColumn\n", indent);
+            let mut out = format!("{}CenteredColumn\n", sangria);
             for c in children {
-                out.push_str(&format_layout_tree(c, depth + 1));
+                out.push_str(&formato_layout_arbol(c, depth + 1));
             }
             out
         }
@@ -127,45 +127,52 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
             gap,
             alignment,
         } => {
-            let mut out = format!("{}Row (gap: {}, align: {})\n", indent, gap, alignment);
+            let mut out = format!("{}Row (gap: {}, align: {})\n", sangria, gap, alignment);
             for c in children {
-                out.push_str(&format_layout_tree(c, depth + 1));
+                out.push_str(&formato_layout_arbol(c, depth + 1));
             }
             out
         }
         ZStack(children) => {
-            let mut out = format!("{}ZStack\n", indent);
+            let mut out = format!("{}ZStack\n", sangria);
             for c in children {
-                out.push_str(&format_layout_tree(c, depth + 1));
+                out.push_str(&formato_layout_arbol(c, depth + 1));
             }
             out
         }
-        Container { child, max_width } => {
+        Container { hijo, max_ancho } => {
             format!(
                 "{}Container (max_width: {})\n{}",
-                indent,
-                max_width,
-                format_layout_tree(child, depth + 1)
+                sangria,
+                max_ancho,
+                formato_layout_arbol(hijo, depth + 1)
             )
         }
-        Portal(child) => {
-            format!("{}Portal\n{}", indent, format_layout_tree(child, depth + 1))
+        Portal(hijo) => {
+            format!(
+                "{}Portal\n{}",
+                sangria,
+                formato_layout_arbol(hijo, depth + 1)
+            )
         }
         Label { texto, es_variable } => {
             if *es_variable {
-                format!("{}Label (var: '{}')\n", indent, texto)
+                format!("{}Label (var: '{}')\n", sangria, texto)
             } else {
-                format!("{}Label (\"{}\")\n", indent, texto)
+                format!("{}Label (\"{}\")\n", sangria, texto)
             }
         }
         VariableLabel { variable } => {
-            format!("{}VariableLabel ('{}')\n", indent, variable)
+            format!("{}VariableLabel ('{}')\n", sangria, variable)
         }
         Title(texto) => {
-            format!("{}Title (\"{}\")\n", indent, texto)
+            format!("{}Title (\"{}\")\n", sangria, texto)
         }
         ColoredLabel { texto, color } => {
-            format!("{}ColoredLabel (\"{}\", color: {})\n", indent, texto, color)
+            format!(
+                "{}ColoredLabel (\"{}\", color: {})\n",
+                sangria, texto, color
+            )
         }
         MaterialButton {
             texto,
@@ -176,7 +183,7 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
         } => {
             format!(
                 "{}MaterialButton (\"{}\", cb: '{}', variant: {:?}, disabled: {})\n",
-                indent, texto, callback, variant, disabled
+                sangria, texto, callback, variant, disabled
             )
         }
         TextInput {
@@ -186,68 +193,68 @@ pub fn format_layout_tree(layout: &crate::gui_nativa::Layout, depth: usize) -> S
         } => {
             format!(
                 "{}TextInput (var: '{}', multiline: {}, placeholder: \"{}\")\n",
-                indent, variable, multiline, placeholder
+                sangria, variable, multiline, placeholder
             )
         }
         ProgressBar { variable } => {
-            format!("{}ProgressBar (var: '{}')\n", indent, variable)
+            format!("{}ProgressBar (var: '{}')\n", sangria, variable)
         }
         Slider { variable, min, max } => {
             format!(
                 "{}Slider (var: '{}', min: {}, max: {})\n",
-                indent, variable, min, max
+                sangria, variable, min, max
             )
         }
         Checkbox { variable } => {
-            format!("{}Checkbox (var: '{}')\n", indent, variable)
+            format!("{}Checkbox (var: '{}')\n", sangria, variable)
         }
         Prose(texto) => {
-            format!("{}Prose (\"{}\")\n", indent, texto)
+            format!("{}Prose (\"{}\")\n", sangria, texto)
         }
-        Spinner => format!("{}Spinner\n", indent),
-        Separator => format!("{}Separator\n", indent),
-        Spacer(size) => format!("{}Spacer ({})\n", indent, size),
-        Expanded { child } => format!(
+        Spinner => format!("{}Spinner\n", sangria),
+        Separator => format!("{}Separator\n", sangria),
+        Spacer(tamano) => format!("{}Spacer ({})\n", sangria, tamano),
+        Expanded { hijo } => format!(
             "{}Expanded\n{}",
-            indent,
-            format_layout_tree(child, depth + 1)
+            sangria,
+            formato_layout_arbol(hijo, depth + 1)
         ),
-        Centered { child } => format!(
+        Centered { hijo } => format!(
             "{}Centered\n{}",
-            indent,
-            format_layout_tree(child, depth + 1)
+            sangria,
+            formato_layout_arbol(hijo, depth + 1)
         ),
-        Padding { child, amount } => format!(
+        Padding { hijo, amount } => format!(
             "{}Padding ({})\n{}",
-            indent,
+            sangria,
             amount,
-            format_layout_tree(child, depth + 1)
+            formato_layout_arbol(hijo, depth + 1)
         ),
         ResponsiveLayout {
             compact,
             medium,
             expanded,
         } => {
-            let mut out = format!("{}ResponsiveLayout\n", indent);
-            out.push_str(&format!("{}  [Compact]\n", indent));
-            out.push_str(&format_layout_tree(compact, depth + 2));
-            out.push_str(&format!("{}  [Medium]\n", indent));
-            out.push_str(&format_layout_tree(medium, depth + 2));
-            out.push_str(&format!("{}  [Expanded]\n", indent));
-            out.push_str(&format_layout_tree(expanded, depth + 2));
+            let mut out = format!("{}ResponsiveLayout\n", sangria);
+            out.push_str(&format!("{}  [Compact]\n", sangria));
+            out.push_str(&formato_layout_arbol(compact, depth + 2));
+            out.push_str(&format!("{}  [Medium]\n", sangria));
+            out.push_str(&formato_layout_arbol(medium, depth + 2));
+            out.push_str(&format!("{}  [Expanded]\n", sangria));
+            out.push_str(&formato_layout_arbol(expanded, depth + 2));
             out
         }
-        _ => format!("{}Layout({:?})\n", indent, layout),
+        _ => format!("{}Layout({:?})\n", sangria, layout),
     }
 }
 
 /// Imprime el árbol de layouts en consola si el modo debug está activo
-pub fn print_layout_tree(layout: &crate::gui_nativa::Layout) {
-    if is_debug_enabled() {
-        let tree = format_layout_tree(layout, 0);
-        log::debug!("[Forja GUI] Árbol de Layouts Extraído:\n{}", tree);
+pub fn imprimir_layout_arbol(layout: &crate::gui_nativa::Layout) {
+    if es_depuracion_enabled() {
+        let arbol = formato_layout_arbol(layout, 0);
+        log::debug!("[Forja GUI] Árbol de Layouts Extraído:\n{}", arbol);
         eprintln!("\n🌳 [Forja GUI] Árbol de Layouts Extraído:");
-        eprintln!("{}", tree);
+        eprintln!("{}", arbol);
     }
 }
 
@@ -257,23 +264,23 @@ mod tests {
     use crate::gui_nativa::Layout;
 
     #[test]
-    fn test_format_layout_tree_label() {
+    fn test_formato_layout_arbol_etiqueta() {
         let l = Layout::Label {
             texto: "Hola".to_string(),
             es_variable: false,
         };
-        let formatted = format_layout_tree(&l, 0);
+        let formatted = formato_layout_arbol(&l, 0);
         assert!(formatted.contains("Label (\"Hola\")"));
     }
 
     #[test]
-    fn test_format_layout_tree_column() {
+    fn test_formato_layout_arbol_column() {
         let l = Layout::Column {
             children: vec![Layout::Title("Titulo".to_string())],
             gap: 10.0,
             alignment: "center".to_string(),
         };
-        let formatted = format_layout_tree(&l, 0);
+        let formatted = formato_layout_arbol(&l, 0);
         assert!(formatted.contains("Column"));
         assert!(formatted.contains("Title (\"Titulo\")"));
     }

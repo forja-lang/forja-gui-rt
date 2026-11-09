@@ -1,4 +1,4 @@
-// Forja GUI — AnimationRoot: raíz del motor de animaciones
+// Forja GUI — RaizAnimacion: raíz del motor de animaciones
 
 use std::time::Instant;
 
@@ -11,29 +11,29 @@ use xilem::masonry::layout::LayoutSize;
 
 /// Widget raíz que envuelve todo el árbol y tickea el motor de animaciones
 /// en cada frame de pintura.
-pub struct AnimationRoot {
-    child: Option<WidgetPod<dyn Widget>>,
-    last_frame: Instant,
+pub struct RaizAnimacion {
+    hijo: Option<WidgetPod<dyn Widget>>,
+    ultimo_frame: Instant,
 }
 
-impl AnimationRoot {
-    pub fn new(child: impl Widget + 'static) -> Self {
+impl RaizAnimacion {
+    pub fn nuevo(hijo: impl Widget + 'static) -> Self {
         Self {
-            child: Some(NewWidget::new(child).erased().to_pod()),
-            last_frame: Instant::now(),
+            hijo: Some(NewWidget::new(hijo).erased().to_pod()),
+            ultimo_frame: Instant::now(),
         }
     }
 
     /// Calcula el delta time desde el último frame en milisegundos
     pub fn delta_ms(&mut self) -> f64 {
         let now = Instant::now();
-        let delta = now.duration_since(self.last_frame).as_secs_f64() * 1000.0;
-        self.last_frame = now;
+        let delta = now.duration_since(self.ultimo_frame).as_secs_f64() * 1000.0;
+        self.ultimo_frame = now;
         delta
     }
 }
 
-impl Widget for AnimationRoot {
+impl Widget for RaizAnimacion {
     type Action = NoAction;
 
     fn accepts_pointer_interaction(&self) -> bool {
@@ -41,8 +41,8 @@ impl Widget for AnimationRoot {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -51,24 +51,30 @@ impl Widget for AnimationRoot {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (mismo comportamiento que el `layout` viejo,
         // que devolvía el tamaño resultante del hijo).
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => Length::ZERO,
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        if let Some(ref mut child) = self.child {
-            ctx.run_layout(child, size);
-            ctx.place_child(child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.run_layout(hijo, tamano);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -89,14 +95,14 @@ impl Widget for AnimationRoot {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        node: &mut Node,
+        nodo: &mut Node,
     ) {
-        node.set_label("Forja Animation Root");
+        nodo.set_label("Forja Animation Root");
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        match &self.child {
-            Some(child) => ChildrenIds::from_slice(&[child.id()]),
+        match &self.hijo {
+            Some(hijo) => ChildrenIds::from_slice(&[hijo.id()]),
             None => ChildrenIds::from_slice(&[]),
         }
     }

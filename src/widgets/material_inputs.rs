@@ -3,12 +3,12 @@
 // SliderDiscrete, SliderRange, ChipGroup
 // Funciones de rendering extraídas de gui_nativa.rs
 
-use crate::gui_nativa::{AppStateNativo, TextFieldVariant};
+use crate::gui_nativa::{AppStateNativo, TextoCampoVariant};
 use crate::helpers::*;
 use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, ShapeFamily};
+use crate::{AnyWidgetView, Background, DesignStyle, FontWeight, FormaFamily, MaterialTheme};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
@@ -20,7 +20,7 @@ fn superficie_campo(theme: &MaterialTheme) -> (crate::Color, crate::Color, f64) 
     let scheme = &theme.scheme;
     let borde: crate::Color = scheme.outline_variant.into();
     match theme.design {
-        DesignStyle::LiquidGlass => (scheme.surface_variant.with_alpha(0.55), borde, 1.0),
+        DesignStyle::LiquidGlass => (scheme.surface_variant.con_alpha(0.55), borde, 1.0),
         DesignStyle::Fluent => (scheme.surface.into(), borde, 1.0),
         DesignStyle::MaterialYou => (scheme.surface_variant.into(), borde, 0.0),
     }
@@ -28,11 +28,11 @@ fn superficie_campo(theme: &MaterialTheme) -> (crate::Color, crate::Color, f64) 
 
 // ─── MaterialTextField ───────────────────────────────────────────
 
-pub(crate) fn render_text_field(
+pub(crate) fn render_texto_campo(
     variable: &str,
     label: &str,
     placeholder: &str,
-    variant: &TextFieldVariant,
+    variant: &TextoCampoVariant,
     error: &str,
     ctx: ContextoRender<'_>,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
@@ -44,49 +44,49 @@ pub(crate) fn render_text_field(
     let scheme = &theme.scheme;
     let var_name = variable.to_string();
     let val = data.leer(variable).to_string();
-    let label_text = label.to_string();
-    let placeholder_text = placeholder.to_string();
-    let err_text = error.to_string();
+    let etiqueta_texto = label.to_string();
+    let placeholder_texto = placeholder.to_string();
+    let err_texto = error.to_string();
 
     // Label flotante
-    let label_color: crate::Color = if !err_text.is_empty() {
+    let etiqueta_color: crate::Color = if !err_texto.is_empty() {
         scheme.error.into()
     } else {
         scheme.on_surface_variant.into()
     };
-    let label_widget = if label_text.is_empty() {
+    let etiqueta_widget = if etiqueta_texto.is_empty() {
         None
     } else {
         Some(
-            view::label(label_text.clone())
+            view::label(etiqueta_texto.clone())
                 .text_size(12.0)
-                .color(label_color),
+                .color(etiqueta_color),
         )
     };
 
     // Campo de texto
-    let mut ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+    let mut ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        data.escribir(&var_name, crate::ValorGUI::Texto(nuevo_val));
     })
     .text_color(scheme.on_surface.into());
-    if !placeholder_text.is_empty() {
-        ti = ti.placeholder(placeholder_text.as_str());
+    if !placeholder_texto.is_empty() {
+        ti = ti.placeholder(placeholder_texto.as_str());
     }
 
     // Aplicar colores según variante
     let input_widget = match variant {
-        TextFieldVariant::Filled => {
+        TextoCampoVariant::Filled => {
             let (bg, borde, ancho) = superficie_campo(theme);
             Box::new(
                 view::sized_box(ti)
                     .background(Background::Color(bg))
                     .border_color(borde)
                     .border_width(ancho.px())
-                    .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                    .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
             ) as Box<AnyWidgetView<AppStateNativo>>
         }
-        TextFieldVariant::Outlined => {
-            let border: crate::Color = if !err_text.is_empty() {
+        TextoCampoVariant::Outlined => {
+            let border: crate::Color = if !err_texto.is_empty() {
                 scheme.error.into()
             } else {
                 scheme.outline.into()
@@ -98,38 +98,38 @@ pub(crate) fn render_text_field(
                         .border_color(border)
                         .border_width(1.0.px())
                         .background(Background::Color(bg))
-                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>
             } else {
                 Box::new(
                     view::sized_box(ti)
                         .border_color(border)
                         .border_width(1.0.px())
-                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>
             }
         }
     };
 
     // Error text
-    let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if !err_text.is_empty() {
+    let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if !err_texto.is_empty() {
         let err_color: crate::Color = scheme.error.into();
-        let err_label = view::label(err_text.clone())
+        let err_etiqueta = view::label(err_texto.clone())
             .text_size(11.0)
             .color(err_color);
-        match label_widget {
+        match etiqueta_widget {
             Some(lw) => vec![
                 Box::new(lw) as Box<AnyWidgetView<AppStateNativo>>,
                 input_widget,
-                Box::new(err_label) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(err_etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
             ],
             None => vec![
                 input_widget,
-                Box::new(err_label) as Box<AnyWidgetView<AppStateNativo>>,
+                Box::new(err_etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
             ],
         }
     } else {
-        match label_widget {
+        match etiqueta_widget {
             Some(lw) => vec![
                 Box::new(lw) as Box<AnyWidgetView<AppStateNativo>>,
                 input_widget,
@@ -147,7 +147,7 @@ pub(crate) fn render_text_field(
 
 // ─── MaterialPasswordField ───────────────────────────────────────
 
-pub(crate) fn render_password_field(
+pub(crate) fn render_contrasena_campo(
     variable: &str,
     label: &str,
     _data: &mut AppStateNativo,
@@ -157,13 +157,13 @@ pub(crate) fn render_password_field(
     let scheme = &theme.scheme;
     let var_name = variable.to_string();
     let val = _data.leer(variable).to_string();
-    let label_text = label.to_string();
+    let etiqueta_texto = label.to_string();
 
-    let label_color: crate::Color = scheme.on_surface_variant.into();
+    let etiqueta_color: crate::Color = scheme.on_surface_variant.into();
     let bg: crate::Color = scheme.surface_variant.into();
 
-    let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+    let ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        data.escribir(&var_name, crate::ValorGUI::Texto(nuevo_val));
     })
     .placeholder("••••••••")
     .text_color(scheme.on_surface.into());
@@ -171,17 +171,17 @@ pub(crate) fn render_password_field(
     let input_widget = Box::new(
         view::sized_box(ti)
             .background(Background::Color(bg))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
     ) as Box<AnyWidgetView<AppStateNativo>>;
 
-    let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if label_text.is_empty() {
+    let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if etiqueta_texto.is_empty() {
         vec![input_widget]
     } else {
         vec![
             Box::new(
-                view::label(label_text.clone())
+                view::label(etiqueta_texto.clone())
                     .text_size(12.0)
-                    .color(label_color),
+                    .color(etiqueta_color),
             ) as Box<AnyWidgetView<AppStateNativo>>,
             input_widget,
         ]
@@ -196,7 +196,7 @@ pub(crate) fn render_password_field(
 
 // ─── MaterialNumberField ─────────────────────────────────────────
 
-pub(crate) fn render_number_field(
+pub(crate) fn render_numero_campo(
     variable: &str,
     label: &str,
     min: &f64,
@@ -208,41 +208,44 @@ pub(crate) fn render_number_field(
     let scheme = &theme.scheme;
     let var_name = variable.to_string();
     let val = _data.leer(variable).to_string();
-    let label_text = label.to_string();
+    let etiqueta_texto = label.to_string();
     let mn = *min;
     let mx = *max;
 
-    let label_color: crate::Color = scheme.on_surface_variant.into();
+    let etiqueta_color: crate::Color = scheme.on_surface_variant.into();
     let border: crate::Color = scheme.outline.into();
 
-    let range_text = format!("{}-{}", mn, mx);
-    let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        if new_val.parse::<f64>().is_ok() || new_val.is_empty() || new_val == "-" || new_val == "."
+    let range_texto = format!("{}-{}", mn, mx);
+    let ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        if nuevo_val.parse::<f64>().is_ok()
+            || nuevo_val.is_empty()
+            || nuevo_val == "-"
+            || nuevo_val == "."
         {
-            data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+            data.escribir(&var_name, crate::ValorGUI::Texto(nuevo_val));
         }
     })
-    .placeholder(range_text.as_str());
+    .placeholder(range_texto.as_str());
 
-    let input_widget: Box<AnyWidgetView<AppStateNativo>> = if label_text.is_empty() {
+    let input_widget: Box<AnyWidgetView<AppStateNativo>> = if etiqueta_texto.is_empty() {
         Box::new(
             view::sized_box(ti)
                 .border_color(border)
                 .border_width(1.0.px())
-                .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
         )
     } else {
         Box::new(
             view::flex(
                 crate::Axis::Vertical,
                 (
-                    view::label(label_text.clone())
+                    view::label(etiqueta_texto.clone())
                         .text_size(12.0)
-                        .color(label_color),
+                        .color(etiqueta_color),
                     view::sized_box(ti)
                         .border_color(border)
                         .border_width(1.0.px())
-                        .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
                 ),
             )
             .gap(Length::px(4.0)),
@@ -254,7 +257,7 @@ pub(crate) fn render_number_field(
 
 // ─── MaterialSearchField ─────────────────────────────────────────
 
-pub(crate) fn render_search_field(
+pub(crate) fn render_buscar_campo(
     variable: &str,
     placeholder: &str,
     data: &mut AppStateNativo,
@@ -267,8 +270,8 @@ pub(crate) fn render_search_field(
     let ph = placeholder.to_string();
 
     let bg: crate::Color = scheme.surface_variant.into();
-    let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+    let ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        data.escribir(&var_name, crate::ValorGUI::Texto(nuevo_val));
     })
     .placeholder(ph.as_str());
 
@@ -284,7 +287,7 @@ pub(crate) fn render_search_field(
                 ),
                 view::sized_box(ti)
                     .background(Background::Color(bg))
-                    .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px()),
+                    .corner_radius(theme.shapes.for_family(FormaFamily::Button).px()),
             ),
         )
         .gap(Length::px(4.0)),
@@ -306,7 +309,7 @@ pub(crate) fn render_dropdown(
     let sel = *seleccionada;
     let ph = placeholder.to_string();
 
-    let display_text = opts.get(sel).cloned().unwrap_or(ph);
+    let display_texto = opts.get(sel).cloned().unwrap_or(ph);
     let fg: crate::Color = scheme.on_surface.into();
     let border: crate::Color = scheme.outline.into();
     let bg: crate::Color = scheme.surface_variant.into();
@@ -316,11 +319,11 @@ pub(crate) fn render_dropdown(
     };
 
     Box::new(
-        view::button(view::label(display_text).text_size(14.0).color(fg), cb_btn)
+        view::button(view::label(display_texto).text_size(14.0).color(fg), cb_btn)
             .background(Background::Color(bg))
             .border_color(border)
             .border_width(1.0.px())
-            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
     )
 }
 
@@ -337,32 +340,32 @@ pub(crate) fn render_select(
     let scheme = &theme.scheme;
     let opts: Vec<String> = opciones.to_vec();
     let sel = *seleccionada;
-    let label_text = label.to_string();
+    let etiqueta_texto = label.to_string();
 
-    let display_text = opts
+    let display_texto = opts
         .get(sel)
         .cloned()
         .unwrap_or_else(|| "Seleccionar...".to_string());
     let fg: crate::Color = scheme.on_surface.into();
     let border: crate::Color = scheme.outline.into();
-    let label_color: crate::Color = scheme.on_surface_variant.into();
+    let etiqueta_color: crate::Color = scheme.on_surface_variant.into();
 
     Box::new(
         view::flex(
             crate::Axis::Vertical,
             (
-                view::label(label_text.clone())
+                view::label(etiqueta_texto.clone())
                     .text_size(12.0)
-                    .color(label_color),
+                    .color(etiqueta_color),
                 view::button(
-                    view::label(display_text).text_size(14.0).color(fg),
+                    view::label(display_texto).text_size(14.0).color(fg),
                     move |data: &mut AppStateNativo| {
                         let _ = data;
                     },
                 )
                 .border_color(border)
                 .border_width(1.0.px())
-                .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+                .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
             ),
         )
         .gap(Length::px(4.0)),
@@ -382,8 +385,8 @@ pub(crate) fn render_autocomplete(
     let val = data.leer(variable).to_string();
     let border: crate::Color = scheme.outline.into();
 
-    let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        data.escribir(&var_name, crate::ValorGUI::Texto(new_val));
+    let ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        data.escribir(&var_name, crate::ValorGUI::Texto(nuevo_val));
     })
     .placeholder("Escribir...");
 
@@ -391,7 +394,7 @@ pub(crate) fn render_autocomplete(
         view::sized_box(ti)
             .border_color(border)
             .border_width(1.0.px())
-            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
     )
 }
 
@@ -417,14 +420,14 @@ pub(crate) fn render_radio_group(
         let cb_inner = cb.clone();
         let t = opcion.clone();
         let prog_inner = prog.clone();
-        let is_selected = i == sel;
+        let es_selected = i == sel;
 
-        let fg: crate::Color = if is_selected {
+        let fg: crate::Color = if es_selected {
             scheme.primary.into()
         } else {
             scheme.on_surface_variant.into()
         };
-        let radio_color: crate::Color = if is_selected {
+        let radio_color: crate::Color = if es_selected {
             scheme.primary.into()
         } else {
             scheme.outline.into()
@@ -434,7 +437,7 @@ pub(crate) fn render_radio_group(
             crate::Axis::Horizontal,
             (
                 view::sized_box(
-                    view::label(if is_selected { "◉" } else { "○" }.to_string())
+                    view::label(if es_selected { "◉" } else { "○" }.to_string())
                         .text_size(20.0)
                         .color(radio_color),
                 )
@@ -515,8 +518,8 @@ pub(crate) fn render_slider_discrete(
         mn,
         mx,
         val,
-        move |data: &mut AppStateNativo, new_val: f64| {
-            data.escribir(&var_name, crate::ValorGUI::Decimal(new_val));
+        move |data: &mut AppStateNativo, nuevo_val: f64| {
+            data.escribir(&var_name, crate::ValorGUI::Decimal(nuevo_val));
         },
     );
 
@@ -555,16 +558,16 @@ pub(crate) fn render_slider_range(
         mn,
         mx,
         val1,
-        move |data: &mut AppStateNativo, new_val: f64| {
-            data.escribir(&var1, crate::ValorGUI::Decimal(new_val));
+        move |data: &mut AppStateNativo, nuevo_val: f64| {
+            data.escribir(&var1, crate::ValorGUI::Decimal(nuevo_val));
         },
     );
     let slider2 = view::slider(
         mn,
         mx,
         val2,
-        move |data: &mut AppStateNativo, new_val: f64| {
-            data.escribir(&var2, crate::ValorGUI::Decimal(new_val));
+        move |data: &mut AppStateNativo, nuevo_val: f64| {
+            data.escribir(&var2, crate::ValorGUI::Decimal(nuevo_val));
         },
     );
 
@@ -609,9 +612,9 @@ pub(crate) fn render_chip_group(
         let cb_inner = cb.clone();
         let t = chip_text.clone();
         let prog_inner = prog.clone();
-        let is_selected = sels.get(i).copied().unwrap_or(false);
+        let es_selected = sels.get(i).copied().unwrap_or(false);
 
-        if is_selected {
+        if es_selected {
             let fg: crate::Color = scheme.on_secondary_container.into();
             let bg: crate::Color = scheme.secondary_container.into();
             let label = view::label(t.clone())

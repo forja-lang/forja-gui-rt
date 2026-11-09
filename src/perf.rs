@@ -1,6 +1,6 @@
 // Medición del costo de armar un frame.
 //
-// `layout_a_view` reconstruye el árbol de widgets en cada cambio de estado (cada
+// `layout_a_vista` reconstruye el árbol de widgets en cada cambio de estado (cada
 // movimiento del slider, cada tecla, cada scroll). Si eso tarda más que el
 // presupuesto del monitor (4,2 ms a 240 Hz, 16,7 ms a 60 Hz) la interacción se
 // siente pegajosa.
@@ -40,7 +40,7 @@ pub fn activo() -> bool {
     })
 }
 
-/// Cuenta un widget construido en el frame actual (se llama desde `layout_a_view`).
+/// Cuenta un widget construido en el frame actual (se llama desde `layout_a_vista`).
 pub fn contar_nodo() {
     // El `if` externo evita el `thread_local` cuando no se está midiendo.
     if activo() {

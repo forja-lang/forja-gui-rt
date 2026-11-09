@@ -7,7 +7,7 @@ use crate::helpers::*;
 use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
+use crate::{AnyWidgetView, Background, FontWeight, FormaFamily, MaterialTheme, RgbColor};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
@@ -30,13 +30,13 @@ pub(crate) fn render_linear_progress(
     let _ = theme; // los colores vienen de theme_props::default_properties
     Box::new(
         view::sized_box(view::progress_bar(progreso))
-            .width(Length::px((data.window_width - 64.0).max(120.0))),
+            .width(Length::px((data.ventana_ancho - 64.0).max(120.0))),
     )
 }
 
 // ─── LinearProgressValue: barra con valor directo ───────────────────
 
-pub(crate) fn render_linear_progress_value(
+pub(crate) fn render_linear_progress_valor(
     val: &f64,
     _theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
@@ -44,8 +44,8 @@ pub(crate) fn render_linear_progress_value(
     let track_color: crate::Color = scheme.surface_variant.into();
     let indicator_color: crate::Color = scheme.primary.into();
     let valor = (*val / 100.0).clamp(0.0, 1.0);
-    let filled_width = 300.0 * valor;
-    let empty_width = 300.0 * (1.0 - valor);
+    let filled_ancho = 300.0 * valor;
+    let empty_ancho = 300.0 * (1.0 - valor);
     Box::new(
         view::sized_box(view::zstack((
             view::sized_box(view::label(String::new()))
@@ -56,11 +56,11 @@ pub(crate) fn render_linear_progress_value(
                 crate::Axis::Horizontal,
                 (
                     view::sized_box(view::label(String::new()))
-                        .dims((Length::px(filled_width), Length::px(4.0)))
+                        .dims((Length::px(filled_ancho), Length::px(4.0)))
                         .background(Background::Color(indicator_color))
                         .corner_radius(2.0.px()),
                     view::sized_box(view::label(String::new()))
-                        .dims((Length::px(empty_width), Length::px(4.0))),
+                        .dims((Length::px(empty_ancho), Length::px(4.0))),
                 ),
             ),
         )))
@@ -72,14 +72,14 @@ pub(crate) fn render_linear_progress_value(
 
 pub(crate) fn render_circular_progress(
     variable: &str,
-    size: &f64,
+    tamano: &f64,
     indeterminado: &bool,
     data: &mut AppStateNativo,
     _prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let scheme = &theme.scheme;
-    let s = *size;
+    let s = *tamano;
     let track_color: crate::Color = scheme.surface_variant.into();
     let indicator_color: crate::Color = scheme.primary.into();
     if *indeterminado {
@@ -113,7 +113,7 @@ pub(crate) fn render_circular_progress(
 // ─── Badge ──────────────────────────────────────────────────────
 
 pub(crate) fn render_badge(
-    child: &Layout,
+    hijo: &Layout,
     valor: &Option<String>,
     dot: &bool,
     data: &mut AppStateNativo,
@@ -121,7 +121,7 @@ pub(crate) fn render_badge(
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let scheme = &theme.scheme;
-    let inner = crate::gui_nativa::layout_a_view(child, data, prog, theme);
+    let inner = crate::gui_nativa::layout_a_vista(hijo, data, prog, theme);
     let bg_color: crate::Color = scheme.error.into();
     let fg_color: crate::Color = scheme.on_error.into();
     if *dot {
@@ -158,8 +158,8 @@ pub(crate) fn render_skeleton(
     let sk_color: crate::Color = scheme.surface_variant.into();
     let radius = match tipo {
         "circulo" => ancho / 2.0,
-        "tarjeta" => theme.shapes.for_family(ShapeFamily::Container),
-        _ => theme.shapes.for_family(ShapeFamily::TextField),
+        "tarjeta" => theme.shapes.for_family(FormaFamily::Container),
+        _ => theme.shapes.for_family(FormaFamily::TextField),
     };
     Box::new(
         view::sized_box(view::label(String::new()))
@@ -334,11 +334,11 @@ pub(crate) fn render_avatar_group(
     let scheme = &theme.scheme;
     let bg_color: crate::Color = scheme.primary_container.into();
     let fg_color: crate::Color = scheme.on_primary_container.into();
-    let avatar_size = 32.0;
+    let avatar_tamano = 32.0;
     let overlap = 12.0;
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-    let count = avatares.len().min(*max);
-    for (i, avatar_nombre) in avatares.iter().take(count).enumerate() {
+    let cantidad = avatares.len().min(*max);
+    for (i, avatar_nombre) in avatares.iter().take(cantidad).enumerate() {
         let initials: String = avatar_nombre.chars().take(2).collect();
         let avatar = view::sized_box(
             view::label(initials)
@@ -346,13 +346,13 @@ pub(crate) fn render_avatar_group(
                 .weight(FontWeight::BOLD)
                 .color(fg_color),
         )
-        .dims((Length::px(avatar_size), Length::px(avatar_size)))
+        .dims((Length::px(avatar_tamano), Length::px(avatar_tamano)))
         .background(Background::Color(bg_color))
-        .corner_radius((avatar_size / 2.0).px())
+        .corner_radius((avatar_tamano / 2.0).px())
         .border_color(scheme.surface.into())
         .border_width(2.0.px());
         widgets.push(Box::new(
-            view::sized_box(avatar).width(Length::px(avatar_size + i as f64 * overlap)),
+            view::sized_box(avatar).width(Length::px(avatar_tamano + i as f64 * overlap)),
         ) as Box<AnyWidgetView<AppStateNativo>>);
     }
     if avatares.len() > *max {
@@ -363,9 +363,9 @@ pub(crate) fn render_avatar_group(
                 .weight(FontWeight::BOLD)
                 .color(fg_color),
         )
-        .dims((Length::px(avatar_size), Length::px(avatar_size)))
+        .dims((Length::px(avatar_tamano), Length::px(avatar_tamano)))
         .background(Background::Color(scheme.surface_variant.into()))
-        .corner_radius((avatar_size / 2.0).px())
+        .corner_radius((avatar_tamano / 2.0).px())
         .border_color(scheme.surface.into())
         .border_width(2.0.px());
         widgets.push(Box::new(more) as Box<AnyWidgetView<AppStateNativo>>);

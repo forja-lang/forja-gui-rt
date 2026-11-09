@@ -53,7 +53,7 @@ pub enum CanvasCommand {
         g: u8,
         b: u8,
         a: u8,
-        width: f64,
+        ancho: f64,
     },
     /// Rellenar rectángulo
     FillRect {
@@ -76,10 +76,10 @@ pub enum CanvasCommand {
         g: u8,
         b: u8,
         a: u8,
-        width: f64,
+        ancho: f64,
     },
     /// Rellenar un path definido por puntos (BezPath poligonal)
-    FillPath {
+    RellenarTrazado {
         points: Vec<[f64; 2]>, // lista de [x, y]
         closed: bool,
         r: u8,
@@ -88,17 +88,17 @@ pub enum CanvasCommand {
         a: u8,
     },
     /// Trazar contorno de path
-    StrokePath {
+    Trazar {
         points: Vec<[f64; 2]>,
         closed: bool,
         r: u8,
         g: u8,
         b: u8,
         a: u8,
-        width: f64,
+        ancho: f64,
     },
     /// Dibujar línea
-    DrawLine {
+    DibujarLinea {
         x1: f64,
         y1: f64,
         x2: f64,
@@ -107,27 +107,27 @@ pub enum CanvasCommand {
         g: u8,
         b: u8,
         a: u8,
-        width: f64,
+        ancho: f64,
     },
     /// Dibujar texto (placeholder: rectángulo coloreado)
-    DrawText {
+    DibujarTexto {
         x: f64,
         y: f64,
-        text: String,
-        size: f64,
+        texto: String,
+        tamano: f64,
         r: u8,
         g: u8,
         b: u8,
         a: u8,
     },
     /// Limpiar todo el canvas con un color
-    Clear { r: u8, g: u8, b: u8, a: u8 },
+    Limpiar { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar color de relleno actual (modo painter)
-    SetFillColor { r: u8, g: u8, b: u8, a: u8 },
+    FijarColorRelleno { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar color de trazo actual
-    SetStrokeColor { r: u8, g: u8, b: u8, a: u8 },
+    FijarColorTrazo { r: u8, g: u8, b: u8, a: u8 },
     /// Cambiar grosor de trazo actual
-    SetStrokeWidth { width: f64 },
+    FijarAnchoTrazo { ancho: f64 },
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -139,28 +139,28 @@ pub enum CanvasCommand {
 pub struct CanvasWidget {
     commands_var: String,
     commands: Vec<CanvasCommand>,
-    width: f64,
-    height: f64,
+    ancho: f64,
+    alto: f64,
     fill_color: peniko::Color,
     stroke_color: peniko::Color,
-    stroke_width: f64,
+    stroke_ancho: f64,
 }
 
 impl CanvasWidget {
-    pub fn new(commands_var: String, width: f64, height: f64) -> Self {
+    pub fn nuevo(commands_var: String, ancho: f64, alto: f64) -> Self {
         Self {
             commands_var,
             commands: Vec::new(),
-            width,
-            height,
+            ancho,
+            alto,
             fill_color: peniko::Color::BLACK,
             stroke_color: peniko::Color::BLACK,
-            stroke_width: 2.0,
+            stroke_ancho: 2.0,
         }
     }
 
     /// Cargar comandos desde un JSON string (ej: contenido de VariableStore)
-    pub fn load_commands(&mut self, json: &str) {
+    pub fn cargar_commands(&mut self, json: &str) {
         if json.trim().is_empty() || json == "null" {
             self.commands.clear();
             return;
@@ -183,7 +183,7 @@ impl crate::Widget for CanvasWidget {
         &mut self,
         _ctx: &mut EventCtx<'_>,
         _props: &mut PropertiesMut<'_>,
-        _event: &PointerEvent,
+        _evento: &PointerEvent,
     ) {
     }
 
@@ -194,16 +194,16 @@ impl crate::Widget for CanvasWidget {
         _ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        _cross_length: Option<Length>,
+        longitud_req: LenReq,
+        _cross_longitud: Option<Length>,
     ) -> Length {
         // El lienzo tiene tamaño propio fijo: lo respeta, pero se achica si el
         // espacio disponible es menor (equivalente al `bc.constrain` anterior).
         let fijo = match axis {
-            Axis::Horizontal => Length::px(self.width),
-            Axis::Vertical => Length::px(self.height),
+            Axis::Horizontal => Length::px(self.ancho),
+            Axis::Vertical => Length::px(self.alto),
         };
-        match len_req {
+        match longitud_req {
             LenReq::FitContent(space) => fijo.min(space),
             _ => fijo,
         }
@@ -217,20 +217,20 @@ impl crate::Widget for CanvasWidget {
         _props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        let size = ctx.border_box().size();
+        let tamano = ctx.border_box().size();
 
         // Limpiar el canvas con blanco (fondo por defecto)
-        let bg_rect = Rect::new(0.0, 0.0, size.width, size.height);
+        let bg_rect = Rect::new(0.0, 0.0, tamano.width, tamano.height);
         painter.fill(bg_rect, peniko::Color::WHITE).draw();
 
         // Resetear estado de painter
         self.fill_color = peniko::Color::BLACK;
         self.stroke_color = peniko::Color::BLACK;
-        self.stroke_width = 2.0;
+        self.stroke_ancho = 2.0;
 
         for cmd in &self.commands {
             match cmd {
-                CanvasCommand::Clear { r, g, b, a } => {
+                CanvasCommand::Limpiar { r, g, b, a } => {
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
                     painter.fill(bg_rect, color).draw();
                 }
@@ -257,11 +257,11 @@ impl crate::Widget for CanvasWidget {
                     g,
                     b,
                     a,
-                    width,
+                    ancho,
                 } => {
                     let circle = Circle::new(Point::new(*x, *y), *radius);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    painter.stroke(circle, &Stroke::new(*width), color).draw();
+                    painter.stroke(circle, &Stroke::new(*ancho), color).draw();
                 }
 
                 CanvasCommand::FillRect {
@@ -288,14 +288,14 @@ impl crate::Widget for CanvasWidget {
                     g,
                     b,
                     a,
-                    width,
+                    ancho,
                 } => {
                     let rect = Rect::new(*x, *y, x + w, y + h);
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    painter.stroke(rect, &Stroke::new(*width), color).draw();
+                    painter.stroke(rect, &Stroke::new(*ancho), color).draw();
                 }
 
-                CanvasCommand::DrawLine {
+                CanvasCommand::DibujarLinea {
                     x1,
                     y1,
                     x2,
@@ -304,14 +304,14 @@ impl crate::Widget for CanvasWidget {
                     g,
                     b,
                     a,
-                    width,
+                    ancho,
                 } => {
-                    let line = Line::new(Point::new(*x1, *y1), Point::new(*x2, *y2));
+                    let linea = Line::new(Point::new(*x1, *y1), Point::new(*x2, *y2));
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    painter.stroke(line, &Stroke::new(*width), color).draw();
+                    painter.stroke(linea, &Stroke::new(*ancho), color).draw();
                 }
 
-                CanvasCommand::FillPath {
+                CanvasCommand::RellenarTrazado {
                     points,
                     closed,
                     r,
@@ -322,47 +322,47 @@ impl crate::Widget for CanvasWidget {
                     if points.is_empty() {
                         continue;
                     }
-                    let mut path = BezPath::new();
-                    path.move_to(Point::new(points[0][0], points[0][1]));
+                    let mut ruta = BezPath::new();
+                    ruta.move_to(Point::new(points[0][0], points[0][1]));
                     for p in &points[1..] {
-                        path.line_to(Point::new(p[0], p[1]));
+                        ruta.line_to(Point::new(p[0], p[1]));
                     }
                     if *closed {
-                        path.close_path();
+                        ruta.close_path();
                     }
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    painter.fill(path, color).draw();
+                    painter.fill(ruta, color).draw();
                 }
 
-                CanvasCommand::StrokePath {
+                CanvasCommand::Trazar {
                     points,
                     closed,
                     r,
                     g,
                     b,
                     a,
-                    width,
+                    ancho,
                 } => {
                     if points.is_empty() {
                         continue;
                     }
-                    let mut path = BezPath::new();
-                    path.move_to(Point::new(points[0][0], points[0][1]));
+                    let mut ruta = BezPath::new();
+                    ruta.move_to(Point::new(points[0][0], points[0][1]));
                     for p in &points[1..] {
-                        path.line_to(Point::new(p[0], p[1]));
+                        ruta.line_to(Point::new(p[0], p[1]));
                     }
                     if *closed {
-                        path.close_path();
+                        ruta.close_path();
                     }
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    painter.stroke(path, &Stroke::new(*width), color).draw();
+                    painter.stroke(ruta, &Stroke::new(*ancho), color).draw();
                 }
 
-                CanvasCommand::DrawText {
+                CanvasCommand::DibujarTexto {
                     x,
                     y,
-                    text,
-                    size,
+                    texto,
+                    tamano,
                     r,
                     g,
                     b,
@@ -371,21 +371,21 @@ impl crate::Widget for CanvasWidget {
                     // Placeholder: dibujar un pequeño rectángulo coloreado
                     // que representa el área del texto
                     let color = peniko::Color::from_rgba8(*r, *g, *b, *a);
-                    let text_width = text.len() as f64 * size * 0.5;
-                    let rect = Rect::new(*x, *y, x + text_width.min(200.0), y + *size * 1.2);
+                    let texto_ancho = texto.len() as f64 * tamano * 0.5;
+                    let rect = Rect::new(*x, *y, x + texto_ancho.min(200.0), y + *tamano * 1.2);
                     painter.fill(rect, color).draw();
                 }
 
-                CanvasCommand::SetFillColor { r, g, b, a } => {
+                CanvasCommand::FijarColorRelleno { r, g, b, a } => {
                     self.fill_color = peniko::Color::from_rgba8(*r, *g, *b, *a);
                 }
 
-                CanvasCommand::SetStrokeColor { r, g, b, a } => {
+                CanvasCommand::FijarColorTrazo { r, g, b, a } => {
                     self.stroke_color = peniko::Color::from_rgba8(*r, *g, *b, *a);
                 }
 
-                CanvasCommand::SetStrokeWidth { width } => {
-                    self.stroke_width = *width;
+                CanvasCommand::FijarAnchoTrazo { ancho } => {
+                    self.stroke_ancho = *ancho;
                 }
             }
         }
@@ -399,9 +399,9 @@ impl crate::Widget for CanvasWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        node: &mut Node,
+        nodo: &mut Node,
     ) {
-        node.set_label("Lienzo de dibujo");
+        nodo.set_label("Lienzo de dibujo");
     }
 
     fn children_ids(&self) -> ChildrenIds {
@@ -416,61 +416,61 @@ impl crate::Widget for CanvasWidget {
 /// Wrapper Xilem View que crea un [`CanvasWidget`] y lo actualiza con
 /// comandos JSON desde [`VariableStore`].
 ///
-/// El `commands_json` se lee desde VariableStore en `layout_a_view()`
+/// El `commands_json` se lee desde VariableStore en `layout_a_vista()`
 /// y se pasa al View. Xilem detecta el cambio en `rebuild()` y actualiza
 /// el widget internamente.
 ///
 /// Sigue el patrón de `QRView` / `SvgIconView`: implementa
 /// `View<State, (), ViewCtx>` con `Element = Pod<CanvasWidget>`.
-pub struct CanvasView<State> {
+pub struct CanvasVista<State> {
     commands_var: String,
     commands_json: String,
-    width: f64,
-    height: f64,
+    ancho: f64,
+    alto: f64,
     phantom: PhantomData<fn() -> State>,
 }
 
-impl<State: 'static> CanvasView<State> {
-    pub fn new(commands_var: String, commands_json: String, width: f64, height: f64) -> Self {
+impl<State: 'static> CanvasVista<State> {
+    pub fn nuevo(commands_var: String, commands_json: String, ancho: f64, alto: f64) -> Self {
         Self {
             commands_var,
             commands_json,
-            width,
-            height,
+            ancho,
+            alto,
             phantom: PhantomData,
         }
     }
 
     /// Constructor sin comandos (útil cuando no hay variable)
-    pub fn empty(commands_var: String, width: f64, height: f64) -> Self {
+    pub fn empty(commands_var: String, ancho: f64, alto: f64) -> Self {
         Self {
             commands_var,
             commands_json: String::new(),
-            width,
-            height,
+            ancho,
+            alto,
             phantom: PhantomData,
         }
     }
 }
 
-impl<State: 'static> ViewMarker for CanvasView<State> {}
+impl<State: 'static> ViewMarker for CanvasVista<State> {}
 
-impl<State: 'static> View<State, (), ViewCtx> for CanvasView<State> {
+impl<State: 'static> View<State, (), ViewCtx> for CanvasVista<State> {
     type Element = Pod<CanvasWidget>;
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<CanvasWidget>, ()) {
-        let mut widget = CanvasWidget::new(self.commands_var.clone(), self.width, self.height);
+        let mut widget = CanvasWidget::nuevo(self.commands_var.clone(), self.ancho, self.alto);
         if !self.commands_json.is_empty() && self.commands_json != "null" {
-            widget.load_commands(&self.commands_json);
+            widget.cargar_commands(&self.commands_json);
         }
         (ctx.create_pod(widget), ())
     }
 
     fn rebuild(
         &self,
-        _prev: &Self,
-        _view_state: &mut (),
+        _anterior: &Self,
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, Pod<CanvasWidget>>,
         _app_state: &mut State,
@@ -482,7 +482,7 @@ impl<State: 'static> View<State, (), ViewCtx> for CanvasView<State> {
 
     fn teardown(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, Pod<CanvasWidget>>,
     ) {
@@ -490,7 +490,7 @@ impl<State: 'static> View<State, (), ViewCtx> for CanvasView<State> {
 
     fn message(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _message: &mut crate::MessageContext,
         _element: Mut<'_, Pod<CanvasWidget>>,
         _app_state: &mut State,

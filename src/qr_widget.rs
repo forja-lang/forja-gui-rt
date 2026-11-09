@@ -24,39 +24,41 @@ use xilem::masonry::peniko;
 /// usando Vello para dibujar los módulos negros sobre fondo blanco.
 pub struct QRWidget {
     /// Texto a codificar
-    text: String,
+    texto: String,
     /// Tamaño total del widget en píxeles lógicos
-    size: f64,
+    tamano: f64,
     /// Módulos del QR: true = negro, false = blanco
     modules: Vec<bool>,
     /// El QR es una matriz module_count × module_count
-    module_count: usize,
+    modulo_cantidad: usize,
 }
 
 impl QRWidget {
     /// Crea un nuevo QRWidget que codifica `text` en un QR de `size` píxeles.
     ///
     /// Usa nivel de corrección de errores M (~15%) por defecto.
-    pub fn new(text: String, size: f64) -> Self {
-        let size = size.max(50.0); // mínimo 50px
+    pub fn nuevo(texto: String, tamano: f64) -> Self {
+        let tamano = tamano.max(50.0); // mínimo 50px
 
         // Generar QR con corrección de errores nivel M
-        let code = match qrcode::QrCode::with_error_correction_level(
-            text.as_bytes(),
-            qrcode::EcLevel::M,
-        ) {
-            Ok(code) => code,
-            Err(_) => {
-                // Si falla (texto muy largo), usar nivel L
-                qrcode::QrCode::with_error_correction_level(text.as_bytes(), qrcode::EcLevel::L)
+        let code =
+            match qrcode::QrCode::with_error_correction_level(texto.as_bytes(), qrcode::EcLevel::M)
+            {
+                Ok(code) => code,
+                Err(_) => {
+                    // Si falla (texto muy largo), usar nivel L
+                    qrcode::QrCode::with_error_correction_level(
+                        texto.as_bytes(),
+                        qrcode::EcLevel::L,
+                    )
                     .unwrap_or_else(|_| {
                         // Si sigue fallando, crear un QR dummy
                         qrcode::QrCode::new(b"error").unwrap()
                     })
-            }
-        };
+                }
+            };
 
-        let module_count = code.width();
+        let modulo_cantidad = code.width();
         // qrcode 0.14 usa into_colors() para obtener Vec<Color>
         // Donde Color::Dark = true (módulo negro), Color::Light = false
         let modules: Vec<bool> = code
@@ -66,29 +68,29 @@ impl QRWidget {
             .collect();
 
         Self {
-            text,
-            size,
+            texto,
+            tamano,
             modules,
-            module_count,
+            modulo_cantidad,
         }
     }
 
     /// Actualiza el texto del QR y regenera los módulos
-    pub fn set_text(&mut self, text: String) {
-        if self.text == text {
+    pub fn fijar_texto(&mut self, texto: String) {
+        if self.texto == texto {
             return;
         }
-        self.text = text;
+        self.texto = texto;
         let code =
-            qrcode::QrCode::with_error_correction_level(self.text.as_bytes(), qrcode::EcLevel::M)
+            qrcode::QrCode::with_error_correction_level(self.texto.as_bytes(), qrcode::EcLevel::M)
                 .unwrap_or_else(|_| {
                     qrcode::QrCode::with_error_correction_level(
-                        self.text.as_bytes(),
+                        self.texto.as_bytes(),
                         qrcode::EcLevel::L,
                     )
                     .unwrap_or_else(|_| qrcode::QrCode::new(b"error").unwrap())
                 });
-        self.module_count = code.width();
+        self.modulo_cantidad = code.width();
         self.modules = code
             .into_colors()
             .iter()
@@ -109,13 +111,13 @@ impl Widget for QRWidget {
         _ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         _axis: Axis,
-        len_req: LenReq,
-        _cross_length: Option<Length>,
+        longitud_req: LenReq,
+        _cross_longitud: Option<Length>,
     ) -> Length {
         // El QR tiene tamaño propio fijo: lo respeta, pero se achica si el
         // espacio disponible es menor (equivalente al `bc.constrain` anterior).
-        let fijo = Length::px(self.size);
-        match len_req {
+        let fijo = Length::px(self.tamano);
+        match longitud_req {
             LenReq::FitContent(space) => fijo.min(space),
             _ => fijo,
         }
@@ -129,14 +131,14 @@ impl Widget for QRWidget {
         _props: &PropertiesRef<'_>,
         painter: &mut Painter<'_>,
     ) {
-        if self.modules.is_empty() || self.module_count == 0 {
+        if self.modules.is_empty() || self.modulo_cantidad == 0 {
             return;
         }
 
-        let cell_size = self.size / self.module_count as f64;
+        let cell_tamano = self.tamano / self.modulo_cantidad as f64;
 
         // Fondo blanco
-        let bg_rect = Rect::new(0.0, 0.0, self.size, self.size);
+        let bg_rect = Rect::new(0.0, 0.0, self.tamano, self.tamano);
         let white = peniko::Color::from_rgba8(255, 255, 255, 255);
         painter.fill_rect(bg_rect, white);
 
@@ -144,15 +146,15 @@ impl Widget for QRWidget {
         let black = peniko::Color::from_rgba8(0, 0, 0, 255);
 
         // Añadir margen de seguridad (quiet zone) de 4 módulos
-        let quiet_zone = 4.0 * cell_size;
+        let quiet_zone = 4.0 * cell_tamano;
 
         for (i, module) in self.modules.iter().enumerate() {
             if *module {
-                let row = i / self.module_count;
-                let col = i % self.module_count;
-                let x = quiet_zone + col as f64 * cell_size;
-                let y = quiet_zone + row as f64 * cell_size;
-                let rect = Rect::new(x, y, x + cell_size, y + cell_size);
+                let row = i / self.modulo_cantidad;
+                let col = i % self.modulo_cantidad;
+                let x = quiet_zone + col as f64 * cell_tamano;
+                let y = quiet_zone + row as f64 * cell_tamano;
+                let rect = Rect::new(x, y, x + cell_tamano, y + cell_tamano);
                 painter.fill_rect(rect, black);
             }
         }
@@ -166,9 +168,9 @@ impl Widget for QRWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        node: &mut xilem::masonry::accesskit::Node,
+        nodo: &mut xilem::masonry::accesskit::Node,
     ) {
-        node.set_label(format!("Código QR: {}", self.text));
+        nodo.set_label(format!("Código QR: {}", self.texto));
     }
 
     fn children_ids(&self) -> ChildrenIds {
@@ -184,48 +186,48 @@ impl Widget for QRWidget {
 ///
 /// Sigue el patrón de SvgIconView: implementa View<State, (), ViewCtx>
 /// con Element = Pod<QRWidget>.
-pub struct QRView<State> {
-    text: String,
-    size: f64,
+pub struct QRVista<State> {
+    texto: String,
+    tamano: f64,
     phantom: PhantomData<fn() -> State>,
 }
 
 /// Crea una vista de código QR
-pub fn qr_view<State: 'static>(text: &str, size: f64) -> QRView<State> {
-    QRView {
-        text: text.to_string(),
-        size,
+pub fn qr_vista<State: 'static>(texto: &str, tamano: f64) -> QRVista<State> {
+    QRVista {
+        texto: texto.to_string(),
+        tamano,
         phantom: PhantomData,
     }
 }
 
-impl<State: 'static> ViewMarker for QRView<State> {}
+impl<State: 'static> ViewMarker for QRVista<State> {}
 
-impl<State: 'static> View<State, (), ViewCtx> for QRView<State> {
+impl<State: 'static> View<State, (), ViewCtx> for QRVista<State> {
     type Element = xilem::Pod<QRWidget>;
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (xilem::Pod<QRWidget>, ()) {
-        let widget = QRWidget::new(self.text.clone(), self.size);
+        let widget = QRWidget::nuevo(self.texto.clone(), self.tamano);
         (ctx.create_pod(widget), ())
     }
 
     fn rebuild(
         &self,
-        prev: &Self,
-        _view_state: &mut (),
+        anterior: &Self,
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, xilem::Pod<QRWidget>>,
         _app_state: &mut State,
     ) {
-        if self.text != prev.text || (self.size - prev.size).abs() > 0.5 {
+        if self.texto != anterior.texto || (self.tamano - anterior.tamano).abs() > 0.5 {
             // Reconstrucción completa manejada por Xilem
         }
     }
 
     fn teardown(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, xilem::Pod<QRWidget>>,
     ) {
@@ -233,7 +235,7 @@ impl<State: 'static> View<State, (), ViewCtx> for QRView<State> {
 
     fn message(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _message: &mut crate::MessageContext,
         _element: Mut<'_, xilem::Pod<QRWidget>>,
         _app_state: &mut State,

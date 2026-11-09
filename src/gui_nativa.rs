@@ -12,9 +12,9 @@ use crate::Length;
 use crate::*;
 use crate::{map_message, MessageResult};
 use crate::{
-    MaterialTheme, // Tema Material You completo
-    RgbColor,      // Color RGB (convierte a xilem::Color vía From)
-    VariableStore, // Store reactivo de variables
+    MaterialTheme,   // Tema Material You completo
+    RgbColor,        // Color RGB (convierte a xilem::Color vía From)
+    VariableAlmacen, // Store reactivo de variables
 };
 use chrono::Datelike;
 use forja_syntax::ast::*;
@@ -75,15 +75,15 @@ impl From<&str> for ValorGUI {
 
 #[derive(Debug, Clone)]
 pub struct AppStateNativo {
-    pub store: VariableStore,
-    pub window_size: WindowSizeClass,
-    pub window_width: f64,
-    pub window_height: f64,
+    pub almacen: VariableAlmacen,
+    pub ventana_tamano: VentanaTamanoClase,
+    pub ventana_ancho: f64,
+    pub ventana_alto: f64,
     pub animation_engine: AnimationEngine,
     /// Previous visibility values keyed by variable name, for detecting transitions
-    anim_prev_visibility: HashMap<String, bool>,
+    anim_anterior_visibility: HashMap<String, bool>,
     /// Animation start times for transitions keyed by variable name
-    anim_start_time: HashMap<String, Instant>,
+    anim_inicio_time: HashMap<String, Instant>,
     /// Previous screen ID for navigator transitions
     pub(crate) nav_prev_screen: String,
     /// Animation start time for navigator screen transitions
@@ -104,11 +104,11 @@ impl From<ValorGUI> for serde_json::Value {
             ValorGUI::Booleano(b) => serde_json::Value::Bool(b),
             ValorGUI::Nulo => serde_json::Value::Null,
             ValorGUI::Mapa(m) => {
-                let mut map = serde_json::Map::new();
+                let mut mapa = serde_json::Map::new();
                 for (k, v) in m {
-                    map.insert(k, serde_json::Value::from(v));
+                    mapa.insert(k, serde_json::Value::from(v));
                 }
-                serde_json::Value::Object(map)
+                serde_json::Value::Object(mapa)
             }
         }
     }
@@ -129,11 +129,11 @@ impl From<serde_json::Value> for ValorGUI {
             }
             serde_json::Value::Bool(b) => ValorGUI::Booleano(b),
             serde_json::Value::Object(obj) => {
-                let mut map = HashMap::new();
+                let mut mapa = HashMap::new();
                 for (k, v) in obj {
-                    map.insert(k, ValorGUI::from(v));
+                    mapa.insert(k, ValorGUI::from(v));
                 }
-                ValorGUI::Mapa(map)
+                ValorGUI::Mapa(mapa)
             }
             serde_json::Value::Array(arr) => {
                 // Convertir array a JSON string para mantener compatibilidad
@@ -149,34 +149,34 @@ impl From<serde_json::Value> for ValorGUI {
 }
 
 impl AppStateNativo {
-    pub fn new() -> Self {
+    pub fn nuevo() -> Self {
         AppStateNativo {
-            store: VariableStore::new(),
-            window_size: WindowSizeClass::Compact,
-            window_width: 800.0,
-            window_height: 600.0,
-            animation_engine: AnimationEngine::new(),
-            anim_prev_visibility: HashMap::new(),
-            anim_start_time: HashMap::new(),
+            almacen: VariableAlmacen::nuevo(),
+            ventana_tamano: VentanaTamanoClase::Compact,
+            ventana_ancho: 800.0,
+            ventana_alto: 600.0,
+            animation_engine: AnimationEngine::nuevo(),
+            anim_anterior_visibility: HashMap::new(),
+            anim_inicio_time: HashMap::new(),
             nav_prev_screen: String::new(),
             nav_anim_start: None,
             orientation: Orientation::Portrait,
-            reactive_ctx: ReactiveCtx::new(),
+            reactive_ctx: ReactiveCtx::nuevo(),
         }
     }
 
     /// Detecta si una variable de visibilidad cambió de estado
     pub fn anim_visibility_changed(&mut self, var_name: &str, current_visible: bool) -> bool {
-        let prev = self
-            .anim_prev_visibility
+        let anterior = self
+            .anim_anterior_visibility
             .get(var_name)
             .copied()
             .unwrap_or(false);
-        let changed = prev != current_visible;
-        self.anim_prev_visibility
+        let changed = anterior != current_visible;
+        self.anim_anterior_visibility
             .insert(var_name.to_string(), current_visible);
         if changed {
-            self.anim_start_time
+            self.anim_inicio_time
                 .insert(var_name.to_string(), Instant::now());
         }
         changed
@@ -184,8 +184,8 @@ impl AppStateNativo {
 
     /// Obtiene el progreso de animación (0.0 a 1.0) para una transición
     pub fn anim_progress(&self, var_name: &str, duracion_ms: f64) -> f64 {
-        if let Some(start) = self.anim_start_time.get(var_name) {
-            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+        if let Some(inicio) = self.anim_inicio_time.get(var_name) {
+            let elapsed = inicio.elapsed().as_secs_f64() * 1000.0;
 
             (elapsed / duracion_ms).clamp(0.0, 1.0)
         } else {
@@ -199,7 +199,7 @@ impl AppStateNativo {
         EASE_EMPHASIZED.apply(raw)
     }
 
-    pub fn nav_transition_start(&mut self, screen_id: &str) {
+    pub fn nav_transition_inicio(&mut self, screen_id: &str) {
         if self.nav_prev_screen != screen_id {
             self.nav_prev_screen = screen_id.to_string();
             self.nav_anim_start = Some(Instant::now());
@@ -212,48 +212,48 @@ impl AppStateNativo {
     }
 
     /// Anuncia foco en un widget
-    pub fn a11y_focus(&self, widget_type: &str, label: &str, value: &str, state: &str) {
-        let desc = descripcion_accesible(widget_type, label, value, state);
+    pub fn a11y_focus(&self, widget_type: &str, etiqueta: &str, value: &str, state: &str) {
+        let desc = descripcion_accesible(widget_type, etiqueta, value, state);
         self.a11y_say(&desc);
     }
 
     /// Actualiza el tamaño de ventana y la clase de tamaño
-    pub fn update_window_size(&mut self, width: f64, height: f64) {
-        self.window_width = width;
-        self.window_height = height;
-        self.window_size = WindowSizeClass::from_width(width);
+    pub fn actualizar_ventana_tamano(&mut self, width: f64, height: f64) {
+        self.ventana_ancho = width;
+        self.ventana_alto = height;
+        self.ventana_tamano = VentanaTamanoClase::from_ancho(width);
         self.orientation = Orientation::from_dimensions(width, height);
     }
 
     pub fn leer(&self, nombre: &str) -> ValorGUI {
         // 5.7: Registrar lectura para reactive tracking
         self.reactive_ctx.track_dependency(nombre);
-        self.store
-            .get(nombre)
+        self.almacen
+            .obtener(nombre)
             .map(ValorGUI::from)
             .unwrap_or(ValorGUI::Nulo)
     }
 
     pub fn escribir(&mut self, nombre: &str, valor: ValorGUI) {
         let json_val: serde_json::Value = valor.into();
-        self.store.set(nombre, json_val);
+        self.almacen.fijar(nombre, json_val);
     }
 
     /// Serializa todas las variables de estado a JSON.
     /// Usado por hot reload para preservar estado entre reinicios.
     pub fn guardar_estado(&self) -> String {
-        let snapshot = self.store.snapshot();
+        let snapshot = self.almacen.snapshot();
         serde_json::to_string(&snapshot).unwrap_or_default()
     }
 
     /// Carga estado desde un JSON, restaurando las variables guardadas.
     /// Usado por hot reload para restaurar estado tras recompilar.
     pub fn cargar_estado(&mut self, json: &str) {
-        if let Ok(map) =
+        if let Ok(mapa) =
             serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(json)
         {
-            for (key, value) in map {
-                self.store.set(&key, value);
+            for (clave, value) in mapa {
+                self.almacen.fijar(&clave, value);
             }
         }
     }
@@ -261,7 +261,7 @@ impl AppStateNativo {
 
 impl Default for AppStateNativo {
     fn default() -> Self {
-        Self::new()
+        Self::nuevo()
     }
 }
 
@@ -284,20 +284,20 @@ impl Orientation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum WindowSizeClass {
+pub enum VentanaTamanoClase {
     Compact,  // < 600dp
     Medium,   // 600-840dp
     Expanded, // > 840dp
 }
 
-impl WindowSizeClass {
-    pub fn from_width(width: f64) -> Self {
+impl VentanaTamanoClase {
+    pub fn from_ancho(width: f64) -> Self {
         if width < 600.0 {
-            WindowSizeClass::Compact
+            VentanaTamanoClase::Compact
         } else if width < 840.0 {
-            WindowSizeClass::Medium
+            VentanaTamanoClase::Medium
         } else {
-            WindowSizeClass::Expanded
+            VentanaTamanoClase::Expanded
         }
     }
 }
@@ -314,7 +314,7 @@ pub enum ButtonVariant {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum FabSize {
+pub enum FabTamano {
     Small,
     Medium,
     Large,
@@ -337,7 +337,7 @@ pub enum ChipVariant {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TextFieldVariant {
+pub enum TextoCampoVariant {
     Filled,
     Outlined,
 }
@@ -360,9 +360,9 @@ pub enum SheetVariant {
 // ─── Navegación Material You ─────────────────────────────────────
 
 #[derive(Debug, Clone)]
-pub struct NavItem {
+pub struct NavElemento {
     pub icono: String,
-    pub label: String,
+    pub etiqueta: String,
     pub badge: Option<String>,
 }
 
@@ -393,7 +393,7 @@ pub struct NavigatorScreen {
 
 /// Tipo de navegación visual del Navigator
 #[derive(Debug, Clone, PartialEq)]
-pub enum NavigatorType {
+pub enum NavigatorTipo {
     /// Solo las pantallas, sin barra de navegación
     None,
     /// NavigationBar inferior (mobile style)
@@ -452,8 +452,8 @@ pub enum Layout {
     ZStack(Vec<Layout>),
     Portal(Box<Layout>),
     Container {
-        child: Box<Layout>,
-        max_width: f64,
+        hijo: Box<Layout>,
+        max_ancho: f64,
     },
     Label {
         texto: String,
@@ -470,12 +470,12 @@ pub enum Layout {
     // ─── Variantes de tema Material You ───────────────────────────
     /// Proveedor de tema: cambia el color semilla para los hijos
     ThemeProvider {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         theme: String,
     },
     /// Aplica un color del esquema al hijo (primary, secondary, etc.)
     ColoredBox {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         color_role: String,
     },
     /// Etiqueta con estilo tipográfico predefinido (display_large, body_medium, etc.)
@@ -485,18 +485,18 @@ pub enum Layout {
     },
     /// Aplica una familia de forma (border-radius) al hijo
     ShapedBox {
-        child: Box<Layout>,
-        shape_family: String,
+        hijo: Box<Layout>,
+        forma_family: String,
     },
     /// Aplica elevación (sombra) al hijo, con familia de forma opcional
     ElevatedBox {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         level: u8,
-        shape_family: String,
+        forma_family: String,
     },
     /// Aplica un estado visual al hijo (hover, pressed, etc.)
     StateLayerBox {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         state: String,
     },
     /// Layout responsivo con 3 variantes
@@ -507,16 +507,16 @@ pub enum Layout {
     },
     /// Aplica padding alrededor del hijo
     Padding {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         amount: f64,
     },
     /// Hace que el hijo se expanda para llenar el espacio disponible
     Expanded {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
     },
     /// Centra al hijo en el eje transversal
     Centered {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
     },
     Button {
         texto: String,
@@ -548,7 +548,7 @@ pub enum Layout {
         children: Vec<Layout>,
         axis: String,
         gap: f64,
-        wrap: bool,
+        envolver: bool,
     },
     /// Flow layout con gap y wrap automático
     FlowLayout {
@@ -563,7 +563,7 @@ pub enum Layout {
     },
     /// Caja con relación de aspecto fija
     AspectRatioBox {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         ratio: f64,
     },
     // ─── Botones Material Design 3 ──────────────────────────────────
@@ -577,7 +577,7 @@ pub enum Layout {
     FAB {
         icono: String,
         callback: String,
-        size: FabSize,
+        size: FabTamano,
         texto_extendido: Option<String>,
     },
     IconButton {
@@ -597,27 +597,27 @@ pub enum Layout {
         callback: String,
         variant: ChipVariant,
         activo: bool,
-        on_remove: Option<String>,
+        on_quitar: Option<String>,
     },
 
     // ─── Inputs Material Design 3 ────────────────────────────────
     MaterialTextField {
         variable: String,
-        label: String,
+        etiqueta: String,
         placeholder: String,
-        variant: TextFieldVariant,
+        variant: TextoCampoVariant,
         multiline: bool,
         error: String,
         counter: bool,
     },
     MaterialPasswordField {
         variable: String,
-        label: String,
+        etiqueta: String,
         visible: bool,
     },
     MaterialNumberField {
         variable: String,
-        label: String,
+        etiqueta: String,
         min: f64,
         max: f64,
         decimales: i32,
@@ -634,7 +634,7 @@ pub enum Layout {
     MaterialSelect {
         opciones: Vec<String>,
         seleccionada: usize,
-        label: String,
+        etiqueta: String,
     },
     MaterialAutocomplete {
         opciones: Vec<String>,
@@ -648,7 +648,7 @@ pub enum Layout {
         direction: String,
     },
     MaterialSwitch {
-        label: String,
+        etiqueta: String,
         variable: String,
     },
     MaterialSliderDiscrete {
@@ -681,7 +681,7 @@ pub enum Layout {
 
     // ─── Tarjetas, Listas y Tablas ──────────────────────────────
     MaterialCard {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         variant: CardVariant,
         on_click: Option<String>,
         seleccionado: bool,
@@ -699,7 +699,7 @@ pub enum Layout {
     },
     MaterialListControl {
         items: Vec<Layout>,
-        control_type: String,
+        control_tipo: String,
         variables: Vec<String>,
     },
     MaterialListSelection {
@@ -712,7 +712,7 @@ pub enum Layout {
     /// usando una función Forja como callback de render (lista_dinamica).
     DynamicList {
         variable: String,
-        item_fn: String,
+        elemento_fn: String,
     },
     /// Texto dinámico con estilo: la expresión se evalúa en tiempo de render
     /// usando el store (soporta concatenación + etiqueta_dinamica + helpers).
@@ -735,7 +735,7 @@ pub enum Layout {
         orden_asc: bool,
     },
     MaterialSurface {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         color_role: String,
     },
     MaterialScaffold {
@@ -765,13 +765,13 @@ pub enum Layout {
     },
     DialogCustom {
         titulo: String,
-        child: Box<Layout>,
-        on_close: String,
+        hijo: Box<Layout>,
+        on_cerrar: String,
     },
 
     // Bottom Sheets
     BottomSheet {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         variant: SheetVariant, // Standard | Modal | Expanded
         visible: String,
         on_dismiss: Option<String>,
@@ -788,7 +788,7 @@ pub enum Layout {
 
     // Tooltip
     Tooltip {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         texto: String,
     },
 
@@ -809,18 +809,18 @@ pub enum Layout {
     Navigator {
         screens: Vec<NavigatorScreen>,
         /// Variable que almacena el ID de la pantalla actual
-        current_var: String,
+        actual_variable: String,
         /// Variable para pila de navegación (historial)
         history_var: String,
         /// Tipo de navegación visual
-        nav_type: NavigatorType,
+        nav_tipo: NavigatorTipo,
         /// Animación de transición
         anim: NavigatorAnim,
         /// Callback opcional para cuando cambia la pantalla
         on_change: Option<String>,
     },
     NavigationBar {
-        items: Vec<NavItem>,
+        items: Vec<NavElemento>,
         seleccion: usize,
         /// Variable del `.fa` que guarda el índice seleccionado (2º argumento);
         /// sin esto la barra escribía en una variable con el nombre del callback
@@ -829,14 +829,14 @@ pub enum Layout {
         on_change: String,
     },
     NavigationRail {
-        items: Vec<NavItem>,
+        items: Vec<NavElemento>,
         seleccion: usize,
         variable_seleccion: Option<String>,
         on_change: String,
         extended: bool, // muestra labels
     },
     NavigationDrawer {
-        items: Vec<NavItem>,
+        items: Vec<NavElemento>,
         seleccion: usize,
         variable_seleccion: Option<String>,
         on_change: String,
@@ -861,7 +861,7 @@ pub enum Layout {
     },
     SearchBar {
         placeholder: String,
-        on_search: String,
+        on_buscar: String,
         variable: String,
     },
     SearchView {
@@ -886,7 +886,7 @@ pub enum Layout {
     },
     /// Badge (distintivo) sobre un hijo
     Badge {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         valor: Option<String>,
         dot: bool,
     },
@@ -929,13 +929,13 @@ pub enum Layout {
     // ═══════════════════════════════════════════════════════════════════
     /// Transición Fade (muestra/oculta con opacidad)
     FadeTransition {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         visible: String,
         duracion: f64,
     },
     /// Efecto ripple (onda al hacer clic)
     RippleEffect {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         color: String,
     },
 
@@ -944,27 +944,27 @@ pub enum Layout {
     // ═══════════════════════════════════════════════════════════════════
     /// Pull-to-refresh: envuelve un hijo con capacidad de recargar al tirar hacia abajo
     PullToRefresh {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         callback: String,
         refreshing: String,
     },
     /// Swipe-to-dismiss: deslizar para descartar con opción de deshacer
     SwipeToDismiss {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         on_dismiss: String,
-        label: String,
+        etiqueta: String,
         dismissed: String,
     },
 
     /// Pinch-to-zoom: zoom por pellizco multi-touch
     PinchZoom {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         min_scale: f64,
         max_scale: f64,
     },
     /// Rotate: rotación por gesto multi-touch
     Rotate {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
     },
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1053,13 +1053,13 @@ pub enum Layout {
     // ═══════════════════════════════════════════════════════════════════
     /// Tarjeta con efecto vidrio (Glassmorphism)
     GlassCard {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         blur: f64,
         opacity: f64,
     },
     /// Caja con gradiente
     GradientBox {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         colores: Vec<String>,
         direccion: String,
     },
@@ -1076,7 +1076,7 @@ pub enum Layout {
     },
     /// Borde con brillo (Glow)
     GlowBorder {
-        child: Box<Layout>,
+        hijo: Box<Layout>,
         color: String,
         ancho: f64,
     },
@@ -1106,11 +1106,11 @@ pub enum Layout {
 // ─── AST → Layout ─────────────────────────────────────────────────
 
 /// Extrae el layout del AST (recursivo: soporta desplazable, pila, etc.)
-pub fn extraer_layout(decls: &[Declaracion], store: &mut VariableStore) -> Layout {
+pub fn extraer_layout(decls: &[Declaracion], almacen: &mut VariableAlmacen) -> Layout {
     for decl in decls {
         if let Declaracion::Funcion { nombre, cuerpo, .. } = decl {
             if nombre == "main" {
-                let children = layouts_de_bloque(cuerpo, store, decls);
+                let children = layouts_de_bloque(cuerpo, almacen, decls);
                 // Una sola sentencia de nivel superior → ese layout tal cual (así
                 // las apps que ya envuelven todo en `columna(...)` no cambian).
                 // Varias → se concatenan en una columna implícita.
@@ -1143,12 +1143,12 @@ pub fn extraer_layout(decls: &[Declaracion], store: &mut VariableStore) -> Layou
 /// - Lo que no produce layout (declaraciones de variables, bucles, etc.) se ignora.
 fn layouts_de_bloque(
     cuerpo: &[Declaracion],
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     decls: &[Declaracion],
 ) -> Vec<Layout> {
     cuerpo
         .iter()
-        .flat_map(|d| expandir_declaracion_layout(d, store, decls, 0))
+        .flat_map(|d| expandir_declaracion_layout(d, almacen, decls, 0))
         .filter_map(|expr| expr_a_layout(&expr))
         .collect()
 }
@@ -1173,7 +1173,7 @@ fn cuerpo_de_funcion<'a>(nombre: &str, decls: &'a [Declaracion]) -> Option<&'a V
 /// recursivamente; el resultado es una lista plana de expresiones de widgets.
 fn expandir_declaracion_layout(
     decl: &Declaracion,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     decls: &[Declaracion],
     depth: u8,
 ) -> Vec<Expresion> {
@@ -1185,16 +1185,16 @@ fn expandir_declaracion_layout(
                 nombre: nombre.clone(),
                 argumentos: argumentos.clone(),
             },
-            store,
+            almacen,
             decls,
             depth,
         ),
-        Declaracion::Expresion(expr) => expandir_expresion_layout(expr, store, decls, depth),
+        Declaracion::Expresion(expr) => expandir_expresion_layout(expr, almacen, decls, depth),
         // Las funciones que arman layouts suelen devolverlo con `retornar`:
         // el valor es la expresión de layout (y en una función de valor, el
         // texto literal que después lee `extraer_texto`).
         Declaracion::Retornar { valor: Some(expr) } => {
-            expandir_expresion_layout(expr, store, decls, depth)
+            expandir_expresion_layout(expr, almacen, decls, depth)
         }
         Declaracion::Si {
             condicion,
@@ -1206,7 +1206,7 @@ fn expandir_declaracion_layout(
                 bloque_verdadero: bloque_verdadero.clone(),
                 bloque_falso: bloque_falso.clone(),
             },
-            store,
+            almacen,
             decls,
             depth,
         ),
@@ -1223,7 +1223,7 @@ fn expandir_declaracion_layout(
 /// 3. Cualquier otra expresión se devuelve tal cual, expandiendo sus argumentos.
 fn expandir_expresion_layout(
     expr: &Expresion,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     decls: &[Declaracion],
     depth: u8,
 ) -> Vec<Expresion> {
@@ -1234,7 +1234,7 @@ fn expandir_expresion_layout(
             bloque_falso,
         } => {
             let condicion_verdadera =
-                crate::evaluador::evaluar_condicion(condicion, store, decls).unwrap_or(true);
+                crate::evaluador::evaluar_condicion(condicion, almacen, decls).unwrap_or(true);
             let rama = if condicion_verdadera {
                 Some(bloque_verdadero)
             } else {
@@ -1243,7 +1243,7 @@ fn expandir_expresion_layout(
             match rama {
                 Some(bloque) => bloque
                     .iter()
-                    .flat_map(|d| expandir_declaracion_layout(d, store, decls, depth))
+                    .flat_map(|d| expandir_declaracion_layout(d, almacen, decls, depth))
                     .collect(),
                 None => Vec::new(),
             }
@@ -1251,7 +1251,7 @@ fn expandir_expresion_layout(
         Expresion::LlamadaFuncion { nombre, argumentos } => {
             let argumentos: Vec<Expresion> = argumentos
                 .iter()
-                .flat_map(|a| expandir_expresion_layout(a, store, decls, depth))
+                .flat_map(|a| expandir_expresion_layout(a, almacen, decls, depth))
                 .collect();
             // Función de usuario: puede ser de **valor** (`titulo_categoria(pagina)`)
             // o armar un **layout** (`seccion_botones(...)`). Se intenta primero
@@ -1262,18 +1262,18 @@ fn expandir_expresion_layout(
                 if let Some(cuerpo) = cuerpo_de_funcion(nombre, decls) {
                     let args: Result<Vec<ValorGUI>, String> = argumentos
                         .iter()
-                        .map(|a| crate::evaluador::evaluar_valor(a, store, decls))
+                        .map(|a| crate::evaluador::evaluar_valor(a, almacen, decls))
                         .collect();
                     if let Ok(args) = args {
                         if let Ok(valor) =
-                            crate::evaluador::ejecutar_funcion(nombre, &args, decls, store)
+                            crate::evaluador::ejecutar_funcion(nombre, &args, decls, almacen)
                         {
                             return vec![valor_a_expresion(&valor)];
                         }
                     }
                     return cuerpo
                         .iter()
-                        .flat_map(|d| expandir_declaracion_layout(d, store, decls, depth + 1))
+                        .flat_map(|d| expandir_declaracion_layout(d, almacen, decls, depth + 1))
                         .collect();
                 }
             }
@@ -1285,11 +1285,11 @@ fn expandir_expresion_layout(
         Expresion::Arreglo(items) => vec![Expresion::Arreglo(
             items
                 .iter()
-                .flat_map(|a| expandir_expresion_layout(a, store, decls, depth))
+                .flat_map(|a| expandir_expresion_layout(a, almacen, decls, depth))
                 .collect(),
         )],
         Expresion::Grupo(inner) => {
-            let mut expandido = expandir_expresion_layout(inner, store, decls, depth);
+            let mut expandido = expandir_expresion_layout(inner, almacen, decls, depth);
             match expandido.len() {
                 0 => Vec::new(),
                 1 => vec![Expresion::Grupo(Box::new(expandido.remove(0)))],
@@ -1339,7 +1339,7 @@ fn procesar_args(args: &[Expresion]) -> Vec<Layout> {
 /// 5.8: Tipo para la función de procesamiento de hijos.
 /// Permite que `parse_layout_call` use tanto `procesar_args` como `procesar_args_item`.
 type ChildProcessor =
-    fn(&[Expresion], &HashMap<String, ValorGUI>, &VariableStore, &[Declaracion]) -> Vec<Layout>;
+    fn(&[Expresion], &HashMap<String, ValorGUI>, &VariableAlmacen, &[Declaracion]) -> Vec<Layout>;
 
 /// 5.8: Wrapper que adapta `procesar_args` al signature de `ChildProcessor`.
 /// Disponible para futura migración de `expr_a_layout` a usar `parse_layout_call`.
@@ -1347,7 +1347,7 @@ type ChildProcessor =
 fn procesar_args_wrapper(
     args: &[Expresion],
     _params: &HashMap<String, ValorGUI>,
-    _store: &VariableStore,
+    _almacen: &VariableAlmacen,
     _declaraciones: &[Declaracion],
 ) -> Vec<Layout> {
     procesar_args(args)
@@ -1377,12 +1377,12 @@ fn extract_gap_alignment(argumentos: &[Expresion]) -> (f64, String) {
 fn extract_children_from_array(
     arg: &Expresion,
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
-    process_children: ChildProcessor,
+    procesar_children: ChildProcessor,
 ) -> Vec<Layout> {
     match arg {
-        Expresion::Arreglo(exprs) => process_children(exprs, params, store, declaraciones),
+        Expresion::Arreglo(exprs) => procesar_children(exprs, params, almacen, declaraciones),
         _ => Vec::new(),
     }
 }
@@ -1390,22 +1390,22 @@ fn extract_children_from_array(
 /// 5.8: Función compartida para parsear llamadas de función → Layout.
 /// Maneja los casos comunes entre `expr_a_layout` y `expr_a_layout_item`.
 /// Retorna Some(Layout) si es un caso compartido, None si el caller debe manejarlo.
-fn parse_layout_call(
+fn parsear_layout_llamada(
     nombre: &str,
     argumentos: &[Expresion],
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
-    process_children: ChildProcessor,
+    procesar_children: ChildProcessor,
 ) -> Option<Layout> {
     match nombre {
         "columna" | "gui_columna" => Some(Layout::Column {
-            children: process_children(argumentos, params, store, declaraciones),
+            children: procesar_children(argumentos, params, almacen, declaraciones),
             gap: 0.0,
             alignment: "start".to_string(),
         }),
         "fila" | "gui_fila" => Some(Layout::Row {
-            children: process_children(argumentos, params, store, declaraciones),
+            children: procesar_children(argumentos, params, almacen, declaraciones),
             gap: 0.0,
             alignment: "start".to_string(),
         }),
@@ -1413,7 +1413,13 @@ fn parse_layout_call(
             let children = argumentos
                 .first()
                 .map(|a| {
-                    extract_children_from_array(a, params, store, declaraciones, process_children)
+                    extract_children_from_array(
+                        a,
+                        params,
+                        almacen,
+                        declaraciones,
+                        procesar_children,
+                    )
                 })
                 .unwrap_or_default();
             let (gap, alignment) = extract_gap_alignment(argumentos);
@@ -1427,7 +1433,13 @@ fn parse_layout_call(
             let children = argumentos
                 .first()
                 .map(|a| {
-                    extract_children_from_array(a, params, store, declaraciones, process_children)
+                    extract_children_from_array(
+                        a,
+                        params,
+                        almacen,
+                        declaraciones,
+                        procesar_children,
+                    )
                 })
                 .unwrap_or_default();
             let (gap, alignment) = extract_gap_alignment(argumentos);
@@ -1452,7 +1464,7 @@ fn parse_layout_call(
                 .first()
                 .and_then(|a| match a {
                     Expresion::Arreglo(exprs) => {
-                        Some(process_children(exprs, params, store, declaraciones))
+                        Some(procesar_children(exprs, params, almacen, declaraciones))
                     }
                     _ => None,
                 })
@@ -1472,7 +1484,7 @@ fn parse_layout_call(
                 .first()
                 .and_then(|a| match a {
                     Expresion::Arreglo(exprs) => {
-                        Some(process_children(exprs, params, store, declaraciones))
+                        Some(procesar_children(exprs, params, almacen, declaraciones))
                     }
                     _ => None,
                 })
@@ -1723,19 +1735,19 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "desplazable" | "gui_desplazable" | "scroll" => argumentos
                     .first()
                     .and_then(expr_a_layout)
-                    .map(|child| Layout::Portal(Box::new(child))),
+                    .map(|hijo| Layout::Portal(Box::new(hijo))),
                 "contenedor" | "container" | "caja" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    let max_width = argumentos
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    let max_ancho = argumentos
                         .get(1)
                         .and_then(|a| match a {
                             Expresion::LiteralNumero(n) => Some(*n as f64),
                             _ => None,
                         })
                         .unwrap_or(400.0);
-                    child.map(|c| Layout::Container {
-                        child: Box::new(c),
-                        max_width,
+                    hijo.map(|c| Layout::Container {
+                        hijo: Box::new(c),
+                        max_ancho,
                     })
                 }
                 // ─── Configuración de la ventana ────────────────────
@@ -1753,118 +1765,128 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => "#6750A4".to_string(),
                         })
                         .unwrap_or_else(|| "#6750A4".to_string());
-                    let child = argumentos.get(1).and_then(expr_a_layout);
-                    child.map(|c| Layout::ThemeProvider {
-                        child: Box::new(c),
+                    let hijo = argumentos.get(1).and_then(expr_a_layout);
+                    hijo.map(|c| Layout::ThemeProvider {
+                        hijo: Box::new(c),
                         theme: seed,
                     })
                 }
                 // ─── Diseños predeterminados (claro/oscuro) ──────────
                 // tema_fluent(hijo) / tema_fluent_oscuro(hijo)
                 "tema_fluent" | "fluent" | "tema_windows11" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::ThemeProvider {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::ThemeProvider {
+                        hijo: Box::new(c),
                         theme: "fluent:light".to_string(),
                     })
                 }
                 "tema_fluent_oscuro" | "fluent_oscuro" | "tema_windows11_oscuro" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::ThemeProvider {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::ThemeProvider {
+                        hijo: Box::new(c),
                         theme: "fluent:dark".to_string(),
                     })
                 }
                 // tema_liquid_glass(hijo) / tema_liquid_glass_oscuro(hijo)
                 "tema_liquid_glass" | "tema_vidrio" | "liquid_glass" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::ThemeProvider {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::ThemeProvider {
+                        hijo: Box::new(c),
                         theme: "liquid_glass:light".to_string(),
                     })
                 }
                 "tema_liquid_glass_oscuro" | "tema_vidrio_oscuro" | "liquid_glass_oscuro" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::ThemeProvider {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::ThemeProvider {
+                        hijo: Box::new(c),
                         theme: "liquid_glass:dark".to_string(),
                     })
                 }
                 // Colores del tema (envuelven un hijo con un color role)
-                "color_primario" | "color_primary" => wrap_with_color_role(argumentos, "primary"),
+                "color_primario" | "color_primary" => {
+                    envolver_con_color_role(argumentos, "primary")
+                }
                 "color_sobre_primario" | "color_on_primary" => {
-                    wrap_with_color_role(argumentos, "on_primary")
+                    envolver_con_color_role(argumentos, "on_primary")
                 }
                 "color_primario_contenedor" | "color_primary_container" => {
-                    wrap_with_color_role(argumentos, "primary_container")
+                    envolver_con_color_role(argumentos, "primary_container")
                 }
                 "color_sobre_primario_contenedor" | "color_on_primary_container" => {
-                    wrap_with_color_role(argumentos, "on_primary_container")
+                    envolver_con_color_role(argumentos, "on_primary_container")
                 }
                 "color_secundario" | "color_secondary" => {
-                    wrap_with_color_role(argumentos, "secondary")
+                    envolver_con_color_role(argumentos, "secondary")
                 }
                 "color_sobre_secundario" | "color_on_secondary" => {
-                    wrap_with_color_role(argumentos, "on_secondary")
+                    envolver_con_color_role(argumentos, "on_secondary")
                 }
                 "color_secundario_contenedor" | "color_secondary_container" => {
-                    wrap_with_color_role(argumentos, "secondary_container")
+                    envolver_con_color_role(argumentos, "secondary_container")
                 }
                 "color_sobre_secundario_contenedor" | "color_on_secondary_container" => {
-                    wrap_with_color_role(argumentos, "on_secondary_container")
+                    envolver_con_color_role(argumentos, "on_secondary_container")
                 }
                 "color_terciario" | "color_tertiary" => {
-                    wrap_with_color_role(argumentos, "tertiary")
+                    envolver_con_color_role(argumentos, "tertiary")
                 }
                 "color_sobre_terciario" | "color_on_tertiary" => {
-                    wrap_with_color_role(argumentos, "on_tertiary")
+                    envolver_con_color_role(argumentos, "on_tertiary")
                 }
-                "color_error" | "color_error_role" => wrap_with_color_role(argumentos, "error"),
+                "color_error" | "color_error_role" => envolver_con_color_role(argumentos, "error"),
                 "color_sobre_error" | "color_on_error" => {
-                    wrap_with_color_role(argumentos, "on_error")
+                    envolver_con_color_role(argumentos, "on_error")
                 }
-                "color_superficie" | "color_surface" => wrap_with_color_role(argumentos, "surface"),
+                "color_superficie" | "color_surface" => {
+                    envolver_con_color_role(argumentos, "surface")
+                }
                 "color_sobre_superficie" | "color_on_surface" => {
-                    wrap_with_color_role(argumentos, "on_surface")
+                    envolver_con_color_role(argumentos, "on_surface")
                 }
                 "color_fondo" | "color_background" => {
-                    wrap_with_color_role(argumentos, "background")
+                    envolver_con_color_role(argumentos, "background")
                 }
                 "color_sobre_fondo" | "color_on_background" => {
-                    wrap_with_color_role(argumentos, "on_background")
+                    envolver_con_color_role(argumentos, "on_background")
                 }
-                "color_perfil" | "color_outline" => wrap_with_color_role(argumentos, "outline"),
+                "color_perfil" | "color_outline" => envolver_con_color_role(argumentos, "outline"),
 
                 // Estilos tipográficos (15 estilos Material You)
-                "texto_grande" | "display_large" => styled_label(argumentos, "display_large"),
-                "texto_mediano" | "display_medium" => styled_label(argumentos, "display_medium"),
+                "texto_grande" | "display_large" => styled_etiqueta(argumentos, "display_large"),
+                "texto_mediano" | "display_medium" => styled_etiqueta(argumentos, "display_medium"),
                 "texto_pequeño" | "texto_pequeno" | "display_small" => {
-                    styled_label(argumentos, "display_small")
+                    styled_etiqueta(argumentos, "display_small")
                 }
-                "titular_grande" | "headline_large" => styled_label(argumentos, "headline_large"),
+                "titular_grande" | "headline_large" => {
+                    styled_etiqueta(argumentos, "headline_large")
+                }
                 "titular_mediano" | "headline_medium" => {
-                    styled_label(argumentos, "headline_medium")
+                    styled_etiqueta(argumentos, "headline_medium")
                 }
-                "titular_pequeño" | "headline_small" => styled_label(argumentos, "headline_small"),
-                "encabezado_grande" | "title_large" => styled_label(argumentos, "title_large"),
-                "encabezado_mediano" | "title_medium" => styled_label(argumentos, "title_medium"),
-                "encabezado_pequeño" | "title_small" => styled_label(argumentos, "title_small"),
-                "cuerpo_grande" | "body_large" => styled_label(argumentos, "body_large"),
-                "cuerpo_mediano" | "body_medium" => styled_label(argumentos, "body_medium"),
-                "cuerpo_pequeño" | "body_small" => styled_label(argumentos, "body_small"),
-                "etiqueta_grande" | "label_large" => styled_label(argumentos, "label_large"),
-                "etiqueta_mediana" | "label_medium" => styled_label(argumentos, "label_medium"),
-                "etiqueta_pequeña" | "label_small" => styled_label(argumentos, "label_small"),
+                "titular_pequeño" | "headline_small" => {
+                    styled_etiqueta(argumentos, "headline_small")
+                }
+                "encabezado_grande" | "title_large" => styled_etiqueta(argumentos, "title_large"),
+                "encabezado_mediano" | "title_medium" => {
+                    styled_etiqueta(argumentos, "title_medium")
+                }
+                "encabezado_pequeño" | "title_small" => styled_etiqueta(argumentos, "title_small"),
+                "cuerpo_grande" | "body_large" => styled_etiqueta(argumentos, "body_large"),
+                "cuerpo_mediano" | "body_medium" => styled_etiqueta(argumentos, "body_medium"),
+                "cuerpo_pequeño" | "body_small" => styled_etiqueta(argumentos, "body_small"),
+                "etiqueta_grande" | "label_large" => styled_etiqueta(argumentos, "label_large"),
+                "etiqueta_mediana" | "label_medium" => styled_etiqueta(argumentos, "label_medium"),
+                "etiqueta_pequeña" | "label_small" => styled_etiqueta(argumentos, "label_small"),
 
                 // Formas (border-radius)
-                "esquinas_pequeñas" | "shape_small" => wrap_with_shape(argumentos, "small"),
-                "esquinas_medianas" | "shape_medium" => wrap_with_shape(argumentos, "medium"),
-                "esquinas_grandes" | "shape_large" => wrap_with_shape(argumentos, "large"),
-                "esquinas_completas" | "shape_full" => wrap_with_shape(argumentos, "full"),
+                "esquinas_pequeñas" | "shape_small" => envolver_con_forma(argumentos, "small"),
+                "esquinas_medianas" | "shape_medium" => envolver_con_forma(argumentos, "medium"),
+                "esquinas_grandes" | "shape_large" => envolver_con_forma(argumentos, "large"),
+                "esquinas_completas" | "shape_full" => envolver_con_forma(argumentos, "full"),
 
                 // Layout avanzado
                 "relleno" | "padding" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let amount = argumentos
                         .get(1)
                         .and_then(|a| match a {
@@ -1872,21 +1894,21 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(8.0);
-                    child.map(|c| Layout::Padding {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::Padding {
+                        hijo: Box::new(c),
                         amount,
                     })
                 }
                 "expansor" | "expanded" => argumentos
                     .first()
                     .and_then(expr_a_layout)
-                    .map(|c| Layout::Expanded { child: Box::new(c) }),
+                    .map(|c| Layout::Expanded { hijo: Box::new(c) }),
                 "centrado" | "centered" | "center" => argumentos
                     .first()
                     .and_then(expr_a_layout)
-                    .map(|c| Layout::Centered { child: Box::new(c) }),
+                    .map(|c| Layout::Centered { hijo: Box::new(c) }),
                 "sombra" | "shadow" | "elevated" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let level = argumentos
                         .get(1)
                         .and_then(|a| match a {
@@ -1894,17 +1916,17 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(1);
-                    let shape_family = argumentos
+                    let forma_family = argumentos
                         .get(2)
                         .and_then(|a| match a {
                             Expresion::LiteralTexto(s) => Some(s.clone()),
                             _ => None,
                         })
                         .unwrap_or_else(|| "surface".to_string());
-                    child.map(|c| Layout::ElevatedBox {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::ElevatedBox {
+                        hijo: Box::new(c),
                         level,
-                        shape_family,
+                        forma_family,
                     })
                 }
                 "adaptable" | "responsive" => {
@@ -2040,7 +2062,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // caja_relativa(hijo, proporcion) — Aspect ratio
                 "caja_relativa" | "aspect_ratio" | "aspectratio" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let ratio = argumentos
                         .get(1)
                         .and_then(|a| match a {
@@ -2049,8 +2071,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(1.0);
-                    child.map(|c| Layout::AspectRatioBox {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::AspectRatioBox {
+                        hijo: Box::new(c),
                         ratio,
                     })
                 }
@@ -2079,7 +2101,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(0.0);
-                    let wrap = argumentos
+                    let envolver = argumentos
                         .get(3)
                         .and_then(|a| match a {
                             Expresion::LiteralBooleano(b) => Some(*b),
@@ -2090,7 +2112,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         children,
                         axis,
                         gap,
-                        wrap,
+                        envolver,
                     })
                 }
 
@@ -2160,7 +2182,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabSize::Medium,
+                        size: FabTamano::Medium,
                         texto_extendido: None,
                     })
                 }
@@ -2170,7 +2192,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabSize::Small,
+                        size: FabTamano::Small,
                         texto_extendido: None,
                     })
                 }
@@ -2180,7 +2202,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabSize::Large,
+                        size: FabTamano::Large,
                         texto_extendido: None,
                     })
                 }
@@ -2191,7 +2213,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabSize::Medium,
+                        size: FabTamano::Medium,
                         texto_extendido: Some(texto),
                     })
                 }
@@ -2323,7 +2345,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         callback,
                         variant: ChipVariant::Assist,
                         activo: false,
-                        on_remove: None,
+                        on_quitar: None,
                     })
                 }
                 "subconjunto_filtro" | "chip_filter" => {
@@ -2335,7 +2357,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         callback,
                         variant: ChipVariant::Filter,
                         activo,
-                        on_remove: None,
+                        on_quitar: None,
                     })
                 }
                 "subconjunto_entrada" | "chip_input" => {
@@ -2347,7 +2369,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         callback: cb_fn,
                         variant: ChipVariant::Input,
                         activo: true,
-                        on_remove: Some(cb_clone),
+                        on_quitar: Some(cb_clone),
                     })
                 }
                 "subconjunto_sugerencia" | "chip_suggestion" => {
@@ -2358,7 +2380,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         callback,
                         variant: ChipVariant::Suggestion,
                         activo: false,
-                        on_remove: None,
+                        on_quitar: None,
                     })
                 }
 
@@ -2367,7 +2389,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 // Text Fields
                 "campo_texto" | "campo_texto_error" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     let error = if nombre == "campo_texto_error" {
                         extraer_texto(argumentos, 2)
                     } else {
@@ -2375,9 +2397,9 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     };
                     Some(Layout::MaterialTextField {
                         variable,
-                        label,
+                        etiqueta,
                         placeholder: String::new(),
-                        variant: TextFieldVariant::Filled,
+                        variant: TextoCampoVariant::Filled,
                         multiline: false,
                         error,
                         counter: false,
@@ -2385,12 +2407,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_perfilado" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::MaterialTextField {
                         variable,
-                        label,
+                        etiqueta,
                         placeholder: String::new(),
-                        variant: TextFieldVariant::Outlined,
+                        variant: TextoCampoVariant::Outlined,
                         multiline: false,
                         error: String::new(),
                         counter: false,
@@ -2398,12 +2420,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_email" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::MaterialTextField {
                         variable,
-                        label,
+                        etiqueta,
                         placeholder: "email@ejemplo.com".to_string(),
-                        variant: TextFieldVariant::Outlined,
+                        variant: TextoCampoVariant::Outlined,
                         multiline: false,
                         error: String::new(),
                         counter: false,
@@ -2411,12 +2433,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_telefono" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::MaterialTextField {
                         variable,
-                        label,
+                        etiqueta,
                         placeholder: "+54 11 1234-5678".to_string(),
-                        variant: TextFieldVariant::Outlined,
+                        variant: TextoCampoVariant::Outlined,
                         multiline: false,
                         error: String::new(),
                         counter: false,
@@ -2424,12 +2446,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_url" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::MaterialTextField {
                         variable,
-                        label,
+                        etiqueta,
                         placeholder: "https://".to_string(),
-                        variant: TextFieldVariant::Outlined,
+                        variant: TextoCampoVariant::Outlined,
                         multiline: false,
                         error: String::new(),
                         counter: false,
@@ -2437,21 +2459,21 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_contraseña" | "campo_contrasena" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::MaterialPasswordField {
                         variable,
-                        label,
+                        etiqueta,
                         visible: false,
                     })
                 }
                 "campo_numero" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     let min = extraer_f64(argumentos, 2);
                     let max = extraer_f64(argumentos, 3);
                     Some(Layout::MaterialNumberField {
                         variable,
-                        label,
+                        etiqueta,
                         min,
                         max,
                         decimales: 0,
@@ -2478,11 +2500,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "menu_seleccion" | "select_menu" => {
                     let opciones = extraer_array_strings(argumentos, 0);
                     let seleccionada = extraer_usize(argumentos, 1);
-                    let label = extraer_texto(argumentos, 2);
+                    let etiqueta = extraer_texto(argumentos, 2);
                     Some(Layout::MaterialSelect {
                         opciones,
                         seleccionada,
-                        label,
+                        etiqueta,
                     })
                 }
                 "autocompletar" | "autocomplete" => {
@@ -2512,9 +2534,9 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // Switch
                 "interruptor" | "switch_widget" => {
-                    let label = extraer_texto(argumentos, 0);
+                    let etiqueta = extraer_texto(argumentos, 0);
                     let variable = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialSwitch { label, variable })
+                    Some(Layout::MaterialSwitch { etiqueta, variable })
                 }
 
                 // Sliders
@@ -2572,34 +2594,34 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── Tarjetas (Cards) ─────────────────────────────
                 "tarjeta" | "card" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::MaterialCard {
+                        hijo: Box::new(c),
                         variant: CardVariant::Filled,
                         on_click: None,
                         seleccionado: false,
                     })
                 }
                 "tarjeta_elevada" | "elevated_card" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::MaterialCard {
+                        hijo: Box::new(c),
                         variant: CardVariant::Elevated,
                         on_click: None,
                         seleccionado: false,
                     })
                 }
                 "tarjeta_perfilada" | "outlined_card" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::MaterialCard {
+                        hijo: Box::new(c),
                         variant: CardVariant::Outlined,
                         on_click: None,
                         seleccionado: false,
                     })
                 }
                 "tarjeta_seleccionable" | "selectable_card" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let _variable = argumentos
                         .get(1)
                         .map(|a| match a {
@@ -2607,8 +2629,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    child.map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::MaterialCard {
+                        hijo: Box::new(c),
                         variant: CardVariant::Selectable,
                         on_click: None,
                         seleccionado: false,
@@ -2675,11 +2697,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or_default();
-                    let control_type = extraer_texto(argumentos, 1);
+                    let control_tipo = extraer_texto(argumentos, 1);
                     let variables = extraer_array_strings(argumentos, 2);
                     Some(Layout::MaterialListControl {
                         items,
-                        control_type,
+                        control_tipo,
                         variables,
                     })
                 }
@@ -2704,7 +2726,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 // lista_dinamica("variable_lista", &render_item)
                 "lista_dinamica" | "dynamic_list" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let item_fn = argumentos
+                    let elemento_fn = argumentos
                         .get(1)
                         .map(|a| match a {
                             Expresion::Referencia { expr, .. } => match expr.as_ref() {
@@ -2715,7 +2737,10 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    Some(Layout::DynamicList { variable, item_fn })
+                    Some(Layout::DynamicList {
+                        variable,
+                        elemento_fn,
+                    })
                 }
 
                 // ─── Data Tables ─────────────────────────────────
@@ -2758,16 +2783,16 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── Surfaces ────────────────────────────────────
                 "superficie" | "surface_widget" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::MaterialSurface {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::MaterialSurface {
+                        hijo: Box::new(c),
                         color_role: "surface".to_string(),
                     })
                 }
                 "superficie_tonal" | "tonal_surface" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::MaterialSurface {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::MaterialSurface {
+                        hijo: Box::new(c),
                         color_role: "tonal".to_string(),
                     })
                 }
@@ -2812,49 +2837,49 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "dialogo_personalizado" | "dialog_custom" => {
                     let titulo = extraer_texto(argumentos, 0);
-                    let child = argumentos.get(1).and_then(expr_a_layout);
-                    child.map(|c| Layout::DialogCustom {
+                    let hijo = argumentos.get(1).and_then(expr_a_layout);
+                    hijo.map(|c| Layout::DialogCustom {
                         titulo,
-                        child: Box::new(c),
-                        on_close: String::new(),
+                        hijo: Box::new(c),
+                        on_cerrar: String::new(),
                     })
                 }
                 "dialogo_completo" | "dialog_full" => {
                     let titulo = extraer_texto(argumentos, 0);
-                    let child = argumentos.get(1).and_then(expr_a_layout);
-                    child.map(|c| Layout::DialogCustom {
+                    let hijo = argumentos.get(1).and_then(expr_a_layout);
+                    hijo.map(|c| Layout::DialogCustom {
                         titulo,
-                        child: Box::new(c),
-                        on_close: String::new(),
+                        hijo: Box::new(c),
+                        on_cerrar: String::new(),
                     })
                 }
 
                 // ─── FEEDBACK: Bottom Sheets ─────────────────────────
                 "hoja_inferior" | "bottom_sheet" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let visible = extraer_texto(argumentos, 1);
-                    child.map(|c| Layout::BottomSheet {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::BottomSheet {
+                        hijo: Box::new(c),
                         variant: SheetVariant::Standard,
                         visible,
                         on_dismiss: None,
                     })
                 }
                 "hoja_inferior_modal" | "modal_sheet" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let visible = extraer_texto(argumentos, 1);
-                    child.map(|c| Layout::BottomSheet {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::BottomSheet {
+                        hijo: Box::new(c),
                         variant: SheetVariant::Modal,
                         visible,
                         on_dismiss: None,
                     })
                 }
                 "hoja_inferior_grande" | "expanded_sheet" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let visible = extraer_texto(argumentos, 1);
-                    child.map(|c| Layout::BottomSheet {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::BottomSheet {
+                        hijo: Box::new(c),
                         variant: SheetVariant::Expanded,
                         visible,
                         on_dismiss: None,
@@ -2894,10 +2919,10 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── FEEDBACK: Tooltip ───────────────────────────────
                 "información" | "tooltip" | "info" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let texto = extraer_texto(argumentos, 1);
-                    child.map(|c| Layout::Tooltip {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::Tooltip {
+                        hijo: Box::new(c),
                         texto,
                     })
                 }
@@ -2961,27 +2986,27 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 // ─── Navigator (navegación por pantallas) ──────────
                 "navegador" | "navigator" => {
                     let screens = extraer_navigator_screens(argumentos, 0);
-                    let current_var = argumentos
+                    let actual_variable = argumentos
                         .get(1)
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
                             _ => "pantalla_actual".to_string(),
                         })
                         .unwrap_or_else(|| "pantalla_actual".to_string());
-                    let current_var_clone = current_var.clone();
-                    let nav_type_str = argumentos
+                    let actual_variable_clonar = actual_variable.clone();
+                    let nav_tipo_texto = argumentos
                         .get(2)
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.clone(),
                             _ => "ninguno".to_string(),
                         })
                         .unwrap_or_else(|| "ninguno".to_string());
-                    let nav_type = match nav_type_str.to_lowercase().as_str() {
-                        "barra" | "bottom" | "inferior" => NavigatorType::BottomBar,
-                        "riel" | "rail" | "lateral" => NavigatorType::Rail,
-                        "pestañas" | "tabs" | "tab" => NavigatorType::Tabs,
-                        "cajon" | "drawer" => NavigatorType::Drawer,
-                        _ => NavigatorType::None,
+                    let nav_tipo = match nav_tipo_texto.to_lowercase().as_str() {
+                        "barra" | "bottom" | "inferior" => NavigatorTipo::BottomBar,
+                        "riel" | "rail" | "lateral" => NavigatorTipo::Rail,
+                        "pestañas" | "tabs" | "tab" => NavigatorTipo::Tabs,
+                        "cajon" | "drawer" => NavigatorTipo::Drawer,
+                        _ => NavigatorTipo::None,
                     };
                     // Arg 3 opcional: callback on_change (ej: &cambiar_pantalla)
                     let on_change = argumentos
@@ -2989,14 +3014,14 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         .map(|_| extraer_callback(argumentos, 3))
                         .filter(|s| !s.is_empty());
                     // Arg 4 opcional: tipo de animación ("fade", "slide", "ninguno")
-                    let anim_type = argumentos
+                    let anim_tipo = argumentos
                         .get(4)
                         .map(|a| match a {
                             Expresion::LiteralTexto(s) => s.to_lowercase(),
                             _ => "ninguno".to_string(),
                         })
                         .unwrap_or_else(|| "ninguno".to_string());
-                    let anim = match anim_type.as_str() {
+                    let anim = match anim_tipo.as_str() {
                         "fade" => NavigatorAnim::Fade,
                         "slide" => NavigatorAnim::Slide,
                         _ => NavigatorAnim::None,
@@ -3006,9 +3031,9 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     } else {
                         Some(Layout::Navigator {
                             screens,
-                            current_var: current_var_clone,
-                            history_var: format!("{}_historial", current_var),
-                            nav_type,
+                            actual_variable: actual_variable_clonar,
+                            history_var: format!("{}_historial", actual_variable),
+                            nav_tipo,
                             anim,
                             on_change,
                         })
@@ -3154,7 +3179,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let variable = extraer_texto(argumentos, 1);
                     Some(Layout::SearchBar {
                         placeholder,
-                        on_search: String::new(),
+                        on_buscar: String::new(),
                         variable,
                     })
                 }
@@ -3164,9 +3189,9 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     // item_navegacion se procesa dentro de extraer_nav_items,
                     // pero como llamada directa devolvemos un placeholder
                     let icono = extraer_texto(argumentos, 0);
-                    let label = extraer_texto(argumentos, 1);
+                    let etiqueta = extraer_texto(argumentos, 1);
                     Some(Layout::StyledLabel {
-                        texto: format!("{} {}", icono, label),
+                        texto: format!("{} {}", icono, etiqueta),
                         style: "label_medium".to_string(),
                     })
                 }
@@ -3225,7 +3250,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── Badge ───────────────────────────────────────────
                 "distintivo" | "badge" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let valor = argumentos
                         .get(1)
                         .map(|a| match a {
@@ -3235,16 +3260,16 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(None);
-                    child.map(|c| Layout::Badge {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::Badge {
+                        hijo: Box::new(c),
                         valor,
                         dot: false,
                     })
                 }
                 "distintivo_punto" | "badge_dot" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::Badge {
-                        child: Box::new(c),
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::Badge {
+                        hijo: Box::new(c),
                         valor: None,
                         dot: true,
                     })
@@ -3402,7 +3427,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── FadeTransition ──────────────────────────────────
                 "transición" | "fade_transition" | "transition" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let visible = extraer_texto(argumentos, 1);
                     let duracion = argumentos
                         .get(2)
@@ -3412,8 +3437,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(0.3);
-                    child.map(|c| Layout::FadeTransition {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::FadeTransition {
+                        hijo: Box::new(c),
                         visible,
                         duracion,
                     })
@@ -3421,10 +3446,10 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── RippleEffect ────────────────────────────────────
                 "efecto_onda" | "ripple_effect" | "ripple" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let color = extraer_texto(argumentos, 1);
-                    child.map(|c| Layout::RippleEffect {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::RippleEffect {
+                        hijo: Box::new(c),
                         color: if color.is_empty() {
                             "primary".to_string()
                         } else {
@@ -3435,7 +3460,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── PullToRefresh ──────────────────────────────────
                 "pull_to_refresh" | "pulltorefresh" | "tirar_recargar" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let callback = extraer_callback(argumentos, 1);
                     let refreshing = argumentos
                         .get(2)
@@ -3445,8 +3470,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    child.map(|c| Layout::PullToRefresh {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::PullToRefresh {
+                        hijo: Box::new(c),
                         callback,
                         refreshing: if refreshing.is_empty() {
                             "refreshing".to_string()
@@ -3458,9 +3483,9 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── SwipeToDismiss ─────────────────────────────────
                 "swipe_to_dismiss" | "swipetodismiss" | "deslizar_descartar" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let on_dismiss = extraer_callback(argumentos, 1);
-                    let label = extraer_texto(argumentos, 2);
+                    let etiqueta = extraer_texto(argumentos, 2);
                     let dismissed = argumentos
                         .get(3)
                         .map(|a| match a {
@@ -3469,17 +3494,17 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    child.map(|c| Layout::SwipeToDismiss {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::SwipeToDismiss {
+                        hijo: Box::new(c),
                         on_dismiss: if on_dismiss.is_empty() {
                             String::new()
                         } else {
                             on_dismiss
                         },
-                        label: if label.is_empty() {
+                        etiqueta: if etiqueta.is_empty() {
                             "Descartar".to_string()
                         } else {
-                            label
+                            etiqueta
                         },
                         dismissed: if dismissed.is_empty() {
                             "dismissed".to_string()
@@ -3491,7 +3516,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── PinchZoom ────────────────────────────────────
                 "zoom_pellizco" | "pinch_zoom" | "zoom" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let min_scale = argumentos
                         .get(1)
                         .and_then(|a| match a {
@@ -3506,8 +3531,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or(3.0);
-                    child.map(|c| Layout::PinchZoom {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::PinchZoom {
+                        hijo: Box::new(c),
                         min_scale,
                         max_scale,
                     })
@@ -3515,8 +3540,8 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── Rotate ───────────────────────────────────────
                 "rotar" | "rotate" | "girar" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
-                    child.map(|c| Layout::Rotate { child: Box::new(c) })
+                    let hijo = argumentos.first().and_then(expr_a_layout);
+                    hijo.map(|c| Layout::Rotate { hijo: Box::new(c) })
                 }
 
                 // ═══════════════════════════════════════════════════════
@@ -3703,11 +3728,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── GlassCard ────────────────────────────────────────
                 "tarjeta_vidrio" | "glass_card" | "glassmorphism" | "glass" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let blur = extraer_f64(argumentos, 1);
                     let opacity = extraer_f64(argumentos, 2);
-                    child.map(|c| Layout::GlassCard {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::GlassCard {
+                        hijo: Box::new(c),
                         blur: if blur <= 0.0 { 20.0 } else { blur },
                         opacity: if opacity <= 0.0 {
                             0.65
@@ -3719,11 +3744,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── GradientBox ──────────────────────────────────────
                 "gradiente_lineal" | "gradiente_radial" | "gradient_box" | "gradient" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let colores = extraer_array_strings(argumentos, 1);
                     let direccion = extraer_texto(argumentos, 2);
-                    child.map(|c| Layout::GradientBox {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::GradientBox {
+                        hijo: Box::new(c),
                         colores,
                         direccion: if direccion.is_empty() {
                             "horizontal".to_string()
@@ -3754,11 +3779,11 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 
                 // ─── GlowBorder ───────────────────────────────────────
                 "efecto_brillo" | "glow_border" | "glow" | "brillo" => {
-                    let child = argumentos.first().and_then(expr_a_layout);
+                    let hijo = argumentos.first().and_then(expr_a_layout);
                     let color = extraer_texto(argumentos, 1);
                     let ancho = extraer_f64(argumentos, 2);
-                    child.map(|c| Layout::GlowBorder {
-                        child: Box::new(c),
+                    hijo.map(|c| Layout::GlowBorder {
+                        hijo: Box::new(c),
                         color: if color.is_empty() {
                             "primary".to_string()
                         } else {
@@ -3890,17 +3915,17 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
 // ─── Helpers de tema Material You ──────────────────────────────────
 
 /// Envuelve un child con un color role del tema
-fn wrap_with_color_role(args: &[Expresion], role: &str) -> Option<Layout> {
+fn envolver_con_color_role(args: &[Expresion], role: &str) -> Option<Layout> {
     args.first()
         .and_then(expr_a_layout)
         .map(|c| Layout::ColoredBox {
-            child: Box::new(c),
+            hijo: Box::new(c),
             color_role: role.to_string(),
         })
 }
 
 /// Crea una etiqueta con estilo tipográfico predefinido
-fn styled_label(args: &[Expresion], style: &str) -> Option<Layout> {
+fn styled_etiqueta(args: &[Expresion], style: &str) -> Option<Layout> {
     if let Some(a) = args.first() {
         match a {
             Expresion::LiteralTexto(s) => {
@@ -3937,7 +3962,7 @@ fn styled_label(args: &[Expresion], style: &str) -> Option<Layout> {
 pub(crate) fn expr_a_valor(
     expr: &Expresion,
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Option<ValorGUI> {
     match expr {
@@ -3949,32 +3974,32 @@ pub(crate) fn expr_a_valor(
             if let Some(v) = params.get(nombre) {
                 return Some(v.clone());
             }
-            store.get(nombre).map(|v| ValorGUI::from_serde(&v))
+            almacen.obtener(nombre).map(|v| ValorGUI::from_serde(&v))
         }
         Expresion::Index { objeto, indice } => {
-            let obj = expr_a_valor(objeto, params, store, declaraciones)?;
-            let idx = expr_a_valor(indice, params, store, declaraciones)?;
+            let obj = expr_a_valor(objeto, params, almacen, declaraciones)?;
+            let idx = expr_a_valor(indice, params, almacen, declaraciones)?;
             match obj {
                 ValorGUI::Mapa(m) => {
-                    let key = match idx {
+                    let clave = match idx {
                         ValorGUI::Texto(s) => s,
                         ValorGUI::Entero(i) => i.to_string(),
                         other => other.to_string(),
                     };
-                    m.get(&key).cloned()
+                    m.get(&clave).cloned()
                 }
                 ValorGUI::Texto(s) => {
                     // Objeto o array serializado (JSON)
-                    let key = idx.to_string();
+                    let clave = idx.to_string();
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
                         match v {
                             serde_json::Value::Object(obj) => {
-                                if let Some(item) = obj.get(&key) {
+                                if let Some(item) = obj.get(&clave) {
                                     return Some(ValorGUI::from_serde(item));
                                 }
                             }
                             serde_json::Value::Array(arr) => {
-                                if let Ok(pos) = key.parse::<usize>() {
+                                if let Ok(pos) = clave.parse::<usize>() {
                                     if let Some(item) = arr.get(pos) {
                                         return Some(ValorGUI::from_serde(item));
                                     }
@@ -3994,12 +4019,12 @@ pub(crate) fn expr_a_valor(
             derecha,
         } => {
             if *operador == Operador::Suma {
-                let a = expr_a_texto(izquierda, params, store, declaraciones);
-                let b = expr_a_texto(derecha, params, store, declaraciones);
+                let a = expr_a_texto(izquierda, params, almacen, declaraciones);
+                let b = expr_a_texto(derecha, params, almacen, declaraciones);
                 Some(ValorGUI::Texto(a + &b))
             } else {
-                let a = expr_a_valor(izquierda, params, store, declaraciones)?;
-                let b = expr_a_valor(derecha, params, store, declaraciones)?;
+                let a = expr_a_valor(izquierda, params, almacen, declaraciones)?;
+                let b = expr_a_valor(derecha, params, almacen, declaraciones)?;
                 let fa = a.to_f64();
                 let fb = b.to_f64();
                 let res = match operador {
@@ -4022,9 +4047,9 @@ pub(crate) fn expr_a_valor(
             // etiqueta_dinamica(variable) → leer del store
             if nombre == "etiqueta_dinamica" || nombre == "varlabel" {
                 if let Some(arg) = argumentos.first() {
-                    let var_name = expr_a_texto(arg, params, store, declaraciones);
+                    let var_name = expr_a_texto(arg, params, almacen, declaraciones);
                     if !var_name.is_empty() {
-                        if let Some(v) = store.get(&var_name) {
+                        if let Some(v) = almacen.obtener(&var_name) {
                             return Some(ValorGUI::from_serde(&v));
                         }
                     }
@@ -4034,13 +4059,14 @@ pub(crate) fn expr_a_valor(
             // Convertir argumentos y ejecutar función (helper o del AST)
             let mut args = Vec::new();
             for a in argumentos {
-                match expr_a_valor(a, params, store, declaraciones) {
+                match expr_a_valor(a, params, almacen, declaraciones) {
                     Some(v) => args.push(v),
                     None => return None,
                 }
             }
-            let mut store_clone = store.clone();
-            crate::evaluador::ejecutar_funcion(nombre, &args, declaraciones, &mut store_clone).ok()
+            let mut almacen_clonar = almacen.clone();
+            crate::evaluador::ejecutar_funcion(nombre, &args, declaraciones, &mut almacen_clonar)
+                .ok()
         }
         _ => None,
     }
@@ -4050,20 +4076,20 @@ pub(crate) fn expr_a_valor(
 pub(crate) fn expr_a_texto(
     expr: &Expresion,
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> String {
-    expr_a_valor(expr, params, store, declaraciones)
+    expr_a_valor(expr, params, almacen, declaraciones)
         .map(|v| v.to_display())
         .unwrap_or_default()
 }
 
 /// Convierte una expresión de texto (o layout) a un string simple para
 /// titulo/subtitulo de listas: extrae el primer texto de una columna.
-fn texto_item_columna(
+fn texto_elemento_columna(
     expr: &Expresion,
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> String {
     match expr {
@@ -4086,7 +4112,7 @@ fn texto_item_columna(
                                 || hn == "encabezado_mediano"
                             {
                                 if let Some(t) = ha.first() {
-                                    textos.push(expr_a_texto(t, params, store, declaraciones));
+                                    textos.push(expr_a_texto(t, params, almacen, declaraciones));
                                 }
                             }
                         }
@@ -4096,33 +4122,33 @@ fn texto_item_columna(
             }
             // etiqueta(x), texto_pequeno(x) directo
             if let Some(t) = argumentos.first() {
-                return expr_a_texto(t, params, store, declaraciones);
+                return expr_a_texto(t, params, almacen, declaraciones);
             }
             String::new()
         }
-        _ => expr_a_texto(expr, params, store, declaraciones),
+        _ => expr_a_texto(expr, params, almacen, declaraciones),
     }
 }
 
 /// Evalúa el layout de un item de lista dinámica, resolviendo accesos a mapa
 /// (item["clave"]), funciones helper (formatear_fecha, formatear_monto) y
 /// etiquetas dinámicas usando los parámetros del item.
-pub(crate) fn expr_a_layout_item(
+pub(crate) fn expresion_a_layout_elemento(
     expr: &Expresion,
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Option<Layout> {
     match expr {
         Expresion::LlamadaFuncion { nombre, argumentos } => {
             // 5.8: Intentar parse_layout_call para casos compartidos primero
-            if let Some(layout) = parse_layout_call(
+            if let Some(layout) = parsear_layout_llamada(
                 nombre,
                 argumentos,
                 params,
-                store,
+                almacen,
                 declaraciones,
-                procesar_args_item,
+                procesar_args_elemento,
             ) {
                 return Some(layout);
             }
@@ -4131,20 +4157,24 @@ pub(crate) fn expr_a_layout_item(
                 "elemento_lista_doble" | "two_line_list_item" => {
                     let leading = argumentos
                         .first()
-                        .and_then(|a| expr_a_layout_item(a, params, store, declaraciones))
+                        .and_then(|a| {
+                            expresion_a_layout_elemento(a, params, almacen, declaraciones)
+                        })
                         .map(Box::new);
-                    let titulo = texto_item_columna(
+                    let titulo = texto_elemento_columna(
                         argumentos.get(1).unwrap_or(argumentos.first()?),
                         params,
-                        store,
+                        almacen,
                         declaraciones,
                     );
                     let subtitulo = argumentos
                         .get(2)
-                        .map(|a| texto_item_columna(a, params, store, declaraciones));
+                        .map(|a| texto_elemento_columna(a, params, almacen, declaraciones));
                     let trailing = argumentos
                         .get(3)
-                        .and_then(|a| expr_a_layout_item(a, params, store, declaraciones))
+                        .and_then(|a| {
+                            expresion_a_layout_elemento(a, params, almacen, declaraciones)
+                        })
                         .map(Box::new);
                     Some(Layout::MaterialListItem {
                         leading,
@@ -4157,7 +4187,7 @@ pub(crate) fn expr_a_layout_item(
                 "icono_material" | "material_icon" => {
                     let nombre_icono = argumentos
                         .first()
-                        .map(|a| expr_a_texto(a, params, store, declaraciones))
+                        .map(|a| expr_a_texto(a, params, almacen, declaraciones))
                         .unwrap_or_default();
                     Some(Layout::MaterialIconLayout {
                         nombre: nombre_icono,
@@ -4169,7 +4199,7 @@ pub(crate) fn expr_a_layout_item(
                 "circulo_color" => {
                     let color = argumentos
                         .first()
-                        .map(|a| expr_a_texto(a, params, store, declaraciones))
+                        .map(|a| expr_a_texto(a, params, almacen, declaraciones))
                         .unwrap_or_default();
                     Some(Layout::ColoredLabel {
                         texto: String::new(),
@@ -4178,7 +4208,7 @@ pub(crate) fn expr_a_layout_item(
                 }
                 "etiqueta" | "label" | "text" | "escribir" => {
                     if let Some(arg) = argumentos.first() {
-                        let txt = expr_a_texto(arg, params, store, declaraciones);
+                        let txt = expr_a_texto(arg, params, almacen, declaraciones);
                         if txt.is_empty() {
                             Some(Layout::Spacer(0.0))
                         } else {
@@ -4207,7 +4237,7 @@ pub(crate) fn expr_a_layout_item(
                     };
                     let txt = argumentos
                         .first()
-                        .map(|a| expr_a_texto(a, params, store, declaraciones))
+                        .map(|a| expr_a_texto(a, params, almacen, declaraciones))
                         .unwrap_or_default();
                     Some(Layout::StyledLabel {
                         texto: txt,
@@ -4216,18 +4246,18 @@ pub(crate) fn expr_a_layout_item(
                 }
                 "tarjeta" | "card" => argumentos
                     .first()
-                    .and_then(|a| expr_a_layout_item(a, params, store, declaraciones))
+                    .and_then(|a| expresion_a_layout_elemento(a, params, almacen, declaraciones))
                     .map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                        hijo: Box::new(c),
                         variant: CardVariant::Elevated,
                         on_click: None,
                         seleccionado: false,
                     }),
                 "tarjeta_seleccionable" | "selectable_card" => argumentos
                     .first()
-                    .and_then(|a| expr_a_layout_item(a, params, store, declaraciones))
+                    .and_then(|a| expresion_a_layout_elemento(a, params, almacen, declaraciones))
                     .map(|c| Layout::MaterialCard {
-                        child: Box::new(c),
+                        hijo: Box::new(c),
                         variant: CardVariant::Outlined,
                         on_click: extraer_callback(argumentos, 1).into(),
                         seleccionado: false,
@@ -4235,7 +4265,7 @@ pub(crate) fn expr_a_layout_item(
                 "barra_progreso" | "progress" | "progress_bar" => {
                     let val = argumentos
                         .first()
-                        .and_then(|a| expr_a_valor(a, params, store, declaraciones))
+                        .and_then(|a| expr_a_valor(a, params, almacen, declaraciones))
                         .map(|v| v.to_f64())
                         .unwrap_or(0.0);
                     Some(Layout::LinearProgressValue(val))
@@ -4248,24 +4278,24 @@ pub(crate) fn expr_a_layout_item(
 }
 
 /// procesar_args con contexto de item (para listas dinámicas).
-fn procesar_args_item(
+fn procesar_args_elemento(
     args: &[Expresion],
     params: &HashMap<String, ValorGUI>,
-    store: &VariableStore,
+    almacen: &VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Vec<Layout> {
     args.iter()
-        .filter_map(|a| expr_a_layout_item(a, params, store, declaraciones))
+        .filter_map(|a| expresion_a_layout_elemento(a, params, almacen, declaraciones))
         .collect()
 }
 
 /// Envuelve un child con una familia de forma
-fn wrap_with_shape(args: &[Expresion], family: &str) -> Option<Layout> {
+fn envolver_con_forma(args: &[Expresion], family: &str) -> Option<Layout> {
     args.first()
         .and_then(expr_a_layout)
         .map(|c| Layout::ShapedBox {
-            child: Box::new(c),
-            shape_family: family.to_string(),
+            hijo: Box::new(c),
+            forma_family: family.to_string(),
         })
 }
 
@@ -4275,13 +4305,13 @@ fn wrap_with_shape(args: &[Expresion], family: &str) -> Option<Layout> {
 
 /// 5.10: Estima el ancho de un Layout basado en su tipo (para wrap de FlowLayout).
 /// Retorna None si no se puede estimar (fallback: 100px).
-fn estimate_child_width(layout: &Layout) -> Option<f64> {
+fn estimate_hijo_ancho(layout: &Layout) -> Option<f64> {
     match layout {
         Layout::MaterialButton { texto, .. } => Some((texto.len() as f64) * 8.0 + 32.0),
         Layout::Chip { texto, .. } => Some((texto.len() as f64) * 7.0 + 24.0),
         Layout::Label { texto, .. } => Some((texto.len() as f64) * 8.0),
         Layout::MaterialCard { .. } => Some(300.0),
-        Layout::Container { max_width, .. } => Some(*max_width),
+        Layout::Container { max_ancho, .. } => Some(*max_ancho),
         Layout::MaterialListItem { .. } => Some(280.0),
         Layout::Row { gap, .. } => Some(200.0 + gap),
         Layout::Column { gap, .. } => Some(200.0 + gap),
@@ -4291,7 +4321,7 @@ fn estimate_child_width(layout: &Layout) -> Option<f64> {
 
 /// Convierte Layout a xilem usando AnyWidgetView para type erasure.
 /// Recibe el tema actual como referencia para aplicar colores, tipografía y formas.
-pub fn layout_a_view<'a>(
+pub fn layout_a_vista<'a>(
     layout: &'a Layout,
     data: &'a mut AppStateNativo,
     _prog: &'a [Declaracion],
@@ -4309,13 +4339,13 @@ pub fn layout_a_view<'a>(
         } => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in children {
-                widgets.push(layout_a_view(h, data, _prog, theme));
+                widgets.push(layout_a_vista(h, data, _prog, theme));
             }
-            let ma = parse_alignment(alignment);
+            let ma = parsear_alignment(alignment);
             // Ancho dinámico: en portrait usa el ancho completo, en landscape limita a 720dp máximo
             let ancho = match data.orientation {
-                Orientation::Portrait => (data.window_width - 16.0).max(200.0),
-                Orientation::Landscape => (data.window_width - 16.0).clamp(200.0, 720.0),
+                Orientation::Portrait => (data.ventana_ancho - 16.0).max(200.0),
+                Orientation::Landscape => (data.ventana_ancho - 16.0).clamp(200.0, 720.0),
             };
             Box::new(
                 view::sized_box(
@@ -4331,12 +4361,12 @@ pub fn layout_a_view<'a>(
         Layout::CenteredColumn(hijos) => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in hijos {
-                widgets.push(layout_a_view(h, data, _prog, theme));
+                widgets.push(layout_a_vista(h, data, _prog, theme));
             }
             // Ancho dinámico: en portrait usa el ancho completo, en landscape limita a 720dp máximo
             let ancho = match data.orientation {
-                Orientation::Portrait => (data.window_width - 16.0).max(200.0),
-                Orientation::Landscape => (data.window_width - 16.0).clamp(200.0, 720.0),
+                Orientation::Portrait => (data.ventana_ancho - 16.0).max(200.0),
+                Orientation::Landscape => (data.ventana_ancho - 16.0).clamp(200.0, 720.0),
             };
             Box::new(
                 view::sized_box(
@@ -4360,7 +4390,7 @@ pub fn layout_a_view<'a>(
             // NOTA: FlexExt::flex() no funciona con Box<AnyWidgetView> (type erasure),
             // ya que Pod<DynWidget> no implementa AnyElement<FlexElement>.
             // Se maneja con tuplas de tamaño fijo para los casos más comunes (1-3 hijos).
-            let ma = parse_alignment(alignment);
+            let ma = parsear_alignment(alignment);
             let flex_eligible = children.iter().all(|h| {
                 matches!(
                     h,
@@ -4371,7 +4401,7 @@ pub fn layout_a_view<'a>(
                 // Casos con 1-3 hijos flex: usar tuplas con FlexExt
                 match children.len() {
                     1 => {
-                        let a = layout_a_view(&children[0], data, _prog, theme);
+                        let a = layout_a_vista(&children[0], data, _prog, theme);
                         let row =
                             view::flex(Axis::Horizontal, (xilem::view::FlexExt::flex(a, 1.0),))
                                 .main_axis_alignment(ma)
@@ -4379,8 +4409,8 @@ pub fn layout_a_view<'a>(
                         return Box::new(row) as Box<AnyWidgetView<AppStateNativo>>;
                     }
                     2 => {
-                        let a = layout_a_view(&children[0], data, _prog, theme);
-                        let b = layout_a_view(&children[1], data, _prog, theme);
+                        let a = layout_a_vista(&children[0], data, _prog, theme);
+                        let b = layout_a_vista(&children[1], data, _prog, theme);
                         let row = view::flex(
                             Axis::Horizontal,
                             (
@@ -4393,9 +4423,9 @@ pub fn layout_a_view<'a>(
                         return Box::new(row) as Box<AnyWidgetView<AppStateNativo>>;
                     }
                     3 => {
-                        let a = layout_a_view(&children[0], data, _prog, theme);
-                        let b = layout_a_view(&children[1], data, _prog, theme);
-                        let c = layout_a_view(&children[2], data, _prog, theme);
+                        let a = layout_a_vista(&children[0], data, _prog, theme);
+                        let b = layout_a_vista(&children[1], data, _prog, theme);
+                        let c = layout_a_vista(&children[2], data, _prog, theme);
                         let row = view::flex(
                             Axis::Horizontal,
                             (
@@ -4414,7 +4444,7 @@ pub fn layout_a_view<'a>(
             // Caso general: sin flex
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in children {
-                widgets.push(layout_a_view(h, data, _prog, theme));
+                widgets.push(layout_a_vista(h, data, _prog, theme));
             }
             Box::new(
                 view::flex(Axis::Horizontal, (widgets,))
@@ -4426,31 +4456,32 @@ pub fn layout_a_view<'a>(
         Layout::ZStack(hijos) => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in hijos {
-                widgets.push(layout_a_view(h, data, _prog, theme));
+                widgets.push(layout_a_vista(h, data, _prog, theme));
             }
             Box::new(view::zstack((widgets,)))
         }
-        Layout::Portal(child) => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::Portal(hijo) => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             // El área desplazable ocupa el ancho de la ventana (menos un margen
             // para el scrollbar). El contenido interno se estira con cross Fill.
-            let ancho = (data.window_width - 18.0).max(200.0);
+            let ancho = (data.ventana_ancho - 18.0).max(200.0);
             Box::new(view::portal(
                 view::sized_box(inner)
                     .width(Length::px(ancho))
                     .padding(16.0.px()),
             ))
         }
-        Layout::Container { child, max_width } => {
-            let inner = layout_a_view(child, data, _prog, theme);
-            Box::new(view::sized_box(inner).width(Length::px(*max_width)))
+        Layout::Container { hijo, max_ancho } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            Box::new(view::sized_box(inner).width(Length::px(*max_ancho)))
         }
         Layout::Label { texto, es_variable } => {
             if *es_variable {
                 let var_name = texto.clone();
                 let txt = data.leer(&var_name).to_string();
-                let gen = data.store.generation(&var_name);
-                let color: forja_gui_rt::Color = get_color_role(&theme.scheme, "on_surface").into();
+                let gen = data.almacen.generation(&var_name);
+                let color: forja_gui_rt::Color =
+                    obtener_color_role(&theme.scheme, "on_surface").into();
                 Box::new(memoize(
                     (gen, txt, color),
                     move |(_, text, clr): &(u64, String, forja_gui_rt::Color)| {
@@ -4465,11 +4496,11 @@ pub fn layout_a_view<'a>(
         }
         Layout::Title(texto) => {
             // Usar estilo headline_medium del tema
-            let style = get_text_style(&theme.typography, "headline_medium");
-            let color: forja_gui_rt::Color = get_color_role(&theme.scheme, "on_surface").into();
+            let style = obtener_texto_style(&theme.typography, "headline_medium");
+            let color: forja_gui_rt::Color = obtener_color_role(&theme.scheme, "on_surface").into();
             Box::new(
                 view::label(texto.clone())
-                    .text_size(style.font_size as f32)
+                    .text_size(style.font_tamano as f32)
                     .weight(FontWeight::BOLD)
                     .color(color),
             )
@@ -4487,7 +4518,7 @@ pub fn layout_a_view<'a>(
             let var_name = variable.clone();
             // Leer valor Y generación para memoize reactivo
             let txt = data.leer(&var_name).to_string();
-            let gen = data.store.generation(&var_name);
+            let gen = data.almacen.generation(&var_name);
             // Usar memoize para que este widget solo se reconstruya
             // cuando la generación de la variable cambie
             Box::new(memoize((gen, txt), move |(_, text): &(u64, String)| {
@@ -4511,7 +4542,7 @@ pub fn layout_a_view<'a>(
         } => {
             let var_name = variable.clone();
             let val = data.leer(&var_name).to_string();
-            let gen = data.store.generation(&var_name);
+            let gen = data.almacen.generation(&var_name);
             let ph = placeholder.clone();
             let tc: forja_gui_rt::Color = theme.scheme.on_surface.into();
             Box::new(memoize(
@@ -4527,8 +4558,8 @@ pub fn layout_a_view<'a>(
                     let pl = pl.clone();
                     let mut ti = view::text_input(
                         text.clone(),
-                        move |data: &mut AppStateNativo, new_val: String| {
-                            data.escribir(&vn, ValorGUI::Texto(new_val));
+                        move |data: &mut AppStateNativo, nuevo_val: String| {
+                            data.escribir(&vn, ValorGUI::Texto(nuevo_val));
                         },
                     )
                     .text_color(*tc);
@@ -4537,7 +4568,7 @@ pub fn layout_a_view<'a>(
                     }
                     map_message(
                         ti,
-                        |_data: &mut AppStateNativo, result: MessageResult<()>| match result {
+                        |_data: &mut AppStateNativo, resultado: MessageResult<()>| match resultado {
                             MessageResult::Action(()) => MessageResult::Nop,
                             other => other,
                         },
@@ -4549,7 +4580,7 @@ pub fn layout_a_view<'a>(
             let var_name = variable.clone();
             let val_str = data.leer(&var_name).to_string();
             let num: f64 = val_str.parse().unwrap_or(0.0);
-            let gen = data.store.generation(&var_name);
+            let gen = data.almacen.generation(&var_name);
             Box::new(memoize((gen, num), move |(_, n): &(u64, f64)| {
                 view::progress_bar(Some(*n))
             }))
@@ -4557,10 +4588,10 @@ pub fn layout_a_view<'a>(
         Layout::Slider { variable, min, max } => {
             let var_name = variable.clone();
             let val = data.leer(&var_name).to_f64();
-            let gen = data.store.generation(&var_name);
+            let gen = data.almacen.generation(&var_name);
             let mn = *min;
             let mx = *max;
-            if debug_activo() {
+            if depuracion_activo() {
                 eprintln!(
                     "[slider] {}: valor={} rango={}..{} gen={}",
                     var_name, val, mn, mx, gen
@@ -4574,8 +4605,8 @@ pub fn layout_a_view<'a>(
                         *mn2,
                         *mx2,
                         *v,
-                        move |data: &mut AppStateNativo, new_val: f64| {
-                            data.escribir(&vn, ValorGUI::Decimal(new_val));
+                        move |data: &mut AppStateNativo, nuevo_val: f64| {
+                            data.escribir(&vn, ValorGUI::Decimal(nuevo_val));
                         },
                     )
                 },
@@ -4585,7 +4616,7 @@ pub fn layout_a_view<'a>(
             let var_name = variable.clone();
             let txt = variable.clone();
             let checked = data.leer(&var_name).to_bool();
-            let gen = data.store.generation(&var_name);
+            let gen = data.almacen.generation(&var_name);
             Box::new(memoize(
                 (gen, checked, txt, var_name.clone()),
                 move |(_, chk, label_txt, vn): &(u64, bool, String, String)| {
@@ -4614,7 +4645,7 @@ pub fn layout_a_view<'a>(
             Box::new(view::sized_box(view::spinner()).dims((Length::px(24.0), Length::px(24.0))))
         }
         Layout::Separator => {
-            let color: forja_gui_rt::Color = get_color_role(&theme.scheme, "outline").into();
+            let color: forja_gui_rt::Color = obtener_color_role(&theme.scheme, "outline").into();
             // `Dim::Stretch` + alto fijo: una línea de 1 px a todo el ancho. Un
             // `.height(..)` suelto dejaría el ancho en `auto` (0 px) y no se vería.
             Box::new(
@@ -4635,31 +4666,31 @@ pub fn layout_a_view<'a>(
         // ThemeProvider: cambia el tema para los hijos
         // Acepta color semilla (#RRGGBB) o diseño nombrado ("fluent", "liquid_glass", con
         // sufijo ":dark"/"oscuro" para forzar modo oscuro)
-        Layout::ThemeProvider { child, theme: seed } => {
-            let new_theme = MaterialTheme::named(seed, theme.is_dark);
-            let inner = layout_a_view(child, data, _prog, &new_theme);
+        Layout::ThemeProvider { hijo, theme: seed } => {
+            let nuevo_theme = MaterialTheme::named(seed, theme.es_dark);
+            let inner = layout_a_vista(hijo, data, _prog, &nuevo_theme);
             // Cada diseño tiene su propio fondo (Mica en Fluent, vidrio en Liquid
             // Glass): lo pintamos acá para que se vea también si el wrapper no es
             // el nodo raíz.
-            let bg: Color = new_theme.scheme.background.into();
+            let bg: Color = nuevo_theme.scheme.background.into();
             Box::new(view::sized_box(inner).background(Background::Color(bg)))
         }
 
         // ColoredBox: aplica un color del esquema como fondo
-        Layout::ColoredBox { child, color_role } => {
-            let inner = layout_a_view(child, data, _prog, theme);
-            let bg: Color = get_color_role(&theme.scheme, color_role).into();
+        Layout::ColoredBox { hijo, color_role } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let bg: Color = obtener_color_role(&theme.scheme, color_role).into();
             Box::new(view::sized_box(inner).background(Background::Color(bg)))
         }
 
         // StyledLabel: etiqueta con estilo tipográfico predefinido
         Layout::StyledLabel { texto, style } => {
-            let text_style = get_text_style(&theme.typography, style);
+            let texto_style = obtener_texto_style(&theme.typography, style);
             let color = color_segun_monto(&theme.scheme, texto);
             Box::new(
                 view::label(texto.clone())
-                    .text_size(text_style.font_size as f32)
-                    .weight(text_style.weight.to_xilem_weight())
+                    .text_size(texto_style.font_tamano as f32)
+                    .weight(texto_style.weight.to_xilem_weight())
                     .color(color),
             )
         }
@@ -4671,12 +4702,12 @@ pub fn layout_a_view<'a>(
             params,
             style,
         } => {
-            let text_style = get_text_style(&theme.typography, style);
-            let txt = expr_a_texto(expr, params, &data.store, _prog);
+            let texto_style = obtener_texto_style(&theme.typography, style);
+            let txt = expr_a_texto(expr, params, &data.almacen, _prog);
             let color = color_segun_monto(&theme.scheme, &txt);
-            let gen = data.store.global_generation();
-            let fs = text_style.font_size as f32;
-            let wt = text_style.weight.to_xilem_weight();
+            let gen = data.almacen.global_generation();
+            let fs = texto_style.font_tamano as f32;
+            let wt = texto_style.weight.to_xilem_weight();
             Box::new(memoize(
                 (gen, txt, color, fs, wt),
                 move |(_, t, clr, size, w): &(
@@ -4696,9 +4727,9 @@ pub fn layout_a_view<'a>(
 
         // DynamicLabel: etiqueta dinámica sin estilo tipográfico.
         Layout::DynamicLabel { expr, params } => {
-            let txt = expr_a_texto(expr, params, &data.store, _prog);
+            let txt = expr_a_texto(expr, params, &data.almacen, _prog);
             let color = color_segun_monto(&theme.scheme, &txt);
-            let gen = data.store.global_generation();
+            let gen = data.almacen.global_generation();
             Box::new(memoize(
                 (gen, txt, color),
                 move |(_, t, clr): &(u64, String, forja_gui_rt::Color)| {
@@ -4708,32 +4739,29 @@ pub fn layout_a_view<'a>(
         }
 
         // ShapedBox: aplica border-radius al hijo
-        Layout::ShapedBox {
-            child,
-            shape_family,
-        } => {
-            let radius = get_shape_radius(&theme.shapes, shape_family);
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::ShapedBox { hijo, forma_family } => {
+            let radius = obtener_forma_radius(&theme.shapes, forma_family);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             Box::new(view::sized_box(inner).corner_radius(radius.px()))
         }
 
         // 5.5: ElevatedBox — aplica corner_radius como indicador visual de elevación.
         // xilem 0.4: BoxShadow no está disponible en sized_box; se documenta la restricción.
         Layout::ElevatedBox {
-            child,
+            hijo,
             level: _level,
-            shape_family,
+            forma_family,
         } => {
-            let inner = layout_a_view(child, data, _prog, theme);
-            let shape_radius = get_shape_radius(&theme.shapes, shape_family);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let forma_radius = obtener_forma_radius(&theme.shapes, forma_family);
             // NOTA: shadow_to_box_shadow(&shadow_cfg) calcula la sombra correctamente
             // pero xilem 0.4 no expone box-shadow en WidgetPod. Aplicar solo corner_radius.
-            Box::new(view::sized_box(inner).corner_radius(shape_radius.px()))
+            Box::new(view::sized_box(inner).corner_radius(forma_radius.px()))
         }
 
         // 5.6: StateLayerBox — overlay semi-transparente según el estado visual
-        Layout::StateLayerBox { child, state } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::StateLayerBox { hijo, state } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             let overlay_alpha: f64 = match state.as_str() {
                 "hover" => 0.08,
                 "pressed" => 0.12,
@@ -4742,7 +4770,7 @@ pub fn layout_a_view<'a>(
                 _ => 0.0,
             };
             if overlay_alpha > 0.0 {
-                let overlay_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                let overlay_color = RgbColor(0, 0, 0).con_alpha(overlay_alpha);
                 Box::new(view::zstack((Box::new(
                     view::sized_box(inner).background(Background::Color(overlay_color)),
                 )
@@ -4757,21 +4785,21 @@ pub fn layout_a_view<'a>(
             compact,
             medium,
             expanded,
-        } => match data.window_size {
-            WindowSizeClass::Expanded => layout_a_view(expanded, data, _prog, theme),
-            WindowSizeClass::Medium => layout_a_view(medium, data, _prog, theme),
-            WindowSizeClass::Compact => layout_a_view(compact, data, _prog, theme),
+        } => match data.ventana_tamano {
+            VentanaTamanoClase::Expanded => layout_a_vista(expanded, data, _prog, theme),
+            VentanaTamanoClase::Medium => layout_a_vista(medium, data, _prog, theme),
+            VentanaTamanoClase::Compact => layout_a_vista(compact, data, _prog, theme),
         },
 
         // Padding: añade espacio alrededor del hijo
-        Layout::Padding { child, amount } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::Padding { hijo, amount } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             Box::new(view::sized_box(inner).padding((*amount).px()))
         }
 
         // Expanded: llena el espacio disponible
-        Layout::Expanded { child } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::Expanded { hijo } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             // Envolver en flex vertical con must_fill para expandir el espacio disponible
             Box::new(view::flex(Axis::Vertical, (inner,)).dims(
                 xilem::masonry::properties::Dimensions::height(
@@ -4781,8 +4809,8 @@ pub fn layout_a_view<'a>(
         }
 
         // Centered: centra el hijo en el eje transversal
-        Layout::Centered { child } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::Centered { hijo } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             let widgets = vec![inner];
             Box::new(
                 view::flex(Axis::Vertical, (widgets,))
@@ -4800,11 +4828,11 @@ pub fn layout_a_view<'a>(
             children,
             axis,
             gap,
-            wrap: _,
+            envolver: _,
         } => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in children {
-                widgets.push(layout_a_view(h, data, _prog, theme));
+                widgets.push(layout_a_vista(h, data, _prog, theme));
             }
             let ax = match axis.to_lowercase().as_str() {
                 "horizontal" | "h" | "fila" => Axis::Horizontal,
@@ -4829,9 +4857,9 @@ pub fn layout_a_view<'a>(
             // Determinar columnas según orientación y tamaño
             let effective_cols = match data.orientation {
                 Orientation::Portrait => {
-                    if data.window_width < 400.0 {
+                    if data.ventana_ancho < 400.0 {
                         1
-                    } else if data.window_width < 600.0 {
+                    } else if data.ventana_ancho < 600.0 {
                         (*columnas).min(2)
                     } else {
                         *columnas
@@ -4844,7 +4872,7 @@ pub fn layout_a_view<'a>(
 
             let mut items = Vec::with_capacity(children.len());
             for (i, item) in children.iter().enumerate() {
-                let widget = layout_a_view(item, data, _prog, theme);
+                let widget = layout_a_vista(item, data, _prog, theme);
                 items.push(view::grid_item(
                     widget,
                     GridParams::pos((i % effective_cols) as u16, (i / effective_cols) as u16),
@@ -4871,29 +4899,29 @@ pub fn layout_a_view<'a>(
             let rendered: Vec<(Box<AnyWidgetView<AppStateNativo>>, f64)> = children
                 .iter()
                 .map(|h| {
-                    let w = layout_a_view(h, data, _prog, theme);
-                    let child_width = estimate_child_width(h).unwrap_or(100.0);
-                    (w, child_width)
+                    let w = layout_a_vista(h, data, _prog, theme);
+                    let hijo_ancho = estimate_hijo_ancho(h).unwrap_or(100.0);
+                    (w, hijo_ancho)
                 })
                 .collect();
 
-            let available_width = (data.window_width - 48.0).max(200.0);
+            let available_ancho = (data.ventana_ancho - 48.0).max(200.0);
             let mut rows: Vec<Vec<Box<AnyWidgetView<AppStateNativo>>>> = Vec::new();
-            let mut current_row: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            let mut current_width = 0.0;
+            let mut actual_row: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+            let mut actual_ancho = 0.0;
 
             for (widget, width) in rendered {
-                if current_row.is_empty() || current_width + width + *gap <= available_width {
-                    current_row.push(widget);
-                    current_width += width + *gap;
+                if actual_row.is_empty() || actual_ancho + width + *gap <= available_ancho {
+                    actual_row.push(widget);
+                    actual_ancho += width + *gap;
                 } else {
-                    rows.push(current_row);
-                    current_row = vec![widget];
-                    current_width = width;
+                    rows.push(actual_row);
+                    actual_row = vec![widget];
+                    actual_ancho = width;
                 }
             }
-            if !current_row.is_empty() {
-                rows.push(current_row);
+            if !actual_row.is_empty() {
+                rows.push(actual_row);
             }
 
             let row_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = rows
@@ -4925,64 +4953,64 @@ pub fn layout_a_view<'a>(
             disabled: _,
         } => {
             let scheme = &theme.scheme;
-            let label_style = get_text_style(&theme.typography, "label_large");
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_large");
             match variant {
-                ButtonVariant::Filled => make_material_button(
+                ButtonVariant::Filled => crear_material_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.on_primary.into(),
                         bg: Some(scheme.primary.into()),
                         border: None,
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     20.0,
                 ),
-                ButtonVariant::Tonal => make_material_button(
+                ButtonVariant::Tonal => crear_material_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.on_secondary_container.into(),
                         bg: Some(scheme.secondary_container.into()),
                         border: None,
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     20.0,
                 ),
-                ButtonVariant::Outlined => make_material_button(
+                ButtonVariant::Outlined => crear_material_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.primary.into(),
                         bg: None,
                         border: Some(scheme.outline.into()),
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     20.0,
                 ),
-                ButtonVariant::Text => make_material_button(
+                ButtonVariant::Text => crear_material_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.primary.into(),
                         bg: None,
                         border: None,
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     20.0,
                 ),
-                ButtonVariant::Elevated => make_material_button(
+                ButtonVariant::Elevated => crear_material_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.primary.into(),
                         bg: Some(scheme.surface.into()),
                         border: None,
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     20.0,
@@ -5037,60 +5065,60 @@ pub fn layout_a_view<'a>(
             callback,
             variant,
             activo,
-            on_remove: _,
+            on_quitar: _,
         } => {
             let scheme = &theme.scheme;
-            let label_style = get_text_style(&theme.typography, "label_small");
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_small");
             match variant {
-                ChipVariant::Assist | ChipVariant::Suggestion => make_chip_button(
+                ChipVariant::Assist | ChipVariant::Suggestion => crear_chip_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.on_surface.into(),
                         bg: None,
                         border: Some(scheme.outline.into()),
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     8.0,
                 ),
                 ChipVariant::Filter => {
                     if *activo {
-                        make_chip_button(
+                        crear_chip_button(
                             texto,
                             ColoresBoton {
                                 fg: scheme.on_secondary_container.into(),
                                 bg: Some(scheme.secondary_container.into()),
                                 border: None,
                             },
-                            label_style,
+                            etiqueta_style,
                             callback,
                             _prog,
                             8.0,
                         )
                     } else {
-                        make_chip_button(
+                        crear_chip_button(
                             texto,
                             ColoresBoton {
                                 fg: scheme.on_surface.into(),
                                 bg: None,
                                 border: Some(scheme.outline.into()),
                             },
-                            label_style,
+                            etiqueta_style,
                             callback,
                             _prog,
                             8.0,
                         )
                     }
                 }
-                ChipVariant::Input => make_chip_button(
+                ChipVariant::Input => crear_chip_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.on_secondary_container.into(),
                         bg: Some(scheme.secondary_container.into()),
                         border: None,
                     },
-                    label_style,
+                    etiqueta_style,
                     callback,
                     _prog,
                     8.0,
@@ -5103,15 +5131,15 @@ pub fn layout_a_view<'a>(
         // ─── MaterialTextField ─────────────────────────────────────────
         Layout::MaterialTextField {
             variable,
-            label,
+            etiqueta,
             placeholder,
             variant,
             multiline: _,
             error,
             counter: _,
-        } => crate::widgets::material_inputs::render_text_field(
+        } => crate::widgets::material_inputs::render_texto_campo(
             variable,
-            label,
+            etiqueta,
             placeholder,
             variant,
             error,
@@ -5125,28 +5153,28 @@ pub fn layout_a_view<'a>(
         // ─── MaterialPasswordField ─────────────────────────────────────
         Layout::MaterialPasswordField {
             variable,
-            label,
+            etiqueta,
             visible: _,
-        } => crate::widgets::material_inputs::render_password_field(
-            variable, label, data, _prog, theme,
+        } => crate::widgets::material_inputs::render_contrasena_campo(
+            variable, etiqueta, data, _prog, theme,
         ),
 
         // ─── MaterialNumberField ───────────────────────────────────────
         Layout::MaterialNumberField {
             variable,
-            label,
+            etiqueta,
             min,
             max,
             decimales: _,
-        } => crate::widgets::material_inputs::render_number_field(
-            variable, label, min, max, data, _prog, theme,
+        } => crate::widgets::material_inputs::render_numero_campo(
+            variable, etiqueta, min, max, data, _prog, theme,
         ),
 
         // ─── MaterialSearchField ───────────────────────────────────────
         Layout::MaterialSearchField {
             variable,
             placeholder,
-        } => crate::widgets::material_inputs::render_search_field(
+        } => crate::widgets::material_inputs::render_buscar_campo(
             variable,
             placeholder,
             data,
@@ -5172,11 +5200,11 @@ pub fn layout_a_view<'a>(
         Layout::MaterialSelect {
             opciones,
             seleccionada,
-            label,
+            etiqueta,
         } => crate::widgets::material_inputs::render_select(
             opciones,
             seleccionada,
-            label,
+            etiqueta,
             data,
             _prog,
             theme,
@@ -5200,8 +5228,8 @@ pub fn layout_a_view<'a>(
         ),
 
         // ─── MaterialSwitch ────────────────────────────────────────────
-        Layout::MaterialSwitch { label, variable } => {
-            crate::widgets::material_inputs::render_switch(label, variable, data, _prog, theme)
+        Layout::MaterialSwitch { etiqueta, variable } => {
+            crate::widgets::material_inputs::render_switch(etiqueta, variable, data, _prog, theme)
         }
 
         // ─── MaterialSliderDiscrete ────────────────────────────────────
@@ -5242,36 +5270,36 @@ pub fn layout_a_view<'a>(
 
         // ─── MaterialDatePicker ────────────────────────────────────────
         Layout::MaterialDatePicker { variable } => {
-            crate::pickers::date_picker_view(variable, data, &theme.scheme, theme)
+            crate::pickers::date_picker_vista(variable, data, &theme.scheme, theme)
         }
 
         // ─── MaterialTimePicker ────────────────────────────────────────
         Layout::MaterialTimePicker { variable } => {
-            crate::pickers::time_picker_view(variable, data, &theme.scheme, theme)
+            crate::pickers::time_picker_vista(variable, data, &theme.scheme, theme)
         }
 
         // ─── ColorPicker ───────────────────────────────────────────────
         Layout::ColorPicker { variable } => {
-            crate::pickers::color_picker_view(variable, data, &theme.scheme, theme)
+            crate::pickers::color_picker_vista(variable, data, &theme.scheme, theme)
         }
 
         // AspectRatioBox: caja con relación de aspecto fija
-        Layout::AspectRatioBox { child, ratio } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::AspectRatioBox { hijo, ratio } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             // Calcular alto basado en el ancho disponible y el ratio
-            let available_width = (data.window_width - 48.0).max(200.0);
-            let height = available_width / ratio;
-            Box::new(view::sized_box(inner).dims((Length::px(available_width), Length::px(height))))
+            let available_ancho = (data.ventana_ancho - 48.0).max(200.0);
+            let height = available_ancho / ratio;
+            Box::new(view::sized_box(inner).dims((Length::px(available_ancho), Length::px(height))))
         }
 
         // ─── Tarjetas, Listas y Tablas ──────────────────────────────
         Layout::MaterialCard {
-            child,
+            hijo,
             variant,
             on_click: _,
             seleccionado,
         } => crate::widgets::material_cards::render_card(
-            child,
+            hijo,
             variant,
             seleccionado,
             data,
@@ -5285,26 +5313,26 @@ pub fn layout_a_view<'a>(
             subtitulo,
             trailing,
             on_click: _,
-        } => crate::widgets::material_cards::render_list_item(
+        } => crate::widgets::material_cards::render_lista_elemento(
             leading, titulo, subtitulo, trailing, data, _prog, theme,
         ),
 
         Layout::MaterialList { items, dividers } => {
-            crate::widgets::material_cards::render_list(items, dividers, data, _prog, theme)
+            crate::widgets::material_cards::render_lista(items, dividers, data, _prog, theme)
         }
 
         Layout::MaterialListControl {
             items,
-            control_type: _,
+            control_tipo: _,
             variables: _,
-        } => crate::widgets::material_cards::render_list_control(items, data, _prog, theme),
+        } => crate::widgets::material_cards::render_lista_control(items, data, _prog, theme),
 
         Layout::MaterialListSelection {
             items,
             seleccion: _,
             callback: _,
             multiple: _,
-        } => crate::widgets::material_cards::render_list_selection(items, data, _prog, theme),
+        } => crate::widgets::material_cards::render_lista_selection(items, data, _prog, theme),
 
         // ─── DynamicList: renderiza items desde una variable ────────
         // 5.4: NOTA sobre virtualización: view::virtual_scroll() de xilem 0.4 requiere
@@ -5312,11 +5340,16 @@ pub fn layout_a_view<'a>(
         // render_dynamic_list usa expr_a_layout_item → Box<AnyWidgetView>, la virtualización
         // directa no es compatible sin un wrapper intermedio. Se documenta para futura
         // migración cuando xilem soporte virtual_scroll con type erasure.
-        Layout::DynamicList { variable, item_fn } => {
-            crate::widgets::material_cards::render_dynamic_list(
-                variable, item_fn, data, _prog, theme,
-            )
-        }
+        Layout::DynamicList {
+            variable,
+            elemento_fn,
+        } => crate::widgets::material_cards::render_dynamic_lista(
+            variable,
+            elemento_fn,
+            data,
+            _prog,
+            theme,
+        ),
 
         Layout::MaterialDataTable {
             columnas,
@@ -5325,7 +5358,7 @@ pub fn layout_a_view<'a>(
             seleccionable: _,
             col_orden,
             orden_asc,
-        } => crate::widgets::material_cards::render_data_table(
+        } => crate::widgets::material_cards::render_data_tabla(
             columnas,
             filas,
             ordenable,
@@ -5338,8 +5371,8 @@ pub fn layout_a_view<'a>(
             },
         ),
 
-        Layout::MaterialSurface { child, color_role } => {
-            crate::widgets::material_cards::render_surface(child, color_role, data, _prog, theme)
+        Layout::MaterialSurface { hijo, color_role } => {
+            crate::widgets::material_cards::render_surface(hijo, color_role, data, _prog, theme)
         }
 
         Layout::MaterialScaffold {
@@ -5363,10 +5396,10 @@ pub fn layout_a_view<'a>(
             let eased = EASE_EMPHASIZED.apply(progress);
 
             if show || progress > 0.0 {
-                let inner = layout_a_view(dialog, data, _prog, theme);
+                let inner = layout_a_vista(dialog, data, _prog, theme);
                 // Overlay con opacidad animada (0 → 0.32)
                 let overlay_alpha = eased * 0.32;
-                let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                let overlay_color: Color = RgbColor(0, 0, 0).con_alpha(overlay_alpha);
                 // Diálogo con escala animada (0.95 → 1.0)
                 let dialog_scale = 0.95 + eased * 0.05;
 
@@ -5392,7 +5425,7 @@ pub fn layout_a_view<'a>(
             on_cancel,
         } => {
             let scheme = &theme.scheme;
-            let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(0.32);
+            let overlay_color: Color = RgbColor(0, 0, 0).con_alpha(0.32);
             let surface_bg: Color = scheme.surface.into();
             let fg: Color = scheme.on_surface.into();
             let fg_var: Color = scheme.on_surface_variant.into();
@@ -5419,8 +5452,8 @@ pub fn layout_a_view<'a>(
             };
 
             // Botón Cancelar (solo si hay texto)
-            let has_cancel = !cancelar_texto.is_empty();
-            let cancel_btn = if has_cancel {
+            let tiene_cancel = !cancelar_texto.is_empty();
+            let cancel_btn = if tiene_cancel {
                 let cb = cb_cancel.clone();
                 let p = prog.clone();
                 Some(view::button(
@@ -5439,7 +5472,7 @@ pub fn layout_a_view<'a>(
             };
 
             // Fila de botones
-            let button_row: Box<AnyWidgetView<AppStateNativo>> = if has_cancel {
+            let button_row: Box<AnyWidgetView<AppStateNativo>> = if tiene_cancel {
                 Box::new(
                     view::flex(
                         Axis::Horizontal,
@@ -5459,19 +5492,19 @@ pub fn layout_a_view<'a>(
             };
 
             // Título
-            let title_label = {
-                let title_style = get_text_style(&theme.typography, "title_large");
+            let title_etiqueta = {
+                let title_style = obtener_texto_style(&theme.typography, "title_large");
                 view::label(titulo.clone())
-                    .text_size(title_style.font_size as f32)
+                    .text_size(title_style.font_tamano as f32)
                     .weight(FontWeight::BOLD)
                     .color(fg)
             };
 
             // Mensaje
-            let msg_label = {
-                let body_style = get_text_style(&theme.typography, "body_medium");
+            let mensaje_etiqueta = {
+                let body_style = obtener_texto_style(&theme.typography, "body_medium");
                 view::label(mensaje.clone())
-                    .text_size(body_style.font_size as f32)
+                    .text_size(body_style.font_tamano as f32)
                     .color(fg_var)
             };
 
@@ -5479,9 +5512,9 @@ pub fn layout_a_view<'a>(
             let dialog_card = view::flex(
                 Axis::Vertical,
                 (
-                    title_label,
+                    title_etiqueta,
                     view::sized_box(view::label(String::new())).height(Length::px(8.0)),
-                    msg_label,
+                    mensaje_etiqueta,
                     view::sized_box(view::label(String::new())).height(Length::px(16.0)),
                     button_row,
                 ),
@@ -5490,7 +5523,7 @@ pub fn layout_a_view<'a>(
             // Card del diálogo con padding interior
             let dialog_inner = view::sized_box(dialog_card)
                 .background(Background::Color(surface_bg))
-                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px())
+                .corner_radius(obtener_forma_radius(&theme.shapes, "extra_large").px())
                 .padding(24.0.px());
 
             // Contenedor externo con ancho máximo
@@ -5508,26 +5541,26 @@ pub fn layout_a_view<'a>(
         // Diálogo personalizado con hijo arbitrario
         Layout::DialogCustom {
             titulo,
-            child,
-            on_close: _,
+            hijo,
+            on_cerrar: _,
         } => {
             let scheme = &theme.scheme;
-            let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(0.32);
+            let overlay_color: Color = RgbColor(0, 0, 0).con_alpha(0.32);
             let surface_bg: Color = scheme.surface.into();
             let fg: Color = scheme.on_surface.into();
 
-            let title_style = get_text_style(&theme.typography, "title_large");
-            let title_label = view::label(titulo.clone())
-                .text_size(title_style.font_size as f32)
+            let title_style = obtener_texto_style(&theme.typography, "title_large");
+            let title_etiqueta = view::label(titulo.clone())
+                .text_size(title_style.font_tamano as f32)
                 .weight(FontWeight::BOLD)
                 .color(fg);
 
-            let inner = layout_a_view(child, data, _prog, theme);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
 
             let dialog_card = view::flex(
                 Axis::Vertical,
                 (
-                    title_label,
+                    title_etiqueta,
                     view::sized_box(view::label(String::new())).height(Length::px(8.0)),
                     inner,
                 ),
@@ -5535,7 +5568,7 @@ pub fn layout_a_view<'a>(
 
             let dialog_container = view::sized_box(dialog_card)
                 .background(Background::Color(surface_bg))
-                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px())
+                .corner_radius(obtener_forma_radius(&theme.shapes, "extra_large").px())
                 .padding(24.0.px());
 
             Box::new(view::zstack((
@@ -5549,7 +5582,7 @@ pub fn layout_a_view<'a>(
         // Panel que emerge desde abajo (Standard, Modal, Expanded)
         // Animación: slide-up con fade del overlay
         Layout::BottomSheet {
-            child,
+            hijo,
             variant,
             visible,
             on_dismiss: _,
@@ -5562,7 +5595,7 @@ pub fn layout_a_view<'a>(
 
             if show || progress > 0.0 {
                 let scheme = &theme.scheme;
-                let inner = layout_a_view(child, data, _prog, theme);
+                let inner = layout_a_vista(hijo, data, _prog, theme);
                 let sheet_bg: Color = scheme.surface.into();
                 // Slide-up: offset_y desde 300px hasta 0
                 let sheet_offset_y = 300.0 * (1.0 - eased);
@@ -5573,7 +5606,9 @@ pub fn layout_a_view<'a>(
                         let sheet = view::transformed(
                             view::sized_box(inner)
                                 .background(Background::Color(sheet_bg))
-                                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px()),
+                                .corner_radius(
+                                    obtener_forma_radius(&theme.shapes, "extra_large").px(),
+                                ),
                         )
                         .translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
@@ -5584,11 +5619,13 @@ pub fn layout_a_view<'a>(
                     SheetVariant::Modal => {
                         // Overlay con fade + panel con slide-up
                         let overlay_alpha = eased * 0.32;
-                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                        let overlay_color: Color = RgbColor(0, 0, 0).con_alpha(overlay_alpha);
                         let sheet = view::transformed(
                             view::sized_box(inner)
                                 .background(Background::Color(sheet_bg))
-                                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px()),
+                                .corner_radius(
+                                    obtener_forma_radius(&theme.shapes, "extra_large").px(),
+                                ),
                         )
                         .translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
@@ -5600,11 +5637,13 @@ pub fn layout_a_view<'a>(
                     SheetVariant::Expanded => {
                         // Overlay con fade + panel expandido con slide-up
                         let overlay_alpha = eased * 0.32;
-                        let overlay_color: Color = RgbColor(0, 0, 0).with_alpha(overlay_alpha);
+                        let overlay_color: Color = RgbColor(0, 0, 0).con_alpha(overlay_alpha);
                         let sheet = view::transformed(
                             view::sized_box(inner)
                                 .background(Background::Color(sheet_bg))
-                                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px()),
+                                .corner_radius(
+                                    obtener_forma_radius(&theme.shapes, "extra_large").px(),
+                                ),
                         )
                         .translate((0.0, sheet_offset_y));
                         Box::new(view::zstack((
@@ -5637,14 +5676,14 @@ pub fn layout_a_view<'a>(
                 let prog = _prog.to_vec();
 
                 // Texto del mensaje
-                let body_style = get_text_style(&theme.typography, "body_medium");
-                let msg_label = view::label(mensaje.clone())
-                    .text_size(body_style.font_size as f32)
+                let body_style = obtener_texto_style(&theme.typography, "body_medium");
+                let mensaje_etiqueta = view::label(mensaje.clone())
+                    .text_size(body_style.font_tamano as f32)
                     .color(fg);
 
                 // Botón de acción (opcional)
-                let has_action = accion_texto.is_some() && accion_callback.is_some();
-                let action_btn: Option<Box<AnyWidgetView<AppStateNativo>>> = if has_action {
+                let tiene_action = accion_texto.is_some() && accion_callback.is_some();
+                let action_btn: Option<Box<AnyWidgetView<AppStateNativo>>> = if tiene_action {
                     let at = accion_texto.clone().unwrap_or_default();
                     let cb = accion_callback.clone().unwrap_or_default();
                     let p = prog.clone();
@@ -5665,7 +5704,7 @@ pub fn layout_a_view<'a>(
 
                 // Construir fila: mensaje + botón
                 let mut row_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-                row_children.push(Box::new(msg_label) as Box<AnyWidgetView<AppStateNativo>>);
+                row_children.push(Box::new(mensaje_etiqueta) as Box<AnyWidgetView<AppStateNativo>>);
                 if let Some(btn) = action_btn {
                     row_children.push(Box::new(
                         view::sized_box(view::label(String::new())).width(Length::px(16.0)),
@@ -5677,7 +5716,7 @@ pub fn layout_a_view<'a>(
 
                 let snackbar = view::sized_box(row)
                     .background(Background::Color(bg))
-                    .corner_radius(get_shape_radius(&theme.shapes, "small").px())
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "small").px())
                     .padding(16.0.px());
 
                 Box::new(snackbar)
@@ -5688,20 +5727,20 @@ pub fn layout_a_view<'a>(
 
         // ─── Tooltip ─────────────────────────────────────────────────
         // Pequeña etiqueta de ayuda contextual
-        Layout::Tooltip { child, texto } => {
+        Layout::Tooltip { hijo, texto } => {
             let scheme = &theme.scheme;
             let tooltip_bg: Color = scheme.on_surface.into();
             let tooltip_fg: Color = scheme.surface.into();
 
-            let inner = layout_a_view(child, data, _prog, theme);
-            let label_style = get_text_style(&theme.typography, "label_small");
-            let tooltip_label = view::label(texto.clone())
-                .text_size(label_style.font_size as f32)
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_small");
+            let tooltip_etiqueta = view::label(texto.clone())
+                .text_size(etiqueta_style.font_tamano as f32)
                 .color(tooltip_fg);
 
-            let tooltip_box = view::sized_box(tooltip_label)
+            let tooltip_box = view::sized_box(tooltip_etiqueta)
                 .background(Background::Color(tooltip_bg))
-                .corner_radius(get_shape_radius(&theme.shapes, "small").px())
+                .corner_radius(obtener_forma_radius(&theme.shapes, "small").px())
                 .padding(8.0.px());
 
             // Mostrar tooltip debajo del contenido
@@ -5728,13 +5767,14 @@ pub fn layout_a_view<'a>(
                     let cb_inner = cb.clone();
                     let t = item.clone();
                     let p = prog.clone();
-                    let item_label = view::label(t.clone()).text_size(14.0).color(fg);
-                    let item_btn = view::button(item_label, move |data: &mut AppStateNativo| {
-                        if !cb_inner.is_empty() {
-                            ejecutar_callback_y_actualizar(&cb_inner, data, &p);
-                        }
-                    });
-                    menu_items.push(Box::new(item_btn) as Box<AnyWidgetView<AppStateNativo>>);
+                    let elemento_etiqueta = view::label(t.clone()).text_size(14.0).color(fg);
+                    let elemento_btn =
+                        view::button(elemento_etiqueta, move |data: &mut AppStateNativo| {
+                            if !cb_inner.is_empty() {
+                                ejecutar_callback_y_actualizar(&cb_inner, data, &p);
+                            }
+                        });
+                    menu_items.push(Box::new(elemento_btn) as Box<AnyWidgetView<AppStateNativo>>);
                     if i < items.len() - 1 {
                         menu_items.push(Box::new(
                             view::sized_box(view::label(String::new())).height(Length::px(1.0)),
@@ -5746,7 +5786,7 @@ pub fn layout_a_view<'a>(
                 let menu_box =
                     view::sized_box(view::flex(Axis::Vertical, (menu_items,)).gap(Length::px(0.0)))
                         .background(Background::Color(surface_bg))
-                        .corner_radius(get_shape_radius(&theme.shapes, "small").px());
+                        .corner_radius(obtener_forma_radius(&theme.shapes, "small").px());
 
                 Box::new(menu_box)
             } else {
@@ -5774,13 +5814,14 @@ pub fn layout_a_view<'a>(
                     let cb_inner = cb.clone();
                     let t = item.clone();
                     let p = prog.clone();
-                    let item_label = view::label(t.clone()).text_size(14.0).color(fg);
-                    let item_btn = view::button(item_label, move |data: &mut AppStateNativo| {
-                        if !cb_inner.is_empty() {
-                            ejecutar_callback_y_actualizar(&cb_inner, data, &p);
-                        }
-                    });
-                    menu_items.push(Box::new(item_btn) as Box<AnyWidgetView<AppStateNativo>>);
+                    let elemento_etiqueta = view::label(t.clone()).text_size(14.0).color(fg);
+                    let elemento_btn =
+                        view::button(elemento_etiqueta, move |data: &mut AppStateNativo| {
+                            if !cb_inner.is_empty() {
+                                ejecutar_callback_y_actualizar(&cb_inner, data, &p);
+                            }
+                        });
+                    menu_items.push(Box::new(elemento_btn) as Box<AnyWidgetView<AppStateNativo>>);
                     if i < items.len() - 1 {
                         menu_items.push(Box::new(
                             view::sized_box(view::label(String::new())).height(Length::px(1.0)),
@@ -5792,7 +5833,7 @@ pub fn layout_a_view<'a>(
                 let menu_box =
                     view::sized_box(view::flex(Axis::Vertical, (menu_items,)).gap(Length::px(0.0)))
                         .background(Background::Color(surface_bg))
-                        .corner_radius(get_shape_radius(&theme.shapes, "small").px());
+                        .corner_radius(obtener_forma_radius(&theme.shapes, "small").px());
 
                 Box::new(menu_box)
             } else {
@@ -5807,15 +5848,15 @@ pub fn layout_a_view<'a>(
         // ─── Navigator (navegación por pantallas) ────────────────────
         Layout::Navigator {
             screens,
-            current_var,
+            actual_variable,
             history_var: _,
-            nav_type,
+            nav_tipo,
             anim,
             on_change,
         } => crate::widgets::navigation::render_navigator(
             screens,
-            current_var,
-            nav_type,
+            actual_variable,
+            nav_tipo,
             anim,
             on_change,
             ContextoRender {
@@ -5909,10 +5950,10 @@ pub fn layout_a_view<'a>(
         // ─── SearchBar ───────────────────────────────────────────────
         Layout::SearchBar {
             placeholder,
-            on_search: _,
+            on_buscar: _,
             variable,
         } => {
-            crate::widgets::navigation::render_search_bar(placeholder, variable, data, _prog, theme)
+            crate::widgets::navigation::render_buscar_bar(placeholder, variable, data, _prog, theme)
         }
 
         // ─── SearchView ──────────────────────────────────────────────
@@ -5921,7 +5962,7 @@ pub fn layout_a_view<'a>(
             resultados,
             visible,
         } => {
-            crate::widgets::navigation::render_search_view(resultados, visible, data, _prog, theme)
+            crate::widgets::navigation::render_buscar_vista(resultados, visible, data, _prog, theme)
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -5942,7 +5983,7 @@ pub fn layout_a_view<'a>(
 
         // ─── LinearProgressValue: barra con valor directo (items de lista) ──
         Layout::LinearProgressValue(val) => {
-            crate::widgets::indicators::render_linear_progress_value(val, theme)
+            crate::widgets::indicators::render_linear_progress_valor(val, theme)
         }
 
         // ─── CircularProgress ────────────────────────────────────────
@@ -5960,8 +6001,8 @@ pub fn layout_a_view<'a>(
         ),
 
         // ─── Badge ──────────────────────────────────────────────────
-        Layout::Badge { child, valor, dot } => {
-            crate::widgets::indicators::render_badge(child, valor, dot, data, _prog, theme)
+        Layout::Badge { hijo, valor, dot } => {
+            crate::widgets::indicators::render_badge(hijo, valor, dot, data, _prog, theme)
         }
 
         // ─── Skeleton ───────────────────────────────────────────────
@@ -6013,7 +6054,7 @@ pub fn layout_a_view<'a>(
         // ─── FadeTransition ──────────────────────────────────────────
         // Fundido de entrada/salida con opacidad animada
         Layout::FadeTransition {
-            child,
+            hijo,
             visible,
             duracion,
         } => {
@@ -6024,14 +6065,14 @@ pub fn layout_a_view<'a>(
             let eased = EASE_STANDARD.apply(progress);
 
             if show || progress > 0.0 {
-                let inner = layout_a_view(child, data, _prog, theme);
+                let inner = layout_a_vista(hijo, data, _prog, theme);
                 // Fade mediante opacidad del overlay
                 let overlay_alpha = 1.0 - eased;
                 if overlay_alpha < 0.01 {
                     inner
                 } else {
                     Box::new(view::sized_box(inner).background(Background::Color(
-                        RgbColor(0, 0, 0).with_alpha(overlay_alpha),
+                        RgbColor(0, 0, 0).con_alpha(overlay_alpha),
                     )))
                 }
             } else {
@@ -6044,28 +6085,28 @@ pub fn layout_a_view<'a>(
         // NOTA: La integración completa requiere un View Xilem personalizado.
         // El RippleWidget de animated_widgets estará disponible para uso
         // directo con Pod cuando se requiera desde código Masonry nativo.
-        Layout::RippleEffect { child, color: _ } => {
-            let inner = layout_a_view(child, data, _prog, theme);
+        Layout::RippleEffect { hijo, color: _ } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             Box::new(
                 view::sized_box(inner)
-                    .corner_radius(get_shape_radius(&theme.shapes, "extra_small").px()),
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "extra_small").px()),
             )
         }
 
         // ─── PullToRefresh ────────────────────────────────────────────
         Layout::PullToRefresh {
-            child,
+            hijo,
             callback,
             refreshing,
         } => {
-            let is_refreshing = data.leer(refreshing).to_bool();
+            let es_refreshing = data.leer(refreshing).to_bool();
             let prog = _prog.to_vec();
             let cb = callback.clone();
             let ref_var = refreshing.clone();
 
-            let inner = layout_a_view(child, data, _prog, theme);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
 
-            if is_refreshing {
+            if es_refreshing {
                 // Si está refrescando, mostrar spinner real + texto
                 let fg: Color = theme.scheme.on_surface.into();
                 let refresh_row = view::flex(
@@ -6088,32 +6129,32 @@ pub fn layout_a_view<'a>(
                 ))
             } else {
                 // Envolver en PullToRefreshView con detección de gesto real
-                let view = PullToRefreshView::new(inner, cb, ref_var, prog);
+                let view = PullToRefreshVista::nuevo(inner, cb, ref_var, prog);
                 Box::new(view)
             }
         }
 
         // ─── SwipeToDismiss ───────────────────────────────────────────
         Layout::SwipeToDismiss {
-            child,
+            hijo,
             on_dismiss,
-            label,
+            etiqueta,
             dismissed,
         } => {
-            let is_dismissed = data.leer(dismissed).to_bool();
+            let es_dismissed = data.leer(dismissed).to_bool();
             let prog = _prog.to_vec();
             let cb = on_dismiss.clone();
             let dismiss_var = dismissed.clone();
-            let action_text = label.clone();
+            let action_texto = etiqueta.clone();
 
-            if is_dismissed {
+            if es_dismissed {
                 // Ya descartado: mostrar opción de deshacer
                 let scheme = &theme.scheme;
                 let fg: Color = scheme.on_surface.into();
                 let btn_fg: Color = scheme.primary.into();
-                let undo_label = view::label("Elemento descartado").text_size(14.0).color(fg);
+                let undo_etiqueta = view::label("Elemento descartado").text_size(14.0).color(fg);
                 let undo_btn = view::button(
-                    view::label(action_text.clone())
+                    view::label(action_texto.clone())
                         .text_size(14.0)
                         .weight(FontWeight::MEDIUM)
                         .color(btn_fg),
@@ -6122,7 +6163,7 @@ pub fn layout_a_view<'a>(
                     },
                 );
                 let row_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = vec![
-                    Box::new(undo_label) as Box<AnyWidgetView<AppStateNativo>>,
+                    Box::new(undo_etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(view::sized_box(view::label(String::new())).width(Length::px(8.0)))
                         as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(undo_btn) as Box<AnyWidgetView<AppStateNativo>>,
@@ -6132,31 +6173,31 @@ pub fn layout_a_view<'a>(
                         view::flex(Axis::Horizontal, (row_children,)).gap(Length::px(4.0)),
                     )
                     .padding(12.0.px())
-                    .corner_radius(get_shape_radius(&theme.shapes, "small").px()),
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "small").px()),
                 )
             } else {
                 // Mostrar contenido envuelto en SwipeToDismissView con gesto real
-                let inner = layout_a_view(child, data, _prog, theme);
-                let view = SwipeToDismissView::new(inner, cb, dismiss_var, action_text, prog);
+                let inner = layout_a_vista(hijo, data, _prog, theme);
+                let view = SwipeToDismissVista::nuevo(inner, cb, dismiss_var, action_texto, prog);
                 Box::new(view)
             }
         }
 
         // ─── PinchZoom ──────────────────────────────────────────────
         Layout::PinchZoom {
-            child,
+            hijo,
             min_scale,
             max_scale,
         } => {
-            let inner = layout_a_view(child, data, _prog, theme);
-            let view = PinchZoomView::new(inner, *min_scale, *max_scale);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let view = PinchZoomVista::nuevo(inner, *min_scale, *max_scale);
             Box::new(view)
         }
 
         // ─── Rotate ─────────────────────────────────────────────────
-        Layout::Rotate { child } => {
-            let inner = layout_a_view(child, data, _prog, theme);
-            let view = RotateView::new(inner);
+        Layout::Rotate { hijo } => {
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let view = RotateVista::nuevo(inner);
             Box::new(view)
         }
 
@@ -6179,11 +6220,11 @@ pub fn layout_a_view<'a>(
                 .iter()
                 .enumerate()
                 .map(|(i, &v)| {
-                    let label = etiquetas.get(i).cloned().unwrap_or_default();
-                    ChartDataPoint::new(&label, v, c)
+                    let etiqueta = etiquetas.get(i).cloned().unwrap_or_default();
+                    ChartDataPoint::nuevo(&etiqueta, v, c)
                 })
                 .collect();
-            Box::new(LineChartView::<AppStateNativo>::new(puntos))
+            Box::new(LineaChartVista::<AppStateNativo>::nuevo(puntos))
         }
 
         // ─── BarChart ────────────────────────────────────────────────
@@ -6208,15 +6249,15 @@ pub fn layout_a_view<'a>(
                     let c_str = colores.get(i).cloned().unwrap_or_default();
                     let c = if c_str.is_empty() {
                         let rgb = colores_ciclo[i % colores_ciclo.len()];
-                        Rgba::new(rgb.0, rgb.1, rgb.2, 255)
+                        Rgba::nuevo(rgb.0, rgb.1, rgb.2, 255)
                     } else {
                         color_role_to_rgba(&theme.scheme, &c_str)
                     };
-                    let label = etiquetas.get(i).cloned().unwrap_or_default();
-                    ChartDataPoint::new(&label, v, c)
+                    let etiqueta = etiquetas.get(i).cloned().unwrap_or_default();
+                    ChartDataPoint::nuevo(&etiqueta, v, c)
                 })
                 .collect();
-            Box::new(BarChartView::<AppStateNativo>::new(puntos, *apilado))
+            Box::new(BarChartVista::<AppStateNativo>::nuevo(puntos, *apilado))
         }
 
         // ─── PieChart / Donut ─────────────────────────────────────────
@@ -6240,12 +6281,12 @@ pub fn layout_a_view<'a>(
                 .enumerate()
                 .map(|(i, &v)| {
                     let rgb = colores_pie[i % colores_pie.len()];
-                    let c = Rgba::new(rgb.0, rgb.1, rgb.2, 255);
-                    let label = etiquetas.get(i).cloned().unwrap_or_default();
-                    ChartDataPoint::new(&label, v, c)
+                    let c = Rgba::nuevo(rgb.0, rgb.1, rgb.2, 255);
+                    let etiqueta = etiquetas.get(i).cloned().unwrap_or_default();
+                    ChartDataPoint::nuevo(&etiqueta, v, c)
                 })
                 .collect();
-            Box::new(PieChartView::<AppStateNativo>::new(puntos, *donut, 0.5))
+            Box::new(PieChartVista::<AppStateNativo>::nuevo(puntos, *donut, 0.5))
         }
 
         // ─── GaugeChart ──────────────────────────────────────────────
@@ -6256,7 +6297,7 @@ pub fn layout_a_view<'a>(
             color: _,
         } => {
             let threshold = *max * 0.75;
-            Box::new(GaugeChartView::<AppStateNativo>::new(
+            Box::new(GaugeChartVista::<AppStateNativo>::nuevo(
                 *valor, *max, threshold,
             ))
         }
@@ -6264,7 +6305,7 @@ pub fn layout_a_view<'a>(
         // ─── Sparkline ───────────────────────────────────────────────
         Layout::Sparkline { datos, color } => {
             let c = color_role_to_rgba(&theme.scheme, color);
-            Box::new(SparklineView::<AppStateNativo>::new(datos.clone(), c))
+            Box::new(SparklineVista::<AppStateNativo>::nuevo(datos.clone(), c))
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -6347,7 +6388,7 @@ pub fn layout_a_view<'a>(
                     } else {
                         scheme.surface_variant.into()
                     };
-                    let num_text = if completed {
+                    let numero_texto = if completed {
                         "✓".to_string()
                     } else {
                         (i + 1).to_string()
@@ -6361,7 +6402,7 @@ pub fn layout_a_view<'a>(
                         )))
                     } else {
                         Box::new(
-                            view::label(num_text)
+                            view::label(numero_texto)
                                 .text_size(14.0)
                                 .weight(FontWeight::BOLD)
                                 .color(num_color),
@@ -6370,8 +6411,8 @@ pub fn layout_a_view<'a>(
                     let circle = view::sized_box(num)
                         .dims((Length::px(32.0), Length::px(32.0)))
                         .background(Background::Color(bg_color))
-                        .corner_radius(get_shape_radius(&theme.shapes, "small").px());
-                    let label = view::label(paso.clone())
+                        .corner_radius(obtener_forma_radius(&theme.shapes, "small").px());
+                    let etiqueta = view::label(paso.clone())
                         .text_size(12.0)
                         .color(scheme.on_surface.into());
                     let cb_name = cb.clone();
@@ -6381,7 +6422,7 @@ pub fn layout_a_view<'a>(
                             Axis::Vertical,
                             (
                                 Box::new(circle) as Box<AnyWidgetView<AppStateNativo>>,
-                                Box::new(label) as Box<AnyWidgetView<AppStateNativo>>,
+                                Box::new(etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
                             ),
                         )
                         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -6422,15 +6463,15 @@ pub fn layout_a_view<'a>(
                             .color(scheme.on_surface_variant.into());
                         widgets.push(Box::new(sep) as Box<AnyWidgetView<AppStateNativo>>);
                     }
-                    let is_last = i == items.len() - 1;
+                    let es_ultimo = i == items.len() - 1;
                     let lbl = view::label(item.clone())
                         .text_size(14.0)
-                        .weight(if is_last {
+                        .weight(if es_ultimo {
                             FontWeight::BOLD
                         } else {
                             FontWeight::NORMAL
                         })
-                        .color(if is_last {
+                        .color(if es_ultimo {
                             scheme.on_surface.into()
                         } else {
                             scheme.primary.into()
@@ -6461,7 +6502,7 @@ pub fn layout_a_view<'a>(
             let fecha_sel = seleccionado.clone().unwrap_or_default();
 
             // Usar chrono para calcular datos reales del mes
-            let first_date = chrono::NaiveDate::from_ymd_opt(año_val, mes_val as u32, 1)
+            let primero_date = chrono::NaiveDate::from_ymd_opt(año_val, mes_val as u32, 1)
                 .unwrap_or_else(|| {
                     let today = chrono::Local::now().naive_local().date();
                     chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap()
@@ -6477,7 +6518,7 @@ pub fn layout_a_view<'a>(
                     .map(|d| d.day())
                     .unwrap_or(30)
             };
-            let first_weekday = first_date.weekday().num_days_from_monday() as usize; // 0=Lun, 6=Dom
+            let primero_weekday = primero_date.weekday().num_days_from_monday() as usize; // 0=Lun, 6=Dom
             let num_dias = days_in_month as usize;
 
             // Nombres de meses
@@ -6502,9 +6543,9 @@ pub fn layout_a_view<'a>(
                 .color(scheme.on_surface.into());
 
             // Botones de navegación de meses
-            let _prev_cb = cb_name.clone();
-            let _prog_prev = prog.clone();
-            let prev_btn = view::button(
+            let _anterior_cb = cb_name.clone();
+            let _prog_anterior = prog.clone();
+            let anterior_btn = view::button(
                 view::label("◀")
                     .text_size(14.0)
                     .color(scheme.primary.into()),
@@ -6527,7 +6568,7 @@ pub fn layout_a_view<'a>(
             let header_row = view::flex(
                 Axis::Horizontal,
                 (
-                    Box::new(prev_btn) as Box<AnyWidgetView<AppStateNativo>>,
+                    Box::new(anterior_btn) as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(title) as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(next_btn) as Box<AnyWidgetView<AppStateNativo>>,
                 ),
@@ -6554,7 +6595,7 @@ pub fn layout_a_view<'a>(
             let day_header = view::flex(Axis::Horizontal, (header_dias,)).gap(Length::px(2.0));
 
             // Generar grilla de días con datos reales
-            let total_cells = first_weekday + num_dias;
+            let total_cells = primero_weekday + num_dias;
             let num_rows = total_cells.div_ceil(7);
             let mut all_rows: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             all_rows.push(Box::new(header_row) as Box<AnyWidgetView<AppStateNativo>>);
@@ -6564,20 +6605,20 @@ pub fn layout_a_view<'a>(
                 let mut day_cells: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
                 for col in 0..7 {
                     let cell_idx = row * 7 + col;
-                    if cell_idx < first_weekday || cell_idx >= first_weekday + num_dias {
+                    if cell_idx < primero_weekday || cell_idx >= primero_weekday + num_dias {
                         day_cells.push(Box::new(
                             view::sized_box(view::label(String::new()))
                                 .dims((Length::px(36.0), Length::px(36.0))),
                         )
                             as Box<AnyWidgetView<AppStateNativo>>);
                     } else {
-                        let dia = (cell_idx - first_weekday + 1) as u32;
+                        let dia = (cell_idx - primero_weekday + 1) as u32;
                         let cb = cb_name.clone();
                         let p = prog.clone();
                         let fecha_str = format!("{:04}-{:02}-{:02}", año_val, mes_val, dia);
-                        let is_selected = fecha_sel == fecha_str;
+                        let es_selected = fecha_sel == fecha_str;
 
-                        if is_selected {
+                        if es_selected {
                             let lbl = view::label(dia.to_string())
                                 .text_size(12.0)
                                 .weight(FontWeight::BOLD)
@@ -6586,7 +6627,9 @@ pub fn layout_a_view<'a>(
                                 view::sized_box(lbl)
                                     .dims((Length::px(36.0), Length::px(36.0)))
                                     .background(Background::Color(scheme.primary_container.into()))
-                                    .corner_radius(get_shape_radius(&theme.shapes, "full").px()),
+                                    .corner_radius(
+                                        obtener_forma_radius(&theme.shapes, "full").px(),
+                                    ),
                             )
                                 as Box<AnyWidgetView<AppStateNativo>>);
                         } else {
@@ -6629,9 +6672,9 @@ pub fn layout_a_view<'a>(
         Layout::MarkdownViewer { texto } => {
             let scheme = &theme.scheme;
             // Renderizado simplificado: reemplaza # y ** para simular formato
-            let lines: Vec<&str> = texto.split('\n').collect();
+            let lineas: Vec<&str> = texto.split('\n').collect();
             let mut children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-            for line in lines {
+            for line in lineas {
                 let txt = line.to_string();
                 if txt.starts_with("# ") {
                     let content = txt.trim_start_matches("# ");
@@ -6690,7 +6733,7 @@ pub fn layout_a_view<'a>(
                 texto.clone()
             };
             // Usar QRView/widget real con qrcode crate + Vello
-            let qr = crate::qr_widget::qr_view::<AppStateNativo>(texto, t);
+            let qr = crate::qr_widget::qr_vista::<AppStateNativo>(texto, t);
             let lbl = view::label(content)
                 .text_size(10.0)
                 .color(theme.scheme.on_surface.into());
@@ -6784,7 +6827,7 @@ pub fn layout_a_view<'a>(
             );
             Box::new(
                 view::sized_box(btn)
-                    .corner_radius(get_shape_radius(&theme.shapes, "small").px())
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "small").px())
                     .background(Background::Color(scheme.primary_container.into()))
                     .border_color(scheme.primary.into())
                     .border_width(1.0.px()),
@@ -6797,20 +6840,20 @@ pub fn layout_a_view<'a>(
 
         // ─── GlassCard ───────────────────────────────────────────────
         Layout::GlassCard {
-            child,
+            hijo,
             blur: _,
             opacity,
         } => {
             let _scheme = &theme.scheme;
-            let inner = layout_a_view(child, data, _prog, theme);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             // Glassmorphism simulado con alpha blending
             // with_alpha() ya retorna xilem::Color (alias Color)
-            let bg_color = RgbColor(255, 255, 255).with_alpha(*opacity);
-            let border_color = RgbColor(255, 255, 255).with_alpha(0.3);
+            let bg_color = RgbColor(255, 255, 255).con_alpha(*opacity);
+            let border_color = RgbColor(255, 255, 255).con_alpha(0.3);
             Box::new(
                 view::sized_box(inner)
                     .background(Background::Color(bg_color))
-                    .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px())
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "extra_large").px())
                     .border_color(border_color)
                     .border_width(1.0.px()),
             )
@@ -6818,19 +6861,19 @@ pub fn layout_a_view<'a>(
 
         // ─── GradientBox ─────────────────────────────────────────────
         Layout::GradientBox {
-            child,
+            hijo,
             colores,
             direccion,
         } => {
             let scheme = &theme.scheme;
-            let inner = layout_a_view(child, data, _prog, theme);
+            let inner = layout_a_vista(hijo, data, _prog, theme);
             // Gradiente real con Background::Gradient de Masonry
             let gradient = if colores.len() >= 2 {
                 // Convertir colores a xilem::Color (AlphaColor<Srgb>)
                 let color_vec: Vec<Color> = colores
                     .iter()
                     .map(|c| {
-                        let rgb = parse_color(c).unwrap_or(scheme.primary);
+                        let rgb = parsear_color(c).unwrap_or(scheme.primary);
                         rgb.into()
                     })
                     .collect();
@@ -6862,7 +6905,7 @@ pub fn layout_a_view<'a>(
                         .with_stops(stops.as_slice()),
                 }
             } else if colores.len() == 1 {
-                let c = parse_color(&colores[0]).unwrap_or(scheme.primary);
+                let c = parsear_color(&colores[0]).unwrap_or(scheme.primary);
                 let color: Color = c.into();
                 // Gradiente lineal simple con un solo color (fondo sólido)
                 xilem::style::Gradient::new_linear(0.0)
@@ -6874,7 +6917,7 @@ pub fn layout_a_view<'a>(
             Box::new(
                 view::sized_box(inner)
                     .background(Background::Gradient(gradient))
-                    .corner_radius(get_shape_radius(&theme.shapes, "container").px()),
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "container").px()),
             )
         }
 
@@ -6909,7 +6952,7 @@ pub fn layout_a_view<'a>(
             );
             Box::new(
                 view::sized_box(btn)
-                    .corner_radius(get_shape_radius(&theme.shapes, "button").px())
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "button").px())
                     .background(Background::Color(scheme.primary_container.into()))
                     .border_color(scheme.primary.into())
                     .border_width(2.0.px()),
@@ -6923,7 +6966,7 @@ pub fn layout_a_view<'a>(
         } => {
             let scheme = &theme.scheme;
             let bg_color = if !colores.is_empty() {
-                let c = parse_color(&colores[0]).unwrap_or(scheme.primary);
+                let c = parsear_color(&colores[0]).unwrap_or(scheme.primary);
                 c.into()
             } else {
                 scheme.primary_container.into()
@@ -6932,13 +6975,13 @@ pub fn layout_a_view<'a>(
             let base = view::sized_box(view::label(String::new()))
                 .dims((Length::px(300.0), Length::px(120.0)))
                 .background(Background::Color(bg_color))
-                .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px());
+                .corner_radius(obtener_forma_radius(&theme.shapes, "extra_large").px());
             if colores.len() > 1 {
-                let c2 = parse_color(&colores[1]).unwrap_or(scheme.secondary);
+                let c2 = parsear_color(&colores[1]).unwrap_or(scheme.secondary);
                 let overlay = view::sized_box(view::label(String::new()))
                     .dims((Length::px(300.0), Length::px(60.0)))
                     .background(Background::Color(c2.into()))
-                    .corner_radius(get_shape_radius(&theme.shapes, "extra_large").px());
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "extra_large").px());
                 Box::new(view::zstack((
                     Box::new(base) as Box<AnyWidgetView<AppStateNativo>>,
                     Box::new(overlay) as Box<AnyWidgetView<AppStateNativo>>,
@@ -6949,19 +6992,15 @@ pub fn layout_a_view<'a>(
         }
 
         // ─── GlowBorder ──────────────────────────────────────────────
-        Layout::GlowBorder {
-            child,
-            color,
-            ancho,
-        } => {
+        Layout::GlowBorder { hijo, color, ancho } => {
             let scheme = &theme.scheme;
-            let inner = layout_a_view(child, data, _prog, theme);
-            let glow_color: Color = get_color_role(scheme, color).into();
+            let inner = layout_a_vista(hijo, data, _prog, theme);
+            let glow_color: Color = obtener_color_role(scheme, color).into();
             Box::new(
                 view::sized_box(inner)
                     .border_color(glow_color)
                     .border_width((*ancho).px())
-                    .corner_radius(get_shape_radius(&theme.shapes, "container").px()),
+                    .corner_radius(obtener_forma_radius(&theme.shapes, "container").px()),
             )
         }
 
@@ -6974,14 +7013,14 @@ pub fn layout_a_view<'a>(
             // Leer comandos de la variable si existe
             let commands_json = data.leer(commands_var).to_string();
             let view = if commands_json != "null" && !commands_json.is_empty() {
-                crate::canvas_widget::CanvasView::<AppStateNativo>::new(
+                crate::canvas_widget::CanvasVista::<AppStateNativo>::nuevo(
                     commands_var.clone(),
                     commands_json,
                     *width,
                     *height,
                 )
             } else {
-                crate::canvas_widget::CanvasView::<AppStateNativo>::empty(
+                crate::canvas_widget::CanvasVista::<AppStateNativo>::empty(
                     commands_var.clone(),
                     *width,
                     *height,
@@ -7009,9 +7048,9 @@ pub fn layout_a_view<'a>(
             // `parse_color` solo se usa como último recurso porque devuelve
             // valores fijos de Material You.
             let icon_color: RgbColor = color_de_rol(scheme, color)
-                .or_else(|| parse_color(color))
+                .or_else(|| parsear_color(color))
                 .unwrap_or(scheme.primary);
-            let icon_size = *tamaño;
+            let icon_tamano = *tamaño;
             let icon_estilo = IconStyle::desde_str(estilo);
 
             // Si el nombre no está en el catálogo, mostrar el nombre en texto:
@@ -7019,7 +7058,7 @@ pub fn layout_a_view<'a>(
             if crate::icons::catalog::by_name(nombre).is_none() {
                 return Box::new(
                     view::label(format!("[{}]", nombre))
-                        .text_size((icon_size * 0.5) as f32)
+                        .text_size((icon_tamano * 0.5) as f32)
                         .color(icon_color.into()),
                 );
             }
@@ -7027,7 +7066,7 @@ pub fn layout_a_view<'a>(
             // Crear el view wrapper del icono SVG (renderiza paths reales de Vello)
             Box::new(svg_icon::<AppStateNativo>(
                 nombre,
-                icon_size,
+                icon_tamano,
                 icon_color,
                 icon_estilo,
             ))
@@ -7049,46 +7088,46 @@ thread_local! {
 }
 
 /// Obtiene el ancho de ventana almacenado en el thread-local.
-pub fn current_window_width() -> f64 {
+pub fn actual_ventana_ancho() -> f64 {
     WINDOW_WIDTH_TL.with(|w| w.get())
 }
 
 /// Obtiene el alto de ventana almacenado en el thread-local.
-pub fn current_window_height() -> f64 {
+pub fn actual_ventana_alto() -> f64 {
     WINDOW_HEIGHT_TL.with(|h| h.get())
 }
 
 /// Widget Masonry que observa el ancho disponible durante el layout
 /// y lo almacena en el thread-local para que la vista Xilem lo lea.
-pub struct WindowWidthProbe {
-    child: Option<WidgetPod<dyn Widget>>,
+pub struct VentanaAnchoProbe {
+    hijo: Option<WidgetPod<dyn Widget>>,
 }
 
-impl WindowWidthProbe {
+impl VentanaAnchoProbe {
     /// Crea un nuevo probe que envuelve al widget hijo.
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: Some(child.erased().to_pod()),
+            hijo: Some(hijo.erased().to_pod()),
         }
     }
 
     /// Obtiene una referencia mutable al widget hijo.
-    pub fn child_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, dyn Widget> {
-        let child = this
+    pub fn hijo_mut<'t>(this: &'t mut WidgetMut<'_, Self>) -> WidgetMut<'t, dyn Widget> {
+        let hijo = this
             .widget
-            .child
+            .hijo
             .as_mut()
             .expect("WidthProbe always has child");
-        this.ctx.get_mut(child)
+        this.ctx.get_mut(hijo)
     }
 }
 
-impl Widget for WindowWidthProbe {
+impl Widget for VentanaAnchoProbe {
     type Action = NoAction;
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -7097,22 +7136,28 @@ impl Widget for WindowWidthProbe {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         // Adopta el tamaño del hijo (igual que el `layout` viejo); sin hijo usa
         // el tamaño de ventana por defecto (800x600) que antes imponía `bc.constrain`.
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = crate::layout::LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = crate::layout::LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => {
                 let fijo = match axis {
                     Axis::Horizontal => 800.0.px(),
                     Axis::Vertical => 600.0.px(),
                 };
-                match len_req {
+                match longitud_req {
                     LenReq::FitContent(space) => fijo.min(space),
                     _ => fijo,
                 }
@@ -7126,9 +7171,9 @@ impl Widget for WindowWidthProbe {
         WINDOW_HEIGHT_TL.with(|h| h.set(size.height));
 
         // Layout del hijo ocupando todo el espacio disponible
-        if let Some(child) = self.child.as_mut() {
-            ctx.run_layout(child, size);
-            ctx.place_child(child, Point::ORIGIN);
+        if let Some(hijo) = self.hijo.as_mut() {
+            ctx.run_layout(hijo, size);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -7153,13 +7198,13 @@ impl Widget for WindowWidthProbe {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        if let Some(child) = &self.child {
-            ChildrenIds::from_slice(&[child.id()])
+        if let Some(hijo) = &self.hijo {
+            ChildrenIds::from_slice(&[hijo.id()])
         } else {
             ChildrenIds::from_slice(&[])
         }
@@ -7170,72 +7215,72 @@ impl Widget for WindowWidthProbe {
 
 /// Wrapper de Xilem View que envuelve la vista raíz con `WindowWidthProbe`
 /// para detectar resize automáticamente.
-pub struct WidthObservedView<V, State> {
+pub struct AnchoObservedVista<V, State> {
     inner: V,
     phantom: PhantomData<fn() -> State>,
 }
 
 /// Envuelve cualquier `WidgetView` con detección de resize.
-pub fn observe_width<State: 'static, V: WidgetView<State>>(
+pub fn observe_ancho<State: 'static, V: WidgetView<State>>(
     inner: V,
-) -> WidthObservedView<V, State> {
-    WidthObservedView {
+) -> AnchoObservedVista<V, State> {
+    AnchoObservedVista {
         inner,
         phantom: PhantomData,
     }
 }
 
-impl<V: WidgetView<State>, State: 'static> ViewMarker for WidthObservedView<V, State> {}
+impl<V: WidgetView<State>, State: 'static> ViewMarker for AnchoObservedVista<V, State> {}
 
 impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx>
-    for WidthObservedView<V, State>
+    for AnchoObservedVista<V, State>
 {
-    type Element = Pod<WindowWidthProbe>;
+    type Element = Pod<VentanaAnchoProbe>;
     type ViewState = V::ViewState;
 
     fn build(
         &self,
         ctx: &mut ViewCtx,
         app_state: &mut State,
-    ) -> (Pod<WindowWidthProbe>, V::ViewState) {
-        let (child, child_state) = self.inner.build(ctx, app_state);
-        let widget = WindowWidthProbe::new(child.new_widget);
+    ) -> (Pod<VentanaAnchoProbe>, V::ViewState) {
+        let (hijo, child_state) = self.inner.build(ctx, app_state);
+        let widget = VentanaAnchoProbe::nuevo(hijo.new_widget);
         (ctx.create_pod(widget), child_state)
     }
 
     fn rebuild(
         &self,
-        prev: &Self,
+        anterior: &Self,
         view_state: &mut V::ViewState,
         ctx: &mut ViewCtx,
-        mut element: Mut<'_, Pod<WindowWidthProbe>>,
+        mut element: Mut<'_, Pod<VentanaAnchoProbe>>,
         app_state: &mut State,
     ) {
-        let mut child = WindowWidthProbe::child_mut(&mut element);
+        let mut hijo = VentanaAnchoProbe::hijo_mut(&mut element);
         self.inner
-            .rebuild(&prev.inner, view_state, ctx, child.downcast(), app_state);
+            .rebuild(&anterior.inner, view_state, ctx, hijo.downcast(), app_state);
     }
 
     fn teardown(
         &self,
         view_state: &mut V::ViewState,
         ctx: &mut ViewCtx,
-        mut element: Mut<'_, Pod<WindowWidthProbe>>,
+        mut element: Mut<'_, Pod<VentanaAnchoProbe>>,
     ) {
-        let mut child = WindowWidthProbe::child_mut(&mut element);
-        self.inner.teardown(view_state, ctx, child.downcast());
+        let mut hijo = VentanaAnchoProbe::hijo_mut(&mut element);
+        self.inner.teardown(view_state, ctx, hijo.downcast());
     }
 
     fn message(
         &self,
         view_state: &mut V::ViewState,
         message: &mut MessageContext,
-        mut element: Mut<'_, Pod<WindowWidthProbe>>,
+        mut element: Mut<'_, Pod<VentanaAnchoProbe>>,
         app_state: &mut State,
     ) -> MessageResult<()> {
-        let mut child = WindowWidthProbe::child_mut(&mut element);
+        let mut hijo = VentanaAnchoProbe::hijo_mut(&mut element);
         self.inner
-            .message(view_state, message, child.downcast(), app_state)
+            .message(view_state, message, hijo.downcast(), app_state)
     }
 }
 
@@ -7248,7 +7293,7 @@ impl<V: WidgetView<State>, State: 'static> View<State, (), ViewCtx>
 /// ese diseño manda también en el fondo de la ventana (no sólo en los hijos).
 fn tema_de_raiz(layout: &Layout, base: &MaterialTheme) -> MaterialTheme {
     match layout {
-        Layout::ThemeProvider { theme, .. } => MaterialTheme::named(theme, base.is_dark),
+        Layout::ThemeProvider { theme, .. } => MaterialTheme::named(theme, base.es_dark),
         _ => base.clone(),
     }
 }
@@ -7257,7 +7302,7 @@ fn tema_de_raiz(layout: &Layout, base: &MaterialTheme) -> MaterialTheme {
 ///
 /// Por defecto el runtime no imprime nada: en una app compilada esos logs sólo
 /// ensucian la consola y retrasan el arranque.
-fn debug_activo() -> bool {
+fn depuracion_activo() -> bool {
     std::env::var("FORJA_GUI_DEBUG")
         .map(|v| v != "0")
         .unwrap_or(false)
@@ -7266,7 +7311,7 @@ fn debug_activo() -> bool {
 /// Arma las `WindowOptions` con lo declarado en `ventana(...)`.
 fn opciones_ventana(
     titulo: String,
-    config: &crate::window_config::WindowConfig,
+    config: &crate::window_config::VentanaConfig,
     ancho: f64,
     alto: f64,
 ) -> WindowOptions<AppStateNativo> {
@@ -7294,9 +7339,9 @@ fn opciones_ventana(
 /// `auto_theme`: si es `true`, detecta automáticamente el tema del sistema.
 /// `load_state`: estado serializado opcional para restaurar variables
 ///   (usado por hot reload para preservar estado entre reinicios).
-pub fn build_and_run(
+pub fn construir_y_ejecutar(
     programa: &Programa,
-    load_state: Option<&str>,
+    cargar_state: Option<&str>,
     theme: Option<MaterialTheme>,
     auto_theme: bool,
 ) -> Result<(), String> {
@@ -7310,17 +7355,17 @@ pub fn build_and_run(
         theme.unwrap_or_else(MaterialTheme::light)
     };
 
-    let mut state = AppStateNativo::new();
+    let mut state = AppStateNativo::nuevo();
     inicializar_estado(&programa.declaraciones, &mut state);
     // Restaurar estado guardado (hot reload) si se proporcionó
-    if let Some(json) = load_state {
+    if let Some(json) = cargar_state {
         state.cargar_estado(json);
     }
     // Árbol de arranque: sólo para el log (el layout se re-extrae en cada render,
     // así `si/sino` ve el estado actual y la navegación cambia de página).
-    let layout_inicial = extraer_layout(&programa.declaraciones, &mut state.store);
-    if debug_activo() {
-        crate::debug::print_layout_tree(&layout_inicial);
+    let layout_inicial = extraer_layout(&programa.declaraciones, &mut state.almacen);
+    if depuracion_activo() {
+        crate::debug::imprimir_layout_arbol(&layout_inicial);
     }
     // Si la app declara un diseño en la raíz (`tema_fluent(...)`, `tema_liquid_glass(...)`),
     // ese diseño manda también en el fondo de la ventana y el título.
@@ -7333,27 +7378,27 @@ pub fn build_and_run(
         format!(
             "Forja GUI — {:?} {}",
             tema_ventana.design,
-            if tema_ventana.is_dark {
+            if tema_ventana.es_dark {
                 "oscuro"
             } else {
                 "claro"
             }
         )
     });
-    if debug_activo() {
+    if depuracion_activo() {
         println!(
             "  🪟 Ventana «{}» {}x{} (icono: {:?})",
             titulo, config.ancho, config.alto, config.icono
         );
         println!(
             "  {} Diseño {:?} — modo {} (seed: {})",
-            if tema_ventana.is_dark {
+            if tema_ventana.es_dark {
                 "🌙"
             } else {
                 "☀️"
             },
             tema_ventana.design,
-            if tema_ventana.is_dark {
+            if tema_ventana.es_dark {
                 "oscuro"
             } else {
                 "claro"
@@ -7363,15 +7408,15 @@ pub fn build_and_run(
     }
 
     // Inicializar window_width con un valor por defecto (se actualizará en cada render)
-    let initial_width: f64 = config.ancho;
-    let initial_height: f64 = config.alto;
-    state.update_window_size(initial_width, initial_height);
-    WINDOW_WIDTH_TL.with(|w| w.set(initial_width));
-    WINDOW_HEIGHT_TL.with(|h| h.set(initial_height));
-    if debug_activo() {
+    let initial_ancho: f64 = config.ancho;
+    let initial_alto: f64 = config.alto;
+    state.actualizar_ventana_tamano(initial_ancho, initial_alto);
+    WINDOW_WIDTH_TL.with(|w| w.set(initial_ancho));
+    WINDOW_HEIGHT_TL.with(|h| h.set(initial_alto));
+    if depuracion_activo() {
         println!(
             "  📐 Clase de tamaño inicial: {:?} ({:.0}px)",
-            state.window_size, initial_width
+            state.ventana_tamano, initial_ancho
         );
     }
 
@@ -7380,17 +7425,17 @@ pub fn build_and_run(
         state,
         move |data: &mut AppStateNativo| -> Box<AnyWidgetView<AppStateNativo>> {
             // Leer el ancho actual desde el thread-local (actualizado por WindowWidthProbe)
-            let current_width = current_window_width();
-            let current_height = current_window_height();
-            data.update_window_size(current_width, current_height);
+            let actual_ancho = actual_ventana_ancho();
+            let actual_alto = actual_ventana_alto();
+            data.actualizar_ventana_tamano(actual_ancho, actual_alto);
             let medir = crate::perf::activo();
             let t0 = std::time::Instant::now();
-            let layout = extraer_layout(&prog, &mut data.store);
+            let layout = extraer_layout(&prog, &mut data.almacen);
             let t1 = std::time::Instant::now();
             // El diseño de la raíz se re-evalúa en cada render (por si un `si`
             // cambia de tema según el estado).
             let tema = tema_de_raiz(&layout, &theme);
-            let root_view = layout_a_view(&layout, data, &prog, &tema);
+            let raiz_vista = layout_a_vista(&layout, data, &prog, &tema);
             if medir {
                 if let Some(reporte) =
                     crate::perf::registrar(t1 - t0, std::time::Instant::now() - t1)
@@ -7398,17 +7443,17 @@ pub fn build_and_run(
                     eprintln!("{}", reporte);
                 }
             }
-            let root_bg = crate::chrome::fondo_pagina(&tema);
-            let root_with_bg = view::sized_box(root_view)
+            let raiz_bg = crate::chrome::fondo_pagina(&tema);
+            let raiz_con_bg = view::sized_box(raiz_vista)
                 .dims((
-                    Length::px(current_width.max(200.0)),
-                    Length::px(current_height.max(200.0)),
+                    Length::px(actual_ancho.max(200.0)),
+                    Length::px(actual_alto.max(200.0)),
                 ))
-                .background(Background::Color(root_bg));
-            Box::new(observe_width(root_with_bg))
+                .background(Background::Color(raiz_bg));
+            Box::new(observe_ancho(raiz_con_bg))
         },
         crate::chrome::aplicar_chrome(
-            opciones_ventana(titulo, &config, initial_width, initial_height),
+            opciones_ventana(titulo, &config, initial_ancho, initial_alto),
             &tema_ventana,
         ),
     )
@@ -7421,9 +7466,9 @@ pub fn build_and_run(
 }
 
 #[cfg(target_os = "android")]
-pub fn build_and_run_android(
+pub fn construir_y_ejecutar_android(
     programa: &Programa,
-    load_state: Option<&str>,
+    cargar_state: Option<&str>,
     theme: Option<MaterialTheme>,
     auto_theme: bool,
     android_app: winit::platform::android::activity::AndroidApp,
@@ -7439,50 +7484,53 @@ pub fn build_and_run_android(
     // property set de los widgets nativos.
     let tema_ventana = theme.clone();
 
-    let mut state = AppStateNativo::new();
+    let mut state = AppStateNativo::nuevo();
     inicializar_estado(&programa.declaraciones, &mut state);
     // Restaurar estado guardado (hot reload) si se proporcionó
-    if let Some(json) = load_state {
+    if let Some(json) = cargar_state {
         state.cargar_estado(json);
     }
     // Árbol de arranque: sólo para el log (el layout se re-extrae en cada render,
     // así `si/sino` ve el estado actual y la navegación cambia de página).
-    crate::debug::print_layout_tree(&extraer_layout(&programa.declaraciones, &mut state.store));
+    crate::debug::imprimir_layout_arbol(&extraer_layout(
+        &programa.declaraciones,
+        &mut state.almacen,
+    ));
     let prog = programa.declaraciones.clone();
 
-    let initial_width: f64 = 1200.0;
-    let initial_height: f64 = 800.0;
-    state.update_window_size(initial_width, initial_height);
-    WINDOW_WIDTH_TL.with(|w| w.set(initial_width));
-    WINDOW_HEIGHT_TL.with(|h| h.set(initial_height));
+    let initial_ancho: f64 = 1200.0;
+    let initial_alto: f64 = 800.0;
+    state.actualizar_ventana_tamano(initial_ancho, initial_alto);
+    WINDOW_WIDTH_TL.with(|w| w.set(initial_ancho));
+    WINDOW_HEIGHT_TL.with(|h| h.set(initial_alto));
 
     let app = Xilem::new_simple(
         state,
         move |data: &mut AppStateNativo| -> Box<AnyWidgetView<AppStateNativo>> {
-            let current_width = current_window_width();
-            let current_height = current_window_height();
-            data.update_window_size(current_width, current_height);
-            let layout = extraer_layout(&prog, &mut data.store);
+            let actual_ancho = actual_ventana_ancho();
+            let actual_alto = actual_ventana_alto();
+            data.actualizar_ventana_tamano(actual_ancho, actual_alto);
+            let layout = extraer_layout(&prog, &mut data.almacen);
             let tema = tema_de_raiz(&layout, &theme);
-            let root_view = layout_a_view(&layout, data, &prog, &tema);
-            let root_bg = crate::chrome::fondo_pagina(&tema);
-            let root_with_bg = view::sized_box(root_view)
+            let raiz_vista = layout_a_vista(&layout, data, &prog, &tema);
+            let raiz_bg = crate::chrome::fondo_pagina(&tema);
+            let raiz_con_bg = view::sized_box(raiz_vista)
                 .dims((
-                    Length::px(current_width.max(200.0)),
-                    Length::px(current_height.max(200.0)),
+                    Length::px(actual_ancho.max(200.0)),
+                    Length::px(actual_alto.max(200.0)),
                 ))
-                .background(Background::Color(root_bg));
-            Box::new(observe_width(root_with_bg))
+                .background(Background::Color(raiz_bg));
+            Box::new(observe_ancho(raiz_con_bg))
         },
         WindowOptions::new("Forja GUI — diseño de la app")
-            .with_initial_inner_size(LogicalSize::new(initial_width, 800.0)),
+            .with_initial_inner_size(LogicalSize::new(initial_ancho, 800.0)),
     );
 
     let app = app.with_default_properties(crate::theme_props::default_properties(&tema_ventana));
-    let mut event_loop = EventLoop::with_user_event();
-    event_loop.with_android_app(android_app);
+    let mut evento_bucle = EventLoop::with_user_event();
+    evento_bucle.with_android_app(android_app);
 
-    app.run_in(event_loop)
+    app.run_in(evento_bucle)
         .map_err(|e| format!("Error en GUI Android: {}", e))
 }
 
@@ -7495,8 +7543,8 @@ pub fn ejecutar_callback_forja(
     state: &AppStateNativo,
     programa: &[Declaracion],
 ) -> ValorGUI {
-    let mut store = state.store.clone();
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut store) {
+    let mut almacen = state.almacen.clone();
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut almacen) {
         Ok(val) => val,
         Err(e) => ValorGUI::Texto(format!("Error: {}", e)),
     }
@@ -7506,7 +7554,7 @@ pub fn ejecutar_callback_forja(
 
 /// Inicializa el estado de la GUI evaluando las variables de la función `main`.
 pub fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
-    crate::evaluador::inicializar_estado(decls, &mut state.store);
+    crate::evaluador::inicializar_estado(decls, &mut state.almacen);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -7517,7 +7565,7 @@ pub fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
 // gesture_widgets.rs) como vistas Xilem, siguiendo el mismo patrón
 // que el Button view de xilem.
 
-use crate::GestureResult as GestureAction;
+use crate::GestureResultado as GestureAction;
 use crate::PinchZoomWidget;
 use crate::PullToRefreshWidget as PullRefreshWidget;
 use crate::RotateWidget;
@@ -7534,17 +7582,17 @@ const GESTURE_CHILD_VIEW_ID: ViewId = ViewId::new(0);
 
 /// View de Xilem que envuelve un hijo en un PullToRefreshWidget.
 /// Detecta gesto de tirar hacia abajo y ejecuta un callback Forja.
-pub struct PullToRefreshView<V> {
-    child: V,
+pub struct PullToRefreshVista<V> {
+    hijo: V,
     callback: String,
     refreshing: String,
     program: Vec<Declaracion>,
 }
 
-impl<V> PullToRefreshView<V> {
-    pub fn new(child: V, callback: String, refreshing: String, program: Vec<Declaracion>) -> Self {
+impl<V> PullToRefreshVista<V> {
+    pub fn nuevo(hijo: V, callback: String, refreshing: String, program: Vec<Declaracion>) -> Self {
         Self {
-            child,
+            hijo,
             callback,
             refreshing,
             program,
@@ -7552,9 +7600,9 @@ impl<V> PullToRefreshView<V> {
     }
 }
 
-impl<V> ViewMarker for PullToRefreshView<V> {}
+impl<V> ViewMarker for PullToRefreshVista<V> {}
 
-impl<V> View<AppStateNativo, (), ViewCtx> for PullToRefreshView<V>
+impl<V> View<AppStateNativo, (), ViewCtx> for PullToRefreshVista<V>
 where
     V: WidgetView<AppStateNativo, ()>,
 {
@@ -7566,10 +7614,10 @@ where
         ctx: &mut ViewCtx,
         app_state: &mut AppStateNativo,
     ) -> (Self::Element, Self::ViewState) {
-        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
-            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        let (hijo, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.hijo, ctx, app_state)
         });
-        let widget = PullRefreshWidget::new(child.new_widget);
+        let widget = PullRefreshWidget::nuevo(hijo.new_widget);
         (
             ctx.with_action_widget(|ctx| ctx.create_pod(widget)),
             child_state,
@@ -7578,7 +7626,7 @@ where
 
     fn rebuild(
         &self,
-        prev: &Self,
+        anterior: &Self,
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
@@ -7586,11 +7634,11 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::rebuild(
-                &self.child,
-                &prev.child,
+                &self.hijo,
+                &anterior.hijo,
                 view_state,
                 ctx,
-                PullRefreshWidget::child_mut(&mut element).downcast(),
+                PullRefreshWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             );
         });
@@ -7604,10 +7652,10 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::teardown(
-                &self.child,
+                &self.hijo,
                 view_state,
                 ctx,
-                PullRefreshWidget::child_mut(&mut element).downcast(),
+                PullRefreshWidget::hijo_mut(&mut element).downcast(),
             );
         });
         ctx.teardown_action_source(element);
@@ -7615,17 +7663,17 @@ where
 
     fn message(
         &self,
-        _view_state: &mut Self::ViewState,
+        vista_state: &mut Self::ViewState,
         message: &mut MessageContext,
         mut element: Mut<'_, Self::Element>,
         app_state: &mut AppStateNativo,
     ) -> crate::MessageResult<()> {
         match message.take_first() {
             Some(GESTURE_CHILD_VIEW_ID) => View::<AppStateNativo, (), _>::message(
-                &self.child,
-                _view_state,
+                &self.hijo,
+                vista_state,
                 message,
-                PullRefreshWidget::child_mut(&mut element).downcast(),
+                PullRefreshWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             ),
             None => {
@@ -7659,35 +7707,35 @@ where
 
 /// View de Xilem que envuelve un hijo en un SwipeWidget.
 /// Detecta swipe horizontal para descartar elementos.
-pub struct SwipeToDismissView<V> {
-    child: V,
+pub struct SwipeToDismissVista<V> {
+    hijo: V,
     on_dismiss: String,
     dismissed: String,
-    label: String,
+    etiqueta: String,
     program: Vec<Declaracion>,
 }
 
-impl<V> SwipeToDismissView<V> {
-    pub fn new(
-        child: V,
+impl<V> SwipeToDismissVista<V> {
+    pub fn nuevo(
+        hijo: V,
         on_dismiss: String,
         dismissed: String,
-        label: String,
+        etiqueta: String,
         program: Vec<Declaracion>,
     ) -> Self {
         Self {
-            child,
+            hijo,
             on_dismiss,
             dismissed,
-            label,
+            etiqueta,
             program,
         }
     }
 }
 
-impl<V> ViewMarker for SwipeToDismissView<V> {}
+impl<V> ViewMarker for SwipeToDismissVista<V> {}
 
-impl<V> View<AppStateNativo, (), ViewCtx> for SwipeToDismissView<V>
+impl<V> View<AppStateNativo, (), ViewCtx> for SwipeToDismissVista<V>
 where
     V: WidgetView<AppStateNativo, ()>,
 {
@@ -7699,10 +7747,10 @@ where
         ctx: &mut ViewCtx,
         app_state: &mut AppStateNativo,
     ) -> (Self::Element, Self::ViewState) {
-        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
-            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        let (hijo, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.hijo, ctx, app_state)
         });
-        let widget = SwipeGestureWidget::new(child.new_widget).with_threshold(100.0);
+        let widget = SwipeGestureWidget::nuevo(hijo.new_widget).con_threshold(100.0);
         (
             ctx.with_action_widget(|ctx| ctx.create_pod(widget)),
             child_state,
@@ -7711,7 +7759,7 @@ where
 
     fn rebuild(
         &self,
-        prev: &Self,
+        anterior: &Self,
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
@@ -7719,11 +7767,11 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::rebuild(
-                &self.child,
-                &prev.child,
+                &self.hijo,
+                &anterior.hijo,
                 view_state,
                 ctx,
-                SwipeGestureWidget::child_mut(&mut element).downcast(),
+                SwipeGestureWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             );
         });
@@ -7737,10 +7785,10 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::teardown(
-                &self.child,
+                &self.hijo,
                 view_state,
                 ctx,
-                SwipeGestureWidget::child_mut(&mut element).downcast(),
+                SwipeGestureWidget::hijo_mut(&mut element).downcast(),
             );
         });
         ctx.teardown_action_source(element);
@@ -7748,17 +7796,17 @@ where
 
     fn message(
         &self,
-        _view_state: &mut Self::ViewState,
+        vista_state: &mut Self::ViewState,
         message: &mut MessageContext,
         mut element: Mut<'_, Self::Element>,
         app_state: &mut AppStateNativo,
     ) -> crate::MessageResult<()> {
         match message.take_first() {
             Some(GESTURE_CHILD_VIEW_ID) => View::<AppStateNativo, (), _>::message(
-                &self.child,
-                _view_state,
+                &self.hijo,
+                vista_state,
                 message,
-                SwipeGestureWidget::child_mut(&mut element).downcast(),
+                SwipeGestureWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             ),
             None => {
@@ -7766,10 +7814,10 @@ where
                     Some(boxed) => match *boxed {
                         GestureAction::Swipe { .. } => {
                             // 5.1: Usar campo label para debugging durante swipe
-                            if !self.label.is_empty() {
+                            if !self.etiqueta.is_empty() {
                                 eprintln!(
                                     "[SwipeToDismiss] '{}' — deslizando para descartar",
-                                    &self.label
+                                    &self.etiqueta
                                 );
                             }
                             // Marcar como descartado y ejecutar callback
@@ -7799,25 +7847,25 @@ where
 
 /// View de Xilem que envuelve un hijo en un PinchZoomWidget.
 /// Aplica zoom por gesto de pellizco (pinch-to-zoom).
-pub struct PinchZoomView<V> {
-    child: V,
+pub struct PinchZoomVista<V> {
+    hijo: V,
     min_scale: f64,
     max_scale: f64,
 }
 
-impl<V> PinchZoomView<V> {
-    pub fn new(child: V, min_scale: f64, max_scale: f64) -> Self {
+impl<V> PinchZoomVista<V> {
+    pub fn nuevo(hijo: V, min_scale: f64, max_scale: f64) -> Self {
         Self {
-            child,
+            hijo,
             min_scale,
             max_scale,
         }
     }
 }
 
-impl<V> ViewMarker for PinchZoomView<V> {}
+impl<V> ViewMarker for PinchZoomVista<V> {}
 
-impl<V> View<AppStateNativo, (), ViewCtx> for PinchZoomView<V>
+impl<V> View<AppStateNativo, (), ViewCtx> for PinchZoomVista<V>
 where
     V: WidgetView<AppStateNativo, ()>,
 {
@@ -7829,12 +7877,12 @@ where
         ctx: &mut ViewCtx,
         app_state: &mut AppStateNativo,
     ) -> (Self::Element, Self::ViewState) {
-        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
-            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        let (hijo, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.hijo, ctx, app_state)
         });
-        let widget = PinchZoomWidget::new(child.new_widget)
-            .with_min_scale(self.min_scale)
-            .with_max_scale(self.max_scale);
+        let widget = PinchZoomWidget::nuevo(hijo.new_widget)
+            .con_min_scale(self.min_scale)
+            .con_max_scale(self.max_scale);
         (
             ctx.with_action_widget(|ctx| ctx.create_pod(widget)),
             child_state,
@@ -7843,7 +7891,7 @@ where
 
     fn rebuild(
         &self,
-        prev: &Self,
+        anterior: &Self,
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
@@ -7851,11 +7899,11 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::rebuild(
-                &self.child,
-                &prev.child,
+                &self.hijo,
+                &anterior.hijo,
                 view_state,
                 ctx,
-                PinchZoomWidget::child_mut(&mut element).downcast(),
+                PinchZoomWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             );
         });
@@ -7869,10 +7917,10 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::teardown(
-                &self.child,
+                &self.hijo,
                 view_state,
                 ctx,
-                PinchZoomWidget::child_mut(&mut element).downcast(),
+                PinchZoomWidget::hijo_mut(&mut element).downcast(),
             );
         });
         ctx.teardown_action_source(element);
@@ -7880,17 +7928,17 @@ where
 
     fn message(
         &self,
-        _view_state: &mut Self::ViewState,
+        vista_state: &mut Self::ViewState,
         message: &mut MessageContext,
         mut element: Mut<'_, Self::Element>,
         app_state: &mut AppStateNativo,
     ) -> crate::MessageResult<()> {
         match message.take_first() {
             Some(GESTURE_CHILD_VIEW_ID) => View::<AppStateNativo, (), _>::message(
-                &self.child,
-                _view_state,
+                &self.hijo,
+                vista_state,
                 message,
-                PinchZoomWidget::child_mut(&mut element).downcast(),
+                PinchZoomWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             ),
             None => crate::MessageResult::Nop,
@@ -7905,19 +7953,19 @@ where
 
 /// View de Xilem que envuelve un hijo en un RotateWidget.
 /// Aplica rotación por gesto multi-touch.
-pub struct RotateView<V> {
-    child: V,
+pub struct RotateVista<V> {
+    hijo: V,
 }
 
-impl<V> RotateView<V> {
-    pub fn new(child: V) -> Self {
-        Self { child }
+impl<V> RotateVista<V> {
+    pub fn nuevo(hijo: V) -> Self {
+        Self { hijo }
     }
 }
 
-impl<V> ViewMarker for RotateView<V> {}
+impl<V> ViewMarker for RotateVista<V> {}
 
-impl<V> View<AppStateNativo, (), ViewCtx> for RotateView<V>
+impl<V> View<AppStateNativo, (), ViewCtx> for RotateVista<V>
 where
     V: WidgetView<AppStateNativo, ()>,
 {
@@ -7929,10 +7977,10 @@ where
         ctx: &mut ViewCtx,
         app_state: &mut AppStateNativo,
     ) -> (Self::Element, Self::ViewState) {
-        let (child, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
-            View::<AppStateNativo, (), _>::build(&self.child, ctx, app_state)
+        let (hijo, child_state) = ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
+            View::<AppStateNativo, (), _>::build(&self.hijo, ctx, app_state)
         });
-        let widget = RotateWidget::new(child.new_widget);
+        let widget = RotateWidget::nuevo(hijo.new_widget);
         (
             ctx.with_action_widget(|ctx| ctx.create_pod(widget)),
             child_state,
@@ -7941,7 +7989,7 @@ where
 
     fn rebuild(
         &self,
-        prev: &Self,
+        anterior: &Self,
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
@@ -7949,11 +7997,11 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::rebuild(
-                &self.child,
-                &prev.child,
+                &self.hijo,
+                &anterior.hijo,
                 view_state,
                 ctx,
-                RotateWidget::child_mut(&mut element).downcast(),
+                RotateWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             );
         });
@@ -7967,10 +8015,10 @@ where
     ) {
         ctx.with_id(GESTURE_CHILD_VIEW_ID, |ctx| {
             View::<AppStateNativo, (), _>::teardown(
-                &self.child,
+                &self.hijo,
                 view_state,
                 ctx,
-                RotateWidget::child_mut(&mut element).downcast(),
+                RotateWidget::hijo_mut(&mut element).downcast(),
             );
         });
         ctx.teardown_action_source(element);
@@ -7978,17 +8026,17 @@ where
 
     fn message(
         &self,
-        _view_state: &mut Self::ViewState,
+        vista_state: &mut Self::ViewState,
         message: &mut MessageContext,
         mut element: Mut<'_, Self::Element>,
         app_state: &mut AppStateNativo,
     ) -> crate::MessageResult<()> {
         match message.take_first() {
             Some(GESTURE_CHILD_VIEW_ID) => View::<AppStateNativo, (), _>::message(
-                &self.child,
-                _view_state,
+                &self.hijo,
+                vista_state,
                 message,
-                RotateWidget::child_mut(&mut element).downcast(),
+                RotateWidget::hijo_mut(&mut element).downcast(),
                 app_state,
             ),
             None => crate::MessageResult::Nop,
@@ -8007,12 +8055,12 @@ mod tests_layout {
     use forja_syntax::{lexer::Lexer, parser::Parser};
 
     fn layout_de(src: &str) -> Layout {
-        let mut lexer = Lexer::new(src);
+        let mut lexer = Lexer::nuevo(src);
         let tokens = lexer.tokenize().expect("lex");
         let mut parser = Parser::nuevo(tokens);
-        let programa = parser.parse().expect("parse");
-        let mut store = VariableStore::new();
-        extraer_layout(&programa.declaraciones, &mut store)
+        let programa = parser.parsear().expect("parse");
+        let mut almacen = VariableAlmacen::nuevo();
+        extraer_layout(&programa.declaraciones, &mut almacen)
     }
 
     #[test]
@@ -8085,20 +8133,20 @@ mod tests_ejemplo_galeria {
     #[test]
     fn galeria_extrae_tema_grid_y_tarjetas() {
         let src = include_str!("../../../ejemplos/gui/208_gui_galeria.fa");
-        let mut lexer = Lexer::new(src);
+        let mut lexer = Lexer::nuevo(src);
         let tokens = lexer.tokenize().expect("lex");
         let mut parser = Parser::nuevo(tokens);
-        let programa = parser.parse().expect("parse");
-        let mut store = VariableStore::new();
-        let layout = extraer_layout(&programa.declaraciones, &mut store);
+        let programa = parser.parsear().expect("parse");
+        let mut almacen = VariableAlmacen::nuevo();
+        let layout = extraer_layout(&programa.declaraciones, &mut almacen);
 
-        let Layout::ThemeProvider { child, theme } = layout else {
+        let Layout::ThemeProvider { hijo, theme } = layout else {
             panic!("la raíz debe ser un ThemeProvider, llegó: {:?}", layout);
         };
         assert_eq!(theme, "fluent:light");
 
         // El tema envuelve un `desplazable(columna_con_gap(...))`.
-        let Layout::Portal(columna) = *child else {
+        let Layout::Portal(columna) = *hijo else {
             panic!("el tema debe envolver un portal (desplazable)");
         };
         let Layout::Column { children, gap, .. } = *columna else {
@@ -8156,7 +8204,7 @@ mod tests_tema_de_ventana {
     #[test]
     fn la_raiz_tema_fluent_manda_en_la_ventana() {
         let layout = Layout::ThemeProvider {
-            child: Box::new(Layout::Spacer(0.0)),
+            hijo: Box::new(Layout::Spacer(0.0)),
             theme: "fluent".to_string(),
         };
         let tema = tema_de_raiz(&layout, &base());
@@ -8168,12 +8216,12 @@ mod tests_tema_de_ventana {
     #[test]
     fn la_raiz_tema_liquid_glass_oscuro_manda_en_la_ventana() {
         let layout = Layout::ThemeProvider {
-            child: Box::new(Layout::Spacer(0.0)),
+            hijo: Box::new(Layout::Spacer(0.0)),
             theme: "liquid_glass:dark".to_string(),
         };
         let tema = tema_de_raiz(&layout, &base());
         assert_eq!(tema.design, DesignStyle::LiquidGlass);
-        assert!(tema.is_dark);
+        assert!(tema.es_dark);
         assert_eq!(tema.scheme.background, RgbColor(10, 12, 16));
     }
 
@@ -8192,21 +8240,21 @@ mod tests_tema_de_ventana {
     /// 24px en Liquid Glass, 20px en Material.
     #[test]
     fn las_formas_cambian_por_diseno() {
-        let boton = |is_dark| {
+        let boton = |es_dark| {
             (
-                MaterialTheme::fluent(is_dark)
+                MaterialTheme::fluent(es_dark)
                     .shapes
-                    .for_family(ShapeFamily::Button),
-                MaterialTheme::liquid_glass(is_dark)
+                    .for_family(FormaFamily::Button),
+                MaterialTheme::liquid_glass(es_dark)
                     .shapes
-                    .for_family(ShapeFamily::Button),
+                    .for_family(FormaFamily::Button),
                 MaterialTheme::light()
                     .shapes
-                    .for_family(ShapeFamily::Button),
+                    .for_family(FormaFamily::Button),
             )
         };
-        for is_dark in [false, true] {
-            let (fluent, glass, material) = boton(is_dark);
+        for es_dark in [false, true] {
+            let (fluent, glass, material) = boton(es_dark);
             assert_eq!(fluent, 4.0);
             assert_eq!(glass, 24.0);
             assert_eq!(material, 20.0);
@@ -8215,13 +8263,13 @@ mod tests_tema_de_ventana {
         assert_eq!(
             MaterialTheme::fluent(false)
                 .shapes
-                .for_family(ShapeFamily::Container),
+                .for_family(FormaFamily::Container),
             4.0
         );
         assert_eq!(
             MaterialTheme::liquid_glass(false)
                 .shapes
-                .for_family(ShapeFamily::Container),
+                .for_family(FormaFamily::Container),
             20.0
         );
     }
@@ -8237,19 +8285,19 @@ mod tests_modo_claro_oscuro {
     fn el_sufijo_manda_sobre_el_modo_del_sistema() {
         let claro = MaterialTheme::named("fluent:light", true);
         assert!(
-            !claro.is_dark,
+            !claro.es_dark,
             "fluent:light debe ser claro aunque el SO sea oscuro"
         );
         assert_eq!(claro.design, DesignStyle::Fluent);
 
         let oscuro = MaterialTheme::named("fluent:dark", false);
         assert!(
-            oscuro.is_dark,
+            oscuro.es_dark,
             "fluent:dark debe ser oscuro aunque el SO sea claro"
         );
 
         let vidrio = MaterialTheme::named("liquid_glass:light", true);
-        assert!(!vidrio.is_dark);
+        assert!(!vidrio.es_dark);
         assert_eq!(vidrio.scheme.background, RgbColor(242, 246, 252));
     }
 
@@ -8271,10 +8319,10 @@ mod tests_config_ventana {
     use forja_syntax::{lexer::Lexer, parser::Parser};
 
     fn parsear(src: &str) -> Programa {
-        let mut lexer = Lexer::new(src);
+        let mut lexer = Lexer::nuevo(src);
         let tokens = lexer.tokenize().expect("lex");
         let mut parser = Parser::nuevo(tokens);
-        parser.parse().expect("parse")
+        parser.parsear().expect("parse")
     }
 
     #[test]
@@ -8341,8 +8389,8 @@ funcion main() {
 }
 "#,
         );
-        let mut store = VariableStore::new();
-        match extraer_layout(&programa.declaraciones, &mut store) {
+        let mut almacen = VariableAlmacen::nuevo();
+        match extraer_layout(&programa.declaraciones, &mut almacen) {
             Layout::Title(t) => assert_eq!(t, "Hola"),
             otro => panic!("se esperaba sólo el título, llegó {:?}", otro),
         }

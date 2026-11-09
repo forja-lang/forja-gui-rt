@@ -15,7 +15,7 @@
 //   - Soporta llamadas a funciones definidas en el AST y funciones nativas
 
 use crate::gui_nativa::ValorGUI;
-use crate::signals::VariableStore;
+use crate::signals::VariableAlmacen;
 use forja_syntax::ast::*;
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -136,7 +136,7 @@ impl ValorGUI {
     }
 
     /// Convierte a serde_json::Value para almacenar en VariableStore
-    pub fn to_json_value(&self) -> serde_json::Value {
+    pub fn to_json_valor(&self) -> serde_json::Value {
         match self {
             ValorGUI::Texto(t) => serde_json::Value::String(t.clone()),
             ValorGUI::Entero(n) => serde_json::Value::Number((*n).into()),
@@ -147,7 +147,7 @@ impl ValorGUI {
             ValorGUI::Mapa(m) => {
                 let mut map = serde_json::Map::new();
                 for (k, v) in m {
-                    map.insert(k.clone(), v.to_json_value());
+                    map.insert(k.clone(), v.to_json_valor());
                 }
                 serde_json::Value::Object(map)
             }
@@ -277,12 +277,12 @@ pub struct Ambito {
 
 impl Default for Ambito {
     fn default() -> Self {
-        Self::new()
+        Self::nuevo()
     }
 }
 
 impl Ambito {
-    pub fn new() -> Self {
+    pub fn nuevo() -> Self {
         Self {
             variables: HashMap::new(),
         }
@@ -313,7 +313,7 @@ impl Ambito {
 /// Registro de funciones nativas: nombre → implementación
 /// El segundo argumento `&mut VariableStore` permite a las funciones nativas
 /// leer/escribir variables del store (útil para SQLite, callbacks, etc.).
-type NativeFn = fn(&[ValorGUI], &mut VariableStore) -> Result<ValorGUI, String>;
+type NativeFn = fn(&[ValorGUI], &mut VariableAlmacen) -> Result<ValorGUI, String>;
 
 fn obtener_nativas() -> HashMap<&'static str, NativeFn> {
     let mut m: HashMap<&'static str, NativeFn> = HashMap::new();
@@ -346,7 +346,7 @@ fn obtener_nativas() -> HashMap<&'static str, NativeFn> {
 }
 
 /// `timestamp()` — tiempo actual en milisegundos desde Unix epoch
-fn nativa_timestamp(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_timestamp(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if !args.is_empty() {
         return Err("timestamp() no requiere argumentos".to_string());
     }
@@ -360,7 +360,7 @@ fn nativa_timestamp(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Val
 /// `fecha_desde_timestamp(ts)` — formatea timestamp (ms) a "YYYY|MM|DD|HH|mm|ss|n_dia|n_mes"
 fn nativa_fecha_desde_timestamp(
     args: &[ValorGUI],
-    _store: &mut VariableStore,
+    _almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     let ts = match args.first() {
         Some(ValorGUI::Entero(n)) => *n,
@@ -394,7 +394,7 @@ fn nativa_fecha_desde_timestamp(
 }
 
 /// `dividir(texto, separador)` — divide un string y retorna JSON array
-fn nativa_dividir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_dividir(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if args.len() < 2 {
         return Err("dividir(texto, separador) requiere 2 argumentos".to_string());
     }
@@ -430,7 +430,7 @@ fn nativa_dividir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valor
 }
 
 /// `a_numero(texto)` — convierte texto a entero (i64)
-fn nativa_a_numero(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_a_numero(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let val = args
         .first()
         .ok_or("a_numero(valor) requiere un argumento".to_string())?;
@@ -458,7 +458,7 @@ fn nativa_a_numero(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 }
 
 /// `longitud(valor)` — longitud de array (JSON) o texto
-fn nativa_longitud(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_longitud(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let val = args
         .first()
         .ok_or("longitud(valor) requiere 1 argumento".to_string())?;
@@ -482,7 +482,7 @@ fn nativa_longitud(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 }
 
 /// `tipo(valor)` — retorna el nombre del tipo como texto
-fn nativa_tipo(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_tipo(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let val = args
         .first()
         .ok_or("tipo(valor) requiere 1 argumento".to_string())?;
@@ -509,7 +509,10 @@ fn nativa_tipo(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI
 }
 
 /// `_archivo_leer(ruta)` — lee texto de un archivo en disco
-fn nativa_archivo_leer(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_archivo_leer(
+    args: &[ValorGUI],
+    _almacen: &mut VariableAlmacen,
+) -> Result<ValorGUI, String> {
     let ruta = match args.first() {
         Some(ValorGUI::Texto(t)) => t.clone(),
         _ => return Err("_archivo_leer(ruta): ruta debe ser texto".to_string()),
@@ -522,7 +525,7 @@ fn nativa_archivo_leer(args: &[ValorGUI], _store: &mut VariableStore) -> Result<
 /// `_archivo_escribir(ruta, contenido)` — escribe texto a un archivo en disco
 fn nativa_archivo_escribir(
     args: &[ValorGUI],
-    _store: &mut VariableStore,
+    _almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     let ruta = match args.first() {
         Some(ValorGUI::Texto(t)) => t.clone(),
@@ -542,19 +545,19 @@ fn nativa_archivo_escribir(
 /// `_json_stringificar(valor)` — convierte cualquier valor a JSON string
 fn nativa_json_stringificar(
     args: &[ValorGUI],
-    _store: &mut VariableStore,
+    _almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     let val = args
         .first()
         .ok_or("_json_stringificar(valor) requiere 1 argumento".to_string())?;
-    let json_value = val.to_json_value();
-    let json_str = serde_json::to_string(&json_value)
+    let json_valor = val.to_json_valor();
+    let json_str = serde_json::to_string(&json_valor)
         .map_err(|e| format!("Error al stringificar a JSON: {}", e))?;
     Ok(ValorGUI::Texto(json_str))
 }
 
 /// `a_texto(valor)` — convierte cualquier valor a texto
-fn nativa_a_texto(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_a_texto(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let val = args
         .first()
         .ok_or("a_texto(valor) requiere 1 argumento".to_string())?;
@@ -566,7 +569,7 @@ fn nativa_a_texto(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valor
 /// Las funciones Forja llamadas como callbacks se evalúan con este evaluador y
 /// no con la VM, así que `escribir` faltaba y todo callback que lo usara fallaba
 /// con «Función 'escribir' no encontrada».
-fn nativa_escribir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_escribir(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let texto = args
         .iter()
         .map(|v| v.to_display())
@@ -579,7 +582,7 @@ fn nativa_escribir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 /// `empujar(array, elemento)` — agrega un elemento al final de un array JSON
 /// El array se representa como texto conteniendo un JSON array: "[1,2,3]"
 /// Retorna el nuevo array serializado como texto.
-fn nativa_empujar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn nativa_empujar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if args.len() < 2 {
         return Err("empujar(array, elemento) requiere 2 argumentos".to_string());
     }
@@ -597,12 +600,12 @@ fn nativa_empujar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valor
         _ => return Err("empujar: el primer argumento no es un array JSON".to_string()),
     };
 
-    let valor_json = args[1].to_json_value();
+    let valor_json = args[1].to_json_valor();
     arr_ref.push(valor_json);
 
-    let result = serde_json::to_string(&arr)
+    let resultado = serde_json::to_string(&arr)
         .map_err(|e| format!("empujar: error serializando array: {}", e))?;
-    Ok(ValorGUI::Texto(result))
+    Ok(ValorGUI::Texto(resultado))
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -628,13 +631,13 @@ fn extraer_indice(valor: &ValorGUI, nombre_fn: &str) -> Result<usize, String> {
 
 /// Obtiene una conexión del heap por índice (retorna Arc clonado).
 fn sqlite_obtener_conn(idx: usize) -> Result<Arc<Mutex<Connection>>, String> {
-    let heap = SQLITE_HEAP
+    let monticulo = SQLITE_HEAP
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
-    if idx >= heap.len() {
+    if idx >= monticulo.len() {
         return Err("sqlite_error: índice de conexión inválido".to_string());
     }
-    match &heap[idx] {
+    match &monticulo[idx] {
         Some(conn) => Ok(Arc::clone(conn)),
         None => Err("sqlite_error: conexión cerrada o inexistente".to_string()),
     }
@@ -668,9 +671,9 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
             let mut arr = Vec::new();
             let mut i = 0;
             loop {
-                let key = i.to_string();
-                if let Some(v) = m.get(&key) {
-                    arr.push(v.to_json_value());
+                let clave = i.to_string();
+                if let Some(v) = m.get(&clave) {
+                    arr.push(v.to_json_valor());
                     i += 1;
                 } else {
                     break;
@@ -687,7 +690,7 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
                 // Fallback: serializar como objeto
                 let map: serde_json::Map<String, serde_json::Value> = m
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.to_json_value()))
+                    .map(|(k, v)| (k.clone(), v.to_json_valor()))
                     .collect();
                 serde_json::to_string(&serde_json::Value::Object(map))
                     .map_err(|e| format!("sqlite_error: no se pudo serializar mapa: {}", e))?
@@ -728,31 +731,31 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
 // ═════════════════════════════════════════════════════════════════════════
 
 /// `_sqlite_abrir(ruta)` → índice de conexión (entero)
-fn sqlite_abrir(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_abrir(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let ruta = match args.first() {
         Some(ValorGUI::Texto(s)) => s.clone(),
         _ => return Err("_sqlite_abrir(ruta) requiere 1 argumento: ruta (texto)".to_string()),
     };
     let conn = Connection::open(&ruta).map_err(|e| format!("sqlite_error_apertura: {}", e))?;
-    let mut heap = SQLITE_HEAP
+    let mut monticulo = SQLITE_HEAP
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
-    let idx = heap.len() as i64;
-    heap.push(Some(Arc::new(Mutex::new(conn))));
+    let idx = monticulo.len() as i64;
+    monticulo.push(Some(Arc::new(Mutex::new(conn))));
     Ok(ValorGUI::Entero(idx))
 }
 
 /// `_sqlite_cerrar(indice_conexion)` → 0 éxito, -1 error
-fn sqlite_cerrar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_cerrar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let idx = match args.first() {
         Some(v) => extraer_indice(v, "_sqlite_cerrar")?,
         None => return Err("_sqlite_cerrar(indice) requiere 1 argumento: entero".to_string()),
     };
-    let mut heap = SQLITE_HEAP
+    let mut monticulo = SQLITE_HEAP
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
-    if idx < heap.len() {
-        heap[idx] = None;
+    if idx < monticulo.len() {
+        monticulo[idx] = None;
         Ok(ValorGUI::Entero(0))
     } else {
         Err("sqlite_error: índice de conexión inválido".to_string())
@@ -760,7 +763,7 @@ fn sqlite_cerrar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorG
 }
 
 /// `_sqlite_ejecutar(indice_conexion, sql)` → filas_afectadas
-fn sqlite_ejecutar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_ejecutar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if args.len() < 2 {
         return Err("_sqlite_ejecutar(indice, sql) requiere 2 argumentos".to_string());
     }
@@ -780,7 +783,7 @@ fn sqlite_ejecutar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Valo
 }
 
 /// `_sqlite_consultar(indice_conexion, sql)` → JSON array de mapas (como texto)
-fn sqlite_consultar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_consultar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if args.len() < 2 {
         return Err("_sqlite_consultar(indice, sql) requiere 2 argumentos".to_string());
     }
@@ -797,16 +800,16 @@ fn sqlite_consultar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Val
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| format!("sqlite_error_consulta: {}", e))?;
-    let col_count = stmt.column_count();
-    let col_names: Vec<String> = (0..col_count)
+    let col_cantidad = stmt.column_count();
+    let col_names: Vec<String> = (0..col_cantidad)
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
         .collect();
 
     // Extraer datos sin mantener borrow del closure
     let rows_data: Vec<Vec<(String, rusqlite::types::Value)>> = stmt
         .query_map([], |row| {
-            let mut row_data = Vec::with_capacity(col_count);
-            for (i, name) in col_names.iter().enumerate().take(col_count) {
+            let mut row_data = Vec::with_capacity(col_cantidad);
+            for (i, name) in col_names.iter().enumerate().take(col_cantidad) {
                 let name = name.clone();
                 let val = row
                     .get::<_, rusqlite::types::Value>(i)
@@ -837,7 +840,7 @@ fn sqlite_consultar(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Val
 }
 
 /// `_sqlite_ultimo_id(indice_conexion)` → último rowid insertado
-fn sqlite_ultimo_id(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_ultimo_id(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let idx = match args.first() {
         Some(v) => extraer_indice(v, "_sqlite_ultimo_id")?,
         None => return Err("_sqlite_ultimo_id(indice) requiere 1 argumento: entero".to_string()),
@@ -852,7 +855,7 @@ fn sqlite_ultimo_id(args: &[ValorGUI], _store: &mut VariableStore) -> Result<Val
 /// `_sqlite_ejecutar_params(indice, sql, arreglo_valores)` → filas_afectadas
 fn sqlite_ejecutar_params(
     args: &[ValorGUI],
-    _store: &mut VariableStore,
+    _almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     if args.len() < 3 {
         return Err(
@@ -884,7 +887,7 @@ fn sqlite_ejecutar_params(
 /// `_sqlite_consultar_params(indice, sql, arreglo_valores)` → JSON array de mapas
 fn sqlite_consultar_params(
     args: &[ValorGUI],
-    _store: &mut VariableStore,
+    _almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     if args.len() < 3 {
         return Err(
@@ -911,15 +914,15 @@ fn sqlite_consultar_params(
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| format!("sqlite_error_consulta: {}", e))?;
-    let col_count = stmt.column_count();
-    let col_names: Vec<String> = (0..col_count)
+    let col_cantidad = stmt.column_count();
+    let col_names: Vec<String> = (0..col_cantidad)
         .map(|i| stmt.column_name(i).unwrap_or("?").to_string())
         .collect();
 
     let rows_data: Vec<Vec<(String, rusqlite::types::Value)>> = stmt
         .query_map(params_refs.as_slice(), |row| {
-            let mut row_data = Vec::with_capacity(col_count);
-            for (i, name) in col_names.iter().enumerate().take(col_count) {
+            let mut row_data = Vec::with_capacity(col_cantidad);
+            for (i, name) in col_names.iter().enumerate().take(col_cantidad) {
                 let name = name.clone();
                 let val = row
                     .get::<_, rusqlite::types::Value>(i)
@@ -949,7 +952,7 @@ fn sqlite_consultar_params(
 }
 
 /// `_sqlite_tablas(indice_conexion)` → JSON array de nombres de tablas (como texto)
-fn sqlite_tablas(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_tablas(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     let idx = match args.first() {
         Some(v) => extraer_indice(v, "_sqlite_tablas")?,
         None => return Err("_sqlite_tablas(indice) requiere 1 argumento: entero".to_string()),
@@ -977,7 +980,7 @@ fn sqlite_tablas(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorG
 }
 
 /// `_sqlite_columnas(indice_conexion, tabla)` → JSON array de mapas con info de columnas
-fn sqlite_columnas(args: &[ValorGUI], _store: &mut VariableStore) -> Result<ValorGUI, String> {
+fn sqlite_columnas(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<ValorGUI, String> {
     if args.len() < 2 {
         return Err("_sqlite_columnas(indice, tabla) requiere 2 argumentos".to_string());
     }
@@ -1109,12 +1112,12 @@ pub fn ejecutar_funcion(
     nombre: &str,
     args: &[ValorGUI],
     declaraciones: &[Declaracion],
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
 ) -> Result<ValorGUI, String> {
     // 1. Verificar si es una función nativa
     let nativas = obtener_nativas();
     if let Some(nativa_fn) = nativas.get(nombre) {
-        return nativa_fn(args, store);
+        return nativa_fn(args, almacen);
     }
 
     // 2. Buscar la función en las declaraciones del AST
@@ -1126,20 +1129,20 @@ pub fn ejecutar_funcion(
             } => (parametros, cuerpo),
             _ => return Err(format!("'{}' no es una función", nombre)),
         };
-        let mut ambito = Ambito::new();
+        let mut ambito = Ambito::nuevo();
 
         // Asignar parámetros: args explícitos primero, luego cargar desde store
         for (i, param) in parametros.iter().enumerate() {
             if let Some(val) = args.get(i) {
                 ambito.asignar(param.nombre.clone(), val.clone());
-            } else if let Some(json_val) = store.get(&param.nombre) {
+            } else if let Some(json_val) = almacen.obtener(&param.nombre) {
                 ambito.asignar(param.nombre.clone(), ValorGUI::from_serde(&json_val));
             }
         }
 
         // Fallback: cuando la función se invoca como callback desde widgets GUI
         if args.is_empty() && !parametros.is_empty() {
-            if let Some(json_val) = store.get(nombre) {
+            if let Some(json_val) = almacen.obtener(nombre) {
                 let primer_param = &parametros[0];
                 if !ambito.contiene(&primer_param.nombre) {
                     ambito.asignar(primer_param.nombre.clone(), ValorGUI::from_serde(&json_val));
@@ -1148,7 +1151,7 @@ pub fn ejecutar_funcion(
         }
 
         // Evaluar cuerpo
-        evaluar_bloque(cuerpo, &mut ambito, store, declaraciones)
+        evaluar_bloque(cuerpo, &mut ambito, almacen, declaraciones)
     })
 }
 
@@ -1158,11 +1161,11 @@ pub fn ejecutar_funcion(
 /// con el estado inicial de la app (el layout se extrae una sola vez).
 pub fn evaluar_condicion(
     expr: &Expresion,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Result<bool, String> {
-    let mut ambito = Ambito::new();
-    let valor = evaluar_expresion(expr, &mut ambito, store, declaraciones)?;
+    let mut ambito = Ambito::nuevo();
+    let valor = evaluar_expresion(expr, &mut ambito, almacen, declaraciones)?;
     Ok(valor_es_verdadero(&valor))
 }
 
@@ -1172,11 +1175,11 @@ pub fn evaluar_condicion(
 /// (por ejemplo `titulo_categoria(pagina)`) en el momento de armar el árbol.
 pub fn evaluar_valor(
     expr: &Expresion,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Result<ValorGUI, String> {
-    let mut ambito = Ambito::new();
-    evaluar_expresion(expr, &mut ambito, store, declaraciones)
+    let mut ambito = Ambito::nuevo();
+    evaluar_expresion(expr, &mut ambito, almacen, declaraciones)
 }
 
 /// Verdad de un valor en un contexto booleano (condiciones de `si`/`mientras`).
@@ -1244,17 +1247,17 @@ fn es_funcion_ejecutable(nombre: &str, declaraciones: &[Declaracion]) -> bool {
 fn evaluar_bloque(
     bloque: &[Declaracion],
     ambito: &mut Ambito,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Result<ValorGUI, String> {
     let mut ultimo = ValorGUI::Nulo;
     for declaracion in bloque {
-        let result = evaluar_declaracion(declaracion, ambito, store, declaraciones)?;
+        let resultado = evaluar_declaracion(declaracion, ambito, almacen, declaraciones)?;
         // Si la declaración fue un retornar, propagar el valor
         if es_retorno(declaracion) {
-            return Ok(result);
+            return Ok(resultado);
         }
-        ultimo = result;
+        ultimo = resultado;
     }
     // Retornar el último valor (permite que retornos dentro de Coincidir
     // y otras expresiones anidadas se propaguen al bloque contenedor)
@@ -1271,13 +1274,13 @@ fn es_retorno(decl: &Declaracion) -> bool {
 fn evaluar_declaracion(
     decl: &Declaracion,
     ambito: &mut Ambito,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Result<ValorGUI, String> {
     match decl {
         Declaracion::Retornar { valor } => {
             if let Some(expr) = valor {
-                evaluar_expresion(expr, ambito, store, declaraciones)
+                evaluar_expresion(expr, ambito, almacen, declaraciones)
             } else {
                 Ok(ValorGUI::Nulo)
             }
@@ -1288,11 +1291,11 @@ fn evaluar_declaracion(
             bloque_verdadero,
             bloque_falso,
         } => {
-            let cond_val = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let cond_val = evaluar_expresion(condicion, ambito, almacen, declaraciones)?;
             if cond_val.es_verdadero() {
-                evaluar_bloque(bloque_verdadero, ambito, store, declaraciones)
+                evaluar_bloque(bloque_verdadero, ambito, almacen, declaraciones)
             } else if let Some(sino_bloque) = bloque_falso {
-                evaluar_bloque(sino_bloque, ambito, store, declaraciones)
+                evaluar_bloque(sino_bloque, ambito, almacen, declaraciones)
             } else {
                 Ok(ValorGUI::Nulo)
             }
@@ -1300,13 +1303,13 @@ fn evaluar_declaracion(
 
         Declaracion::Mientras { condicion, bloque } => {
             loop {
-                let cond_val = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+                let cond_val = evaluar_expresion(condicion, ambito, almacen, declaraciones)?;
                 if !cond_val.es_verdadero() {
                     break;
                 }
-                let result = evaluar_bloque(bloque, ambito, store, declaraciones)?;
-                if !matches!(result, ValorGUI::Nulo) {
-                    return Ok(result);
+                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
+                if !matches!(resultado, ValorGUI::Nulo) {
+                    return Ok(resultado);
                 }
             }
             Ok(ValorGUI::Nulo)
@@ -1320,36 +1323,36 @@ fn evaluar_declaracion(
         } => {
             // Estilo C: for (init; cond; inc) { cuerpo }
             if let Some(init) = inicializacion {
-                evaluar_declaracion(init, ambito, store, declaraciones)?;
+                evaluar_declaracion(init, ambito, almacen, declaraciones)?;
             }
             loop {
                 if let Some(cond) = condicion {
-                    let cond_val = evaluar_expresion(cond, ambito, store, declaraciones)?;
+                    let cond_val = evaluar_expresion(cond, ambito, almacen, declaraciones)?;
                     if !cond_val.es_verdadero() {
                         break;
                     }
                 }
-                let result = evaluar_bloque(bloque, ambito, store, declaraciones)?;
-                if !matches!(result, ValorGUI::Nulo) {
-                    return Ok(result);
+                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
+                if !matches!(resultado, ValorGUI::Nulo) {
+                    return Ok(resultado);
                 }
                 if let Some(inc) = incremento {
-                    evaluar_declaracion(inc, ambito, store, declaraciones)?;
+                    evaluar_declaracion(inc, ambito, almacen, declaraciones)?;
                 }
             }
             Ok(ValorGUI::Nulo)
         }
 
         Declaracion::Repetir { cantidad, bloque } => {
-            let veces = evaluar_expresion(cantidad, ambito, store, declaraciones)?;
+            let veces = evaluar_expresion(cantidad, ambito, almacen, declaraciones)?;
             let n = match veces {
                 ValorGUI::Entero(n) if n > 0 => n as usize,
                 _ => 0,
             };
             for _ in 0..n {
-                let result = evaluar_bloque(bloque, ambito, store, declaraciones)?;
-                if !matches!(result, ValorGUI::Nulo) {
-                    return Ok(result);
+                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
+                if !matches!(resultado, ValorGUI::Nulo) {
+                    return Ok(resultado);
                 }
             }
             Ok(ValorGUI::Nulo)
@@ -1357,19 +1360,19 @@ fn evaluar_declaracion(
 
         Declaracion::Variable { nombre, valor, .. } => {
             let val = if let Some(expr) = valor {
-                evaluar_expresion(expr, ambito, store, declaraciones)?
+                evaluar_expresion(expr, ambito, almacen, declaraciones)?
             } else {
                 ValorGUI::Nulo
             };
             ambito.asignar(nombre.clone(), val.clone());
-            store.set(nombre, val.to_json_value());
+            almacen.fijar(nombre, val.to_json_valor());
             Ok(ValorGUI::Nulo)
         }
 
         Declaracion::Asignacion { nombre, valor, .. } => {
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             ambito.asignar(nombre.clone(), val.clone());
-            store.set(nombre, val.to_json_value());
+            almacen.fijar(nombre, val.to_json_valor());
             Ok(ValorGUI::Nulo)
         }
 
@@ -1379,10 +1382,10 @@ fn evaluar_declaracion(
             valor,
             ..
         } => {
-            let obj_val = evaluar_expresion(objeto, ambito, store, declaraciones)?;
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
-            let key = format!("{}_{}", obj_val.to_display(), miembro);
-            store.set(&key, val.to_json_value());
+            let obj_val = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
+            let clave = format!("{}_{}", obj_val.to_display(), miembro);
+            almacen.fijar(&clave, val.to_json_valor());
             Ok(ValorGUI::Nulo)
         }
 
@@ -1392,8 +1395,8 @@ fn evaluar_declaracion(
             valor,
             ..
         } => {
-            let idx_val = evaluar_expresion(indice, ambito, store, declaraciones)?;
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let idx_val = evaluar_expresion(indice, ambito, almacen, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             // Actualizar el mapa/objeto en el ámbito local (clave → valor).
             // Los mapas y arrays se representan como Texto(JSON), así que se
             // parsean, se inserta la clave y se vuelven a serializar.
@@ -1407,7 +1410,7 @@ fn evaluar_declaracion(
                         if let Ok(serde_json::Value::Object(mut map)) =
                             serde_json::from_str::<serde_json::Value>(&s)
                         {
-                            map.insert(idx_val.to_display(), val.to_json_value());
+                            map.insert(idx_val.to_display(), val.to_json_valor());
                             if let Ok(nuevo) =
                                 serde_json::to_string(&serde_json::Value::Object(map))
                             {
@@ -1421,9 +1424,9 @@ fn evaluar_declaracion(
                                 _ => idx_val.to_display().parse::<usize>().unwrap_or_default(),
                             };
                             if idx < arr.len() {
-                                arr[idx] = val.to_json_value();
+                                arr[idx] = val.to_json_valor();
                             } else {
-                                arr.push(val.to_json_value());
+                                arr.push(val.to_json_valor());
                             }
                             if let Ok(nuevo) = serde_json::to_string(&serde_json::Value::Array(arr))
                             {
@@ -1435,15 +1438,15 @@ fn evaluar_declaracion(
                 }
             }
             // Mantener compatibilidad con el store (claves con corchetes)
-            let key = format!("{}[{}]", nombre, idx_val.to_display());
-            store.set(&key, val.to_json_value());
+            let clave = format!("{}[{}]", nombre, idx_val.to_display());
+            almacen.fijar(&clave, val.to_json_valor());
             Ok(val)
         }
 
         Declaracion::LlamadaFuncion { nombre, argumentos } => {
             let mut args = Vec::new();
             for arg in argumentos {
-                args.push(evaluar_expresion(arg, ambito, store, declaraciones)?);
+                args.push(evaluar_expresion(arg, ambito, almacen, declaraciones)?);
             }
             // Manejar nombres con punto: "objeto.metodo" → método(objeto, args...)
             if let Some(dot_pos) = nombre.find('.') {
@@ -1451,22 +1454,22 @@ fn evaluar_declaracion(
                 let method = &nombre[dot_pos + 1..];
                 let obj_val = if let Some(val) = ambito.obtener(obj_name) {
                     val.clone()
-                } else if let Some(json_val) = store.get(obj_name) {
+                } else if let Some(json_val) = almacen.obtener(obj_name) {
                     ValorGUI::from_serde(&json_val)
                 } else {
                     return Err(format!("Variable '{}' no encontrada", obj_name));
                 };
-                let mut method_args = vec![obj_val];
-                method_args.extend(args);
-                let result = ejecutar_funcion(method, &method_args, declaraciones, store)?;
+                let mut metodo_args = vec![obj_val];
+                metodo_args.extend(args);
+                let resultado = ejecutar_funcion(method, &metodo_args, declaraciones, almacen)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
                 if method == "empujar" {
-                    ambito.asignar(obj_name.to_string(), result.clone());
-                    store.set(obj_name, result.to_json_value());
+                    ambito.asignar(obj_name.to_string(), resultado.clone());
+                    almacen.fijar(obj_name, resultado.to_json_valor());
                 }
-                Ok(result)
+                Ok(resultado)
             } else {
-                ejecutar_funcion(nombre, &args, declaraciones, store)
+                ejecutar_funcion(nombre, &args, declaraciones, almacen)
             }
         }
 
@@ -1474,15 +1477,15 @@ fn evaluar_declaracion(
             // Retornar el resultado de la expresión directamente.
             // Esto permite que retornos dentro de Coincidir, Ok, etc.
             // se propaguen al bloque contenedor (evaluar_bloque).
-            evaluar_expresion(expr, ambito, store, declaraciones)
+            evaluar_expresion(expr, ambito, almacen, declaraciones)
         }
 
         Declaracion::Cuando {
             condicion, cuerpo, ..
         } => {
-            let cond_val = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let cond_val = evaluar_expresion(condicion, ambito, almacen, declaraciones)?;
             if cond_val.es_verdadero() {
-                evaluar_bloque(cuerpo, ambito, store, declaraciones)
+                evaluar_bloque(cuerpo, ambito, almacen, declaraciones)
             } else {
                 Ok(ValorGUI::Nulo)
             }
@@ -1491,10 +1494,10 @@ fn evaluar_declaracion(
         Declaracion::AsignacionMultiple {
             variables, valor, ..
         } => {
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             for var in variables {
                 ambito.asignar(var.clone(), val.clone());
-                store.set(var, val.to_json_value());
+                almacen.fijar(var, val.to_json_valor());
             }
             Ok(ValorGUI::Nulo)
         }
@@ -1519,7 +1522,7 @@ fn evaluar_declaracion(
 fn evaluar_expresion(
     expr: &Expresion,
     ambito: &mut Ambito,
-    store: &mut VariableStore,
+    almacen: &mut VariableAlmacen,
     declaraciones: &[Declaracion],
 ) -> Result<ValorGUI, String> {
     match expr {
@@ -1535,14 +1538,14 @@ fn evaluar_expresion(
             bloque_verdadero,
             bloque_falso,
         } => {
-            let cond = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let cond = evaluar_expresion(condicion, ambito, almacen, declaraciones)?;
             let rama = if valor_es_verdadero(&cond) {
                 Some(bloque_verdadero)
             } else {
                 bloque_falso.as_ref()
             };
             match rama {
-                Some(bloque) => evaluar_bloque(bloque, ambito, store, declaraciones),
+                Some(bloque) => evaluar_bloque(bloque, ambito, almacen, declaraciones),
                 None => Ok(ValorGUI::Nulo),
             }
         }
@@ -1555,7 +1558,7 @@ fn evaluar_expresion(
         Expresion::Identificador { nombre, .. } => {
             if let Some(val) = ambito.obtener(nombre) {
                 Ok(val.clone())
-            } else if let Some(json_val) = store.get(nombre) {
+            } else if let Some(json_val) = almacen.obtener(nombre) {
                 Ok(ValorGUI::from_serde(&json_val))
             } else {
                 Err(format!("Variable '{}' no encontrada", nombre))
@@ -1568,8 +1571,8 @@ fn evaluar_expresion(
             operador,
             derecha,
         } => {
-            let izq = evaluar_expresion(izquierda, ambito, store, declaraciones)?;
-            let der = evaluar_expresion(derecha, ambito, store, declaraciones)?;
+            let izq = evaluar_expresion(izquierda, ambito, almacen, declaraciones)?;
+            let der = evaluar_expresion(derecha, ambito, almacen, declaraciones)?;
             evaluar_binaria(izq, operador, der)
         }
 
@@ -1578,7 +1581,7 @@ fn evaluar_expresion(
             operador,
             expr: inner,
         } => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             match operador {
                 OperadorUnario::Negar => match val {
                     ValorGUI::Entero(n) => Ok(ValorGUI::Entero(-n)),
@@ -1593,7 +1596,7 @@ fn evaluar_expresion(
         Expresion::LlamadaFuncion { nombre, argumentos } => {
             let mut args = Vec::new();
             for arg in argumentos {
-                args.push(evaluar_expresion(arg, ambito, store, declaraciones)?);
+                args.push(evaluar_expresion(arg, ambito, almacen, declaraciones)?);
             }
             // Si el nombre contiene un punto (ej: "params.empujar"),
             // el compilador Forja genera LlamadaFuncion con nombre "objeto.metodo".
@@ -1604,30 +1607,30 @@ fn evaluar_expresion(
                 let method = &nombre[dot_pos + 1..];
                 let obj_val = if let Some(val) = ambito.obtener(obj_name) {
                     val.clone()
-                } else if let Some(json_val) = store.get(obj_name) {
+                } else if let Some(json_val) = almacen.obtener(obj_name) {
                     ValorGUI::from_serde(&json_val)
                 } else {
                     return Err(format!("Variable '{}' no encontrada", obj_name));
                 };
-                let mut method_args = vec![obj_val];
-                method_args.extend(args);
-                let result = ejecutar_funcion(method, &method_args, declaraciones, store)?;
+                let mut metodo_args = vec![obj_val];
+                metodo_args.extend(args);
+                let resultado = ejecutar_funcion(method, &metodo_args, declaraciones, almacen)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
                 if method == "empujar" {
-                    ambito.asignar(obj_name.to_string(), result.clone());
-                    store.set(obj_name, result.to_json_value());
+                    ambito.asignar(obj_name.to_string(), resultado.clone());
+                    almacen.fijar(obj_name, resultado.to_json_valor());
                 }
-                Ok(result)
+                Ok(resultado)
             } else {
-                ejecutar_funcion(nombre, &args, declaraciones, store)
+                ejecutar_funcion(nombre, &args, declaraciones, almacen)
             }
         }
 
         // ── Acceso a miembro ──────────────────────────────────
         Expresion::AccesoMiembro { objeto, miembro } => {
-            let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
-            let key = format!("{}_{}", obj.to_display(), miembro);
-            if let Some(json_val) = store.get(&key) {
+            let obj = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
+            let clave = format!("{}_{}", obj.to_display(), miembro);
+            if let Some(json_val) = almacen.obtener(&clave) {
                 Ok(ValorGUI::from_serde(&json_val))
             } else {
                 Ok(ValorGUI::Nulo)
@@ -1642,8 +1645,8 @@ fn evaluar_expresion(
                 serde_json::Value::String(clase.clone()),
             );
             for (i, arg) in argumentos.iter().enumerate() {
-                let val = evaluar_expresion(arg, ambito, store, declaraciones)?;
-                mapa.insert(format!("arg_{}", i), val.to_json_value());
+                let val = evaluar_expresion(arg, ambito, almacen, declaraciones)?;
+                mapa.insert(format!("arg_{}", i), val.to_json_valor());
             }
             let json_str = serde_json::to_string(&serde_json::Value::Object(mapa))
                 .map_err(|e| format!("Error serializando instancia: {}", e))?;
@@ -1652,17 +1655,17 @@ fn evaluar_expresion(
 
         // ── Referencia (préstamo) ─────────────────────────────
         Expresion::Referencia { expr: inner, .. } => {
-            evaluar_expresion(inner, ambito, store, declaraciones)
+            evaluar_expresion(inner, ambito, almacen, declaraciones)
         }
 
         // ── Arreglo literal ───────────────────────────────────
         Expresion::Arreglo(elementos) => {
             let mut values = Vec::new();
             for elem in elementos {
-                values.push(evaluar_expresion(elem, ambito, store, declaraciones)?);
+                values.push(evaluar_expresion(elem, ambito, almacen, declaraciones)?);
             }
             let json_arr: Vec<serde_json::Value> =
-                values.iter().map(|v| v.to_json_value()).collect();
+                values.iter().map(|v| v.to_json_valor()).collect();
             let json_str = serde_json::to_string(&json_arr)
                 .map_err(|e| format!("Error serializando array: {}", e))?;
             Ok(ValorGUI::Texto(json_str))
@@ -1672,9 +1675,9 @@ fn evaluar_expresion(
         Expresion::Mapa(pares) => {
             let mut map = serde_json::Map::new();
             for (k, v) in pares {
-                let key_val = evaluar_expresion(k, ambito, store, declaraciones)?;
-                let val = evaluar_expresion(v, ambito, store, declaraciones)?;
-                map.insert(key_val.to_display(), val.to_json_value());
+                let clave_val = evaluar_expresion(k, ambito, almacen, declaraciones)?;
+                let val = evaluar_expresion(v, ambito, almacen, declaraciones)?;
+                map.insert(clave_val.to_display(), val.to_json_valor());
             }
             let json_str = serde_json::to_string(&serde_json::Value::Object(map))
                 .map_err(|e| format!("Error serializando mapa: {}", e))?;
@@ -1686,10 +1689,10 @@ fn evaluar_expresion(
             expr: inner,
             brazos,
         } => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             for brazo in brazos {
                 if coincidir_patron(&val, &brazo.patron, ambito) {
-                    return evaluar_bloque(&brazo.cuerpo, ambito, store, declaraciones);
+                    return evaluar_bloque(&brazo.cuerpo, ambito, almacen, declaraciones);
                 }
             }
             Err("Ningún brazo de match coincidió".to_string())
@@ -1697,12 +1700,12 @@ fn evaluar_expresion(
 
         // ── Index (arr[0]) / Mapa["clave"] ───────────────────
         Expresion::Index { objeto, indice } => {
-            let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
-            let idx = evaluar_expresion(indice, ambito, store, declaraciones)?;
+            let obj = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
+            let idx = evaluar_expresion(indice, ambito, almacen, declaraciones)?;
             // Acceso directo a mapa (ValorGUI::Mapa) por clave
             if let ValorGUI::Mapa(m) = &obj {
-                let key = idx.to_display();
-                return Ok(m.get(&key).cloned().unwrap_or(ValorGUI::Nulo));
+                let clave = idx.to_display();
+                return Ok(m.get(&clave).cloned().unwrap_or(ValorGUI::Nulo));
             }
             let obj_str = obj.to_display();
             match idx {
@@ -1724,12 +1727,12 @@ fn evaluar_expresion(
                         Err("No se puede indexar un valor que no es un array".to_string())
                     }
                 }
-                ValorGUI::Texto(key) => {
+                ValorGUI::Texto(clave) => {
                     // Acceso a mapa por clave string (ej: filtros["tipo"])
                     if let Ok(serde_json::Value::Object(map)) =
                         serde_json::from_str::<serde_json::Value>(&obj_str)
                     {
-                        match map.get(&key) {
+                        match map.get(&clave) {
                             Some(val) => Ok(ValorGUI::from_serde(val)),
                             None => Ok(ValorGUI::Nulo),
                         }
@@ -1737,19 +1740,19 @@ fn evaluar_expresion(
                         serde_json::from_str::<serde_json::Value>(&obj_str)
                     {
                         // Si key es string numérico, intentar como índice
-                        if let Ok(n) = key.parse::<usize>() {
+                        if let Ok(n) = clave.parse::<usize>() {
                             if n < arr.len() {
                                 Ok(ValorGUI::from_serde(&arr[n]))
                             } else {
                                 Err(format!("Índice {} fuera de rango (len={})", n, arr.len()))
                             }
                         } else {
-                            Err(format!("Clave '{}' no encontrada en array", key))
+                            Err(format!("Clave '{}' no encontrada en array", clave))
                         }
                     } else {
                         Err(format!(
                             "No se puede acceder por clave '{}' a un valor no-objeto",
-                            key
+                            clave
                         ))
                     }
                 }
@@ -1761,7 +1764,7 @@ fn evaluar_expresion(
         Expresion::Closure { .. } => Err("Closures no soportados en runtime GUI".to_string()),
 
         // ── Grupo (expresión agrupada) ────────────────────────
-        Expresion::Grupo(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
+        Expresion::Grupo(inner) => evaluar_expresion(inner, ambito, almacen, declaraciones),
 
         // ── Hilo ligero ───────────────────────────────────────
         Expresion::Hilo { .. } => Err("Hilos ligeros no soportados en runtime GUI".to_string()),
@@ -1771,7 +1774,7 @@ fn evaluar_expresion(
 
         // ── Try (propagación de error) ────────────────────────
         Expresion::Try(inner) => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             if matches!(val, ValorGUI::Nulo) {
                 Err("Error propagado desde expresión?".to_string())
             } else {
@@ -1784,9 +1787,9 @@ fn evaluar_expresion(
 
         // ── Asignación como expresión ─────────────────────────
         Expresion::Asignacion { variable, valor } => {
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             ambito.asignar(variable.clone(), val.clone());
-            store.set(variable, val.to_json_value());
+            almacen.fijar(variable, val.to_json_valor());
             Ok(val)
         }
 
@@ -1796,18 +1799,18 @@ fn evaluar_expresion(
             operador,
             valor,
         } => {
-            let viejo = evaluar_expresion(objetivo, ambito, store, declaraciones)?;
-            let der = evaluar_expresion(valor, ambito, store, declaraciones)?;
+            let viejo = evaluar_expresion(objetivo, ambito, almacen, declaraciones)?;
+            let der = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             let nuevo = evaluar_binaria(viejo, operador, der)?;
             match objetivo.as_ref() {
                 Expresion::Identificador { nombre, .. } => {
                     ambito.asignar(nombre.clone(), nuevo.clone());
-                    store.set(nombre, nuevo.to_json_value());
+                    almacen.fijar(nombre, nuevo.to_json_valor());
                 }
                 Expresion::AccesoMiembro { objeto, miembro } => {
-                    let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
-                    let key = format!("{}_{}", obj.to_display(), miembro);
-                    store.set(&key, nuevo.to_json_value());
+                    let obj = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
+                    let clave = format!("{}_{}", obj.to_display(), miembro);
+                    almacen.fijar(&clave, nuevo.to_json_valor());
                 }
                 _ => return Err("Asignación compuesta por índice no soportada en GUI".to_string()),
             }
@@ -1820,16 +1823,16 @@ fn evaluar_expresion(
             campo,
             valor,
         } => {
-            let obj = evaluar_expresion(objeto, ambito, store, declaraciones)?;
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
-            let key = format!("{}_{}", obj.to_display(), campo);
-            store.set(&key, val.to_json_value());
+            let obj = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
+            let clave = format!("{}_{}", obj.to_display(), campo);
+            almacen.fijar(&clave, val.to_json_valor());
             Ok(val)
         }
 
         // ── ArraySet (arr[i] = valor como expresión) ─────────
-        Expresion::ArraySet { array, valor } => {
-            let val = evaluar_expresion(valor, ambito, store, declaraciones)?;
+        Expresion::ArregloFijar { array, valor } => {
+            let val = evaluar_expresion(valor, ambito, almacen, declaraciones)?;
             // array es un Index(objeto, indice): actualizar el mapa/array en el
             // ámbito (dashboard["saldo_total"] = s). Sin esto, el mapa queda
             // vacío y luego las lecturas devuelven nulo.
@@ -1839,7 +1842,7 @@ fn evaluar_expresion(
                     _ => None,
                 };
                 if let Some(nombre) = obj_nombre {
-                    let idx_val = evaluar_expresion(indice, ambito, store, declaraciones)?;
+                    let idx_val = evaluar_expresion(indice, ambito, almacen, declaraciones)?;
                     if let Some(obj) = ambito.obtener(&nombre).cloned() {
                         match obj {
                             ValorGUI::Mapa(mut m) => {
@@ -1850,7 +1853,7 @@ fn evaluar_expresion(
                                 if let Ok(serde_json::Value::Object(mut map)) =
                                     serde_json::from_str::<serde_json::Value>(&s)
                                 {
-                                    map.insert(idx_val.to_display(), val.to_json_value());
+                                    map.insert(idx_val.to_display(), val.to_json_valor());
                                     if let Ok(nuevo) =
                                         serde_json::to_string(&serde_json::Value::Object(map))
                                     {
@@ -1864,9 +1867,9 @@ fn evaluar_expresion(
                                         _ => idx_val.to_display().parse::<usize>().unwrap_or(0),
                                     };
                                     if idx < arr.len() {
-                                        arr[idx] = val.to_json_value();
+                                        arr[idx] = val.to_json_valor();
                                     } else {
-                                        arr.push(val.to_json_value());
+                                        arr.push(val.to_json_valor());
                                     }
                                     if let Ok(nuevo) =
                                         serde_json::to_string(&serde_json::Value::Array(arr))
@@ -1879,8 +1882,8 @@ fn evaluar_expresion(
                         }
                     }
                     // Mantener compatibilidad con el store (claves con corchetes)
-                    let key = format!("{}[{}]", nombre, idx_val.to_display());
-                    store.set(&key, val.to_json_value());
+                    let clave = format!("{}[{}]", nombre, idx_val.to_display());
+                    almacen.fijar(&clave, val.to_json_valor());
                 }
             }
             Ok(val)
@@ -1888,17 +1891,17 @@ fn evaluar_expresion(
 
         // ── Resultado: Ok / Error ─────────────────────────────
         Expresion::Ok(inner) => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             Ok(val)
         }
         Expresion::Error(inner) => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             Err(format!("Error: {}", val.to_display()))
         }
 
         // ── Opción: Algo / Nada / Ninguno ──────────────────────
         Expresion::Algo(inner) => {
-            let val = evaluar_expresion(inner, ambito, store, declaraciones)?;
+            let val = evaluar_expresion(inner, ambito, almacen, declaraciones)?;
             Ok(val)
         }
         Expresion::Nada | Expresion::Ninguno => Ok(ValorGUI::Nulo),
@@ -1911,13 +1914,13 @@ fn evaluar_expresion(
             // Buscar en el ámbito local y luego en el store.
             if let Some(val) = ambito.obtener("resultado") {
                 Ok(val.clone())
-            } else if let Some(json_val) = store.get("resultado") {
+            } else if let Some(json_val) = almacen.obtener("resultado") {
                 Ok(ValorGUI::from_serde(&json_val))
             } else {
                 Ok(ValorGUI::Nulo)
             }
         }
-        Expresion::Anterior(inner) => evaluar_expresion(inner, ambito, store, declaraciones),
+        Expresion::Anterior(inner) => evaluar_expresion(inner, ambito, almacen, declaraciones),
 
         // ── Ternario ──────────────────────────────────────────
         Expresion::Ternario {
@@ -1925,16 +1928,16 @@ fn evaluar_expresion(
             si_verdadero,
             si_falso,
         } => {
-            let cond = evaluar_expresion(condicion, ambito, store, declaraciones)?;
+            let cond = evaluar_expresion(condicion, ambito, almacen, declaraciones)?;
             let b = match &cond {
                 ValorGUI::Booleano(b) => *b,
                 ValorGUI::Entero(n) => *n != 0,
                 _ => false,
             };
             if b {
-                evaluar_expresion(si_verdadero, ambito, store, declaraciones)
+                evaluar_expresion(si_verdadero, ambito, almacen, declaraciones)
             } else {
-                evaluar_expresion(si_falso, ambito, store, declaraciones)
+                evaluar_expresion(si_falso, ambito, almacen, declaraciones)
             }
         }
 
@@ -1945,20 +1948,20 @@ fn evaluar_expresion(
             argumentos,
         } => {
             let mut args = Vec::new();
-            let obj_val = evaluar_expresion(objeto, ambito, store, declaraciones)?;
+            let obj_val = evaluar_expresion(objeto, ambito, almacen, declaraciones)?;
             args.push(obj_val.clone());
             for arg in argumentos {
-                args.push(evaluar_expresion(arg, ambito, store, declaraciones)?);
+                args.push(evaluar_expresion(arg, ambito, almacen, declaraciones)?);
             }
-            let result = ejecutar_funcion(metodo, &args, declaraciones, store)?;
+            let resultado = ejecutar_funcion(metodo, &args, declaraciones, almacen)?;
             // Métodos que mutan (ej: params.empujar(x)): actualizar variable original
             if metodo == "empujar" {
                 if let Expresion::Identificador { nombre, .. } = objeto.as_ref() {
-                    ambito.asignar(nombre.clone(), result.clone());
-                    store.set(nombre, result.to_json_value());
+                    ambito.asignar(nombre.clone(), resultado.clone());
+                    almacen.fijar(nombre, resultado.to_json_valor());
                 }
             }
-            Ok(result)
+            Ok(resultado)
         }
     }
 }
@@ -2040,18 +2043,18 @@ fn coincidir_patron(valor: &ValorGUI, patron: &Patron, ambito: &mut Ambito) -> b
 /// Inicializa el estado evaluando:
 /// 1. Variables de módulo (declaradas fuera de funciones)
 /// 2. La función `main()` para inicializar el estado dinámico
-pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableStore) {
+pub fn inicializar_estado(declaraciones: &[Declaracion], almacen: &mut VariableAlmacen) {
     // 1. Procesar variables de módulo (declaraciones fuera de funciones)
     //    Usa el evaluador completo para soportar llamadas a funciones
     //    (ej: conexion = _sqlite_abrir("forjanzas.db")) en lugar del
     //    match limitado a literales que convertía todo a Nulo.
-    let mut ambito = Ambito::new();
+    let mut ambito = Ambito::nuevo();
     for decl in declaraciones {
         match decl {
             Declaracion::Variable { .. } | Declaracion::Asignacion { .. } => {
                 // Usar evaluar_declaracion que maneja correctamente
                 // todo tipo de expresión, incluyendo llamadas a funciones
-                let _ = evaluar_declaracion(decl, &mut ambito, store, declaraciones);
+                let _ = evaluar_declaracion(decl, &mut ambito, almacen, declaraciones);
             }
             _ => {}
         }
@@ -2067,7 +2070,7 @@ pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableSto
                 for d in cuerpo {
                     match d {
                         Declaracion::Variable { .. } | Declaracion::Asignacion { .. } => {
-                            match evaluar_declaracion(d, &mut ambito, store, declaraciones) {
+                            match evaluar_declaracion(d, &mut ambito, almacen, declaraciones) {
                                 Ok(_) => {}
                                 Err(e) => {
                                     eprintln!("[inicializar_estado] main: {} — ignorado", e);
@@ -2080,11 +2083,11 @@ pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableSto
                             // etc.) no deben evaluarse aquí: se omiten silenciosamente para
                             // evitar falsos errores tipo "Variable 'buscar_transacciones' no encontrada".
                             if es_funcion_ejecutable(nombre, declaraciones) {
-                                let _ = evaluar_declaracion(d, &mut ambito, store, declaraciones);
+                                let _ = evaluar_declaracion(d, &mut ambito, almacen, declaraciones);
                             }
                         }
                         Declaracion::Expresion(..) => {
-                            let _ = evaluar_declaracion(d, &mut ambito, store, declaraciones);
+                            let _ = evaluar_declaracion(d, &mut ambito, almacen, declaraciones);
                         }
                         _ => {} // Ignorar Funcion, Clase, etc.
                     }
@@ -2095,7 +2098,7 @@ pub fn inicializar_estado(declaraciones: &[Declaracion], store: &mut VariableSto
                 //    buscar_transacciones, etc.) sean accesibles desde los callbacks
                 //    de los widgets, que se ejecutan en un ámbito nuevo.
                 for (nombre, valor) in ambito.obtener_todas() {
-                    store.set(nombre, valor.to_json_value());
+                    almacen.fijar(nombre, valor.to_json_valor());
                 }
 
                 return;

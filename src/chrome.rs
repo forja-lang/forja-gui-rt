@@ -27,7 +27,7 @@ pub fn aplicar_chrome<S>(options: WindowOptions<S>, theme: &MaterialTheme) -> Wi
     // - no coinciden → se pinta con los colores del tema, porque si no una app
     //   clara queda con una barra oscura. Con backdrop activo DWM ignora los
     //   colores de la barra, así que ahí hay que apagar el material.
-    let coincide_con_sistema = theme.is_dark == crate::theme::is_system_dark();
+    let coincide_con_sistema = theme.es_dark == crate::theme::es_system_dark();
     let con_mica = theme.design == DesignStyle::Fluent && coincide_con_sistema;
 
     let options = options
@@ -70,7 +70,7 @@ pub fn fondo_pagina(theme: &MaterialTheme) -> xilem::Color {
     let s = &theme.scheme;
     if usa_material_del_sistema(theme) {
         // Fluent deja traslucir Mica: `SolidBackgroundFillColorBase` al 50%.
-        s.background.with_alpha(0.55)
+        s.background.con_alpha(0.55)
     } else {
         s.background.into()
     }

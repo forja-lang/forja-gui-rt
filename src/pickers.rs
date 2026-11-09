@@ -159,7 +159,7 @@ pub const NOMBRES_COLORES: &[&str] = &[
 /// con navegación entre meses.
 ///
 /// Usa chrono para calcular días reales del mes y primer día de la semana.
-pub fn date_picker_view(
+pub fn date_picker_vista(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
@@ -168,12 +168,12 @@ pub fn date_picker_view(
     let var_name = variable.to_string();
 
     // Leer fecha actual de la variable o usar hoy
-    let current_val = data.leer(&var_name).to_string();
+    let actual_val = data.leer(&var_name).to_string();
     let today = Local::now().naive_local().date();
 
     // Parsear fecha actual (YYYY-MM-DD) o usar hoy
-    let (year, mut month, day) = if current_val.len() == 10 && current_val.contains('-') {
-        let parts: Vec<&str> = current_val.split('-').collect();
+    let (year, mut month, day) = if actual_val.len() == 10 && actual_val.contains('-') {
+        let parts: Vec<&str> = actual_val.split('-').collect();
         if parts.len() == 3 {
             let y = parts[0].parse::<i32>().unwrap_or(today.year());
             let m = parts[1].parse::<u32>().unwrap_or(today.month());
@@ -191,18 +191,18 @@ pub fn date_picker_view(
 
     // Calcular días del mes y primer día de la semana
     let days_in_month = calc_days_in_month(year, month);
-    let first_weekday = calc_first_weekday(year, month); // 0=Dom, 1=Lun...
+    let primero_weekday = calc_primero_weekday(year, month); // 0=Dom, 1=Lun...
 
     // Convertir a 0=Lun, 6=Dom para nuestra grilla
-    let offset: usize = if first_weekday == 0 {
+    let offset: usize = if primero_weekday == 0 {
         6
     } else {
-        first_weekday - 1
+        primero_weekday - 1
     } as usize;
 
     // Header con mes/año y navegación
     let month_name = MESES.get(month as usize - 1).unwrap_or(&"");
-    let header_text = format!("{} {}", month_name, year);
+    let header_texto = format!("{} {}", month_name, year);
 
     let on_surface: Color = scheme.on_surface.into();
     let on_surface_variant: Color = scheme.on_surface_variant.into();
@@ -215,13 +215,13 @@ pub fn date_picker_view(
     // usamos la variable del store para persistir año/mes/día
 
     // Botón mes anterior
-    let var_prev = var_name.clone();
-    let prev_btn = view::button(
+    let variable_anterior = var_name.clone();
+    let anterior_btn = view::button(
         view::label("◀").text_size(16.0).color(primary),
         move |data: &mut AppStateNativo| {
-            let val = data.leer(&var_prev).to_string();
+            let val = data.leer(&variable_anterior).to_string();
             let today = Local::now().naive_local().date();
-            let (mut y, mut m, d) = parse_fecha(&val, today);
+            let (mut y, mut m, d) = parsear_fecha(&val, today);
             if m == 1 {
                 m = 12;
                 y -= 1;
@@ -229,7 +229,7 @@ pub fn date_picker_view(
                 m -= 1;
             }
             let fecha_str = format!("{:04}-{:02}-{:02}", y, m, d.min(calc_days_in_month(y, m)));
-            data.escribir(&var_prev, ValorGUI::Texto(fecha_str));
+            data.escribir(&variable_anterior, ValorGUI::Texto(fecha_str));
         },
     );
 
@@ -240,7 +240,7 @@ pub fn date_picker_view(
         move |data: &mut AppStateNativo| {
             let val = data.leer(&var_next).to_string();
             let today = Local::now().naive_local().date();
-            let (mut y, mut m, d) = parse_fecha(&val, today);
+            let (mut y, mut m, d) = parsear_fecha(&val, today);
             if m == 12 {
                 m = 1;
                 y += 1;
@@ -256,9 +256,9 @@ pub fn date_picker_view(
     let header_row = view::flex(
         Axis::Horizontal,
         (
-            Box::new(prev_btn) as Box<AnyWidgetView<AppStateNativo>>,
+            Box::new(anterior_btn) as Box<AnyWidgetView<AppStateNativo>>,
             Box::new(
-                view::label(header_text)
+                view::label(header_texto)
                     .text_size(16.0)
                     .weight(FontWeight::BOLD)
                     .color(on_surface),
@@ -305,9 +305,9 @@ pub fn date_picker_view(
             } else {
                 let dia = (cell_idx - offset + 1) as u32;
                 let var_cell = var_name.clone();
-                let is_selected = dia == day;
+                let es_selected = dia == day;
 
-                let cell = if is_selected {
+                let cell = if es_selected {
                     // Día seleccionado: fondo primary_container
                     let lbl = view::label(dia.to_string())
                         .text_size(12.0)
@@ -317,7 +317,7 @@ pub fn date_picker_view(
                         view::sized_box(lbl)
                             .dims((Length::px(36.0), Length::px(36.0)))
                             .background(Background::Color(primary_container))
-                            .corner_radius(shape_family(theme, "full").px()),
+                            .corner_radius(forma_family(theme, "full").px()),
                     ) as Box<AnyWidgetView<AppStateNativo>>
                 } else {
                     let btn = view::button(
@@ -328,7 +328,7 @@ pub fn date_picker_view(
                             // Necesitamos año/mes actuales
                             let val = data.leer(&var_cell).to_string();
                             let today = Local::now().naive_local().date();
-                            let (y, m, _) = parse_fecha(&val, today);
+                            let (y, m, _) = parsear_fecha(&val, today);
                             let fecha_str = format!("{:04}-{:02}-{:02}", y, m, dia);
                             data.escribir(&var_cell, ValorGUI::Texto(fecha_str));
                         },
@@ -354,11 +354,11 @@ pub fn date_picker_view(
 
 /// Parsea una fecha del formato "YYYY-MM-DD" o devuelve hoy
 /// Radio de forma del tema por nombre de familia ("full", "container", ...).
-fn shape_family(theme: &MaterialTheme, family: &str) -> f64 {
-    crate::helpers::get_shape_radius(&theme.shapes, family)
+fn forma_family(theme: &MaterialTheme, family: &str) -> f64 {
+    crate::helpers::obtener_forma_radius(&theme.shapes, family)
 }
 
-fn parse_fecha(val: &str, today: NaiveDate) -> (i32, u32, u32) {
+fn parsear_fecha(val: &str, today: NaiveDate) -> (i32, u32, u32) {
     if val.len() == 10 && val.contains('-') {
         let parts: Vec<&str> = val.split('-').collect();
         if parts.len() == 3 {
@@ -375,7 +375,7 @@ fn parse_fecha(val: &str, today: NaiveDate) -> (i32, u32, u32) {
 }
 
 /// Calcula el primer día de la semana para un mes/año (0=Dom, 1=Lun...)
-fn calc_first_weekday(year: i32, month: u32) -> u32 {
+fn calc_primero_weekday(year: i32, month: u32) -> u32 {
     NaiveDate::from_ymd_opt(year, month, 1)
         .map(|d| d.weekday().num_days_from_sunday())
         .unwrap_or(0)
@@ -401,19 +401,19 @@ fn calc_days_in_month(year: i32, month: u32) -> u32 {
 // ═══════════════════════════════════════════════════════════════════
 
 /// Construye un TimePicker Xilem View con ajuste de horas y minutos
-pub fn time_picker_view(
+pub fn time_picker_vista(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
-    let current_val = data.leer(variable).to_string();
+    let actual_val = data.leer(variable).to_string();
     let now = Local::now();
 
     // Parsear hora actual (HH:MM) o usar ahora
-    let (hour, minute) = if current_val.len() >= 4 && current_val.contains(':') {
-        let parts: Vec<&str> = current_val.split(':').collect();
+    let (hour, minute) = if actual_val.len() >= 4 && actual_val.contains(':') {
+        let parts: Vec<&str> = actual_val.split(':').collect();
         let h = parts[0].parse::<u32>().unwrap_or(now.hour());
         let m = parts
             .get(1)
@@ -441,9 +441,12 @@ pub fn time_picker_view(
         view::label("▲").text_size(12.0).color(primary),
         move |data: &mut AppStateNativo| {
             let val = data.leer(&var_hup).to_string();
-            let (h, m) = parse_hora(&val);
-            let new_h = if h >= 23 { 0 } else { h + 1 };
-            data.escribir(&var_hup, ValorGUI::Texto(format!("{:02}:{:02}", new_h, m)));
+            let (h, m) = parsear_hora(&val);
+            let nuevo_h = if h >= 23 { 0 } else { h + 1 };
+            data.escribir(
+                &var_hup,
+                ValorGUI::Texto(format!("{:02}:{:02}", nuevo_h, m)),
+            );
         },
     );
 
@@ -453,21 +456,24 @@ pub fn time_picker_view(
         view::label("▼").text_size(12.0).color(primary),
         move |data: &mut AppStateNativo| {
             let val = data.leer(&var_hdn).to_string();
-            let (h, m) = parse_hora(&val);
-            let new_h = if h == 0 { 23 } else { h - 1 };
-            data.escribir(&var_hdn, ValorGUI::Texto(format!("{:02}:{:02}", new_h, m)));
+            let (h, m) = parsear_hora(&val);
+            let nuevo_h = if h == 0 { 23 } else { h - 1 };
+            data.escribir(
+                &var_hdn,
+                ValorGUI::Texto(format!("{:02}:{:02}", nuevo_h, m)),
+            );
         },
     );
 
     // Label hora
-    let hour_label = view::label(hour_str)
+    let hour_etiqueta = view::label(hour_str)
         .text_size(24.0)
         .weight(FontWeight::BOLD)
         .color(on_surface);
-    let hour_box = view::sized_box(hour_label)
+    let hour_box = view::sized_box(hour_etiqueta)
         .dims((Length::px(48.0), Length::px(48.0)))
         .background(Background::Color(surface_variant))
-        .corner_radius(shape_family(theme, "container").px());
+        .corner_radius(forma_family(theme, "container").px());
 
     // Columna hora
     let hour_col = view::flex(
@@ -493,9 +499,12 @@ pub fn time_picker_view(
         view::label("▲").text_size(12.0).color(primary),
         move |data: &mut AppStateNativo| {
             let val = data.leer(&var_mup).to_string();
-            let (h, m) = parse_hora(&val);
-            let new_m = if m >= 59 { 0 } else { m + 1 };
-            data.escribir(&var_mup, ValorGUI::Texto(format!("{:02}:{:02}", h, new_m)));
+            let (h, m) = parsear_hora(&val);
+            let nuevo_m = if m >= 59 { 0 } else { m + 1 };
+            data.escribir(
+                &var_mup,
+                ValorGUI::Texto(format!("{:02}:{:02}", h, nuevo_m)),
+            );
         },
     );
 
@@ -505,21 +514,24 @@ pub fn time_picker_view(
         view::label("▼").text_size(12.0).color(primary),
         move |data: &mut AppStateNativo| {
             let val = data.leer(&var_mdn).to_string();
-            let (h, m) = parse_hora(&val);
-            let new_m = if m == 0 { 59 } else { m - 1 };
-            data.escribir(&var_mdn, ValorGUI::Texto(format!("{:02}:{:02}", h, new_m)));
+            let (h, m) = parsear_hora(&val);
+            let nuevo_m = if m == 0 { 59 } else { m - 1 };
+            data.escribir(
+                &var_mdn,
+                ValorGUI::Texto(format!("{:02}:{:02}", h, nuevo_m)),
+            );
         },
     );
 
     // Label minuto
-    let min_label = view::label(min_str)
+    let min_etiqueta = view::label(min_str)
         .text_size(24.0)
         .weight(FontWeight::BOLD)
         .color(on_surface);
-    let min_box = view::sized_box(min_label)
+    let min_box = view::sized_box(min_etiqueta)
         .dims((Length::px(48.0), Length::px(48.0)))
         .background(Background::Color(surface_variant))
-        .corner_radius(shape_family(theme, "container").px());
+        .corner_radius(forma_family(theme, "container").px());
 
     // Columna minuto
     let min_col = view::flex(
@@ -549,7 +561,7 @@ pub fn time_picker_view(
 }
 
 /// Parsea hora "HH:MM" → (hora, minuto)
-fn parse_hora(val: &str) -> (u32, u32) {
+fn parsear_hora(val: &str) -> (u32, u32) {
     if val.len() >= 4 && val.contains(':') {
         let parts: Vec<&str> = val.split(':').collect();
         let h = parts[0].parse::<u32>().unwrap_or(12).min(23);
@@ -573,30 +585,30 @@ fn parse_hora(val: &str) -> (u32, u32) {
 /// - Grid de 48 colores predefinidos (Material Design)
 /// - Preview del color seleccionado
 /// - Campo hex editable
-pub fn color_picker_view(
+pub fn color_picker_vista(
     variable: &str,
     data: &mut AppStateNativo,
     scheme: &ColorScheme,
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
-    let current_val = data.leer(variable).to_string();
+    let actual_val = data.leer(variable).to_string();
 
     let on_surface: Color = scheme.on_surface.into();
     let surface_variant: Color = scheme.surface_variant.into();
     let outline: Color = scheme.outline.into();
 
     // Validar/parsear color actual
-    let current_hex = if current_val.starts_with('#') && current_val.len() == 7 {
-        current_val.clone()
+    let actual_hex = if actual_val.starts_with('#') && actual_val.len() == 7 {
+        actual_val.clone()
     } else {
         "#E53935".to_string() // default: rojo
     };
 
     // Input para hex
     let hex_var = var_name.clone();
-    let hex_input = view::text_input(
-        current_hex.clone(),
+    let hex_entrada = view::text_input(
+        actual_hex.clone(),
         move |data: &mut AppStateNativo, new_val: String| {
             let clean = if new_val.starts_with('#') {
                 new_val
@@ -608,19 +620,19 @@ pub fn color_picker_view(
     )
     .placeholder("#RRGGBB");
 
-    let hex_input_box = view::sized_box(hex_input)
+    let hex_entrada_box = view::sized_box(hex_entrada)
         .width(Length::px(120.0))
         .background(Background::Color(surface_variant))
         .border_color(outline)
         .border_width(1.0.px())
-        .corner_radius(shape_family(theme, "extra_small").px());
+        .corner_radius(forma_family(theme, "extra_small").px());
 
     // Preview del color actual
-    let preview_color = hex_to_color(&current_hex);
+    let preview_color = hex_to_color(&actual_hex);
     let preview = view::sized_box(view::label("  "))
         .dims((Length::px(32.0), Length::px(32.0)))
         .background(Background::Color(preview_color))
-        .corner_radius(shape_family(theme, "extra_small").px())
+        .corner_radius(forma_family(theme, "extra_small").px())
         .border_color(outline)
         .border_width(1.0.px());
 
@@ -629,7 +641,7 @@ pub fn color_picker_view(
         Axis::Horizontal,
         (
             Box::new(preview) as Box<AnyWidgetView<AppStateNativo>>,
-            Box::new(hex_input_box) as Box<AnyWidgetView<AppStateNativo>>,
+            Box::new(hex_entrada_box) as Box<AnyWidgetView<AppStateNativo>>,
         ),
     )
     .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -651,16 +663,16 @@ pub fn color_picker_view(
             let _color_name = NOMBRES_COLORES.get(idx).unwrap_or(&"");
 
             let var_click = var_name.clone();
-            let is_selected = current_hex.to_uppercase() == hex_str.to_uppercase();
+            let es_selected = actual_hex.to_uppercase() == hex_str.to_uppercase();
 
             let swatch_color = Color::from_rgba8(rgb[0], rgb[1], rgb[2], 255);
 
-            if is_selected {
+            if es_selected {
                 // Seleccionado: borde primary más grueso
                 let swatch = view::sized_box(view::label("").text_size(8.0))
                     .dims((Length::px(24.0), Length::px(24.0)))
                     .background(Background::Color(swatch_color))
-                    .corner_radius(shape_family(theme, "extra_small").px())
+                    .corner_radius(forma_family(theme, "extra_small").px())
                     .border_color(scheme.primary.into())
                     .border_width(2.0.px());
                 row_widgets.push(Box::new(swatch) as Box<AnyWidgetView<AppStateNativo>>);
@@ -669,7 +681,7 @@ pub fn color_picker_view(
                     view::sized_box(view::label("").text_size(8.0))
                         .dims((Length::px(24.0), Length::px(24.0)))
                         .background(Background::Color(swatch_color))
-                        .corner_radius(shape_family(theme, "extra_small").px()),
+                        .corner_radius(forma_family(theme, "extra_small").px()),
                     move |data: &mut AppStateNativo| {
                         data.escribir(&var_click, ValorGUI::Texto(hex_str.clone()));
                     },

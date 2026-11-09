@@ -92,24 +92,24 @@ pub use theme::{
     ColorScheme,     // Esquema de color con roles
     DesignStyle,     // Diseño visual base (Material You, Liquid Glass, Fluent)
     ElevationSystem, // Sistema de elevación (sombras)
+    FormaFamily,     // Familia de componentes para formas
+    FormaSystem,     // Sistema de formas (radios de borde)
     MaterialTheme,   // Tema completo
     RgbColor,        // Color RGB (convierte a xilem::Color via From)
-    ShapeFamily,     // Familia de componentes para formas
-    ShapeSystem,     // Sistema de formas (radios de borde)
-    TextStyle,       // Estilo de texto individual
-    TypeScale,       // Escala tipográfica (15 estilos)
+    TextoStyle,      // Estilo de texto individual
+    TipoScale,       // Escala tipográfica (15 estilos)
 };
 // Re-exportar tipos principales de iconos para uso directo
 pub use icons::{icon_widget, icon_widget_styled, IconStyle, MaterialIcon};
 
 // Re-exportar tipos principales de animación para uso directo
 pub use theme::animation::{
-    interpolate_color, AnimatedValue, Animation, AnimationEngine, AnimationPresets, SpringAnimation,
+    interpolate_color, AnimatedValor, Animation, AnimationEngine, AnimationPresets, SpringAnimation,
 };
 
 // Re-exportar tipos principales de signals/streams
 pub use signals::{
-    read_var, write_var, ReactiveCtx, Signal, Stream, ValorReactivio, VariableStore,
+    escribir_variable, leer_variable, ReactiveCtx, Signal, Stream, ValorReactivio, VariableAlmacen,
 };
 
 // Re-exportar tipos principales de accesibilidad
@@ -120,7 +120,7 @@ pub use accessibility::{
 
 // Re-exportar tipos principales de widgets personalizados
 pub use shadow_widget::{glow_box_shadow, shadow_to_box_shadow};
-pub use svg_icon_widget::{svg_icon, MaterialSvgIcon, SvgIconView};
+pub use svg_icon_widget::{svg_icon, MaterialSvgIcon, SvgIconVista};
 
 // === Módulos de animación ===
 pub mod animated_widgets;
@@ -128,12 +128,12 @@ pub mod animation_root;
 
 // Re-exportar tipos principales de animación
 pub use animated_widgets::{AnimatedOpacity, AnimatedScale, AnimatedSlide, RippleWidget};
-pub use animation_root::AnimationRoot;
+pub use animation_root::RaizAnimacion;
 
 // === Módulo de gestos táctiles ===
 pub mod gesture_widgets;
 pub use gesture_widgets::{
-    GestureResult, GestureTracker, MultiTouchState, PanWidget, PinchZoomWidget,
+    GestureResultado, GestureTracker, MultiTouchState, PanWidget, PinchZoomWidget,
     PullToRefreshWidget, RotateWidget, SwipeWidget,
 };
 
@@ -150,25 +150,26 @@ pub use forja_syntax::ast::{
 
 // === Módulo de QR Code ===
 pub mod qr_widget;
-pub use qr_widget::{qr_view, QRView, QRWidget};
+pub use qr_widget::{qr_vista, QRVista, QRWidget};
 pub mod star_widget;
-pub use star_widget::{estrella, StarIconView, StarWidget};
+pub use star_widget::{estrella, StarIconVista, StarWidget};
 
 // === Módulo de gráficos vectoriales con Vello (Fase 9) ===
 pub mod chart_widgets;
 pub use chart_widgets::{
-    BarChartView, BarChartWidget, ChartDataPoint, GaugeChartView, GaugeChartWidget, LineChartView,
-    LineChartWidget, PieChartView, PieChartWidget, Rgba, SparklineView, SparklineWidget,
+    BarChartVista, BarChartWidget, ChartDataPoint, GaugeChartVista, GaugeChartWidget,
+    LineaChartVista, LineaChartWidget, PieChartVista, PieChartWidget, Rgba, SparklineVista,
+    SparklineWidget,
 };
 
 // === Módulo de canvas / pintura libre con Vello (Fase 10) ===
 pub mod canvas_widget;
-pub use canvas_widget::{CanvasCommand, CanvasView, CanvasWidget};
+pub use canvas_widget::{CanvasCommand, CanvasVista, CanvasWidget};
 
 // === Re-exportaciones del GUI runtime ===
 // Funciones principales para convertir AST → Layout → Widgets
 pub use gui_nativa::{
-    build_and_run, expr_a_layout, extraer_layout, inicializar_estado, layout_a_view,
+    construir_y_ejecutar, expr_a_layout, extraer_layout, inicializar_estado, layout_a_vista,
     AppStateNativo, Layout, Orientation, ValorGUI,
 };
 

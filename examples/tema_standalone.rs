@@ -18,25 +18,25 @@ fn main() {
     println!("  primary        = {}", claro.scheme.primary);
     println!("  surface        = {}", claro.scheme.surface);
     println!("  on_surface     = {}", claro.scheme.on_surface);
-    println!("  ¿oscuro?       = {}", claro.is_dark);
+    println!("  ¿oscuro?       = {}", claro.es_dark);
 
     // Tema oscuro a partir de un nombre de color.
     let oscuro = MaterialTheme::from_seed("violeta", true);
     println!("\nTema oscuro (semilla \"violeta\"):");
     println!("  primary        = {}", oscuro.scheme.primary);
-    println!("  ¿oscuro?       = {}", oscuro.is_dark);
+    println!("  ¿oscuro?       = {}", oscuro.es_dark);
 
     // Tipografía: consultar un estilo del TypeScale.
     let estilo = oscuro.typography.apply("headlineLarge");
     println!(
         "\nheadlineLarge: {}px, peso {:?}",
-        estilo.font_size, estilo.weight
+        estilo.font_tamano, estilo.weight
     );
 
     // Formas: radio de esquina por familia.
     let radio = oscuro
         .shapes
-        .for_family(forja_theme::theme::ShapeFamily::Fab);
+        .for_family(forja_theme::theme::FormaFamily::Fab);
     println!("Radio de esquina (FAB): {}px", radio);
 
     // Conversión de color independiente de xilem.
@@ -45,5 +45,5 @@ fn main() {
 
     // Alternar claro/oscuro (devuelve un tema nuevo).
     let t = claro.toggle_dark_mode();
-    println!("\nTras toggle_dark_mode(), ¿oscuro? = {}", t.is_dark);
+    println!("\nTras toggle_dark_mode(), ¿oscuro? = {}", t.es_dark);
 }

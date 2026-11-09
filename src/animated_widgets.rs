@@ -22,26 +22,26 @@ use crate::{
 /// Widget que envuelve un hijo y controla su opacidad visual
 /// mediante el dibujado de una superposición semitransparente.
 pub struct AnimatedOpacity {
-    child: Option<WidgetPod<dyn Widget>>,
+    hijo: Option<WidgetPod<dyn Widget>>,
     opacity: f64,
     auto_hide: bool,
 }
 
 impl AnimatedOpacity {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: Some(child.erased().to_pod()),
+            hijo: Some(hijo.erased().to_pod()),
             opacity: 1.0,
             auto_hide: false,
         }
     }
 
-    pub fn with_opacity(mut self, opacity: f64) -> Self {
+    pub fn con_opacity(mut self, opacity: f64) -> Self {
         self.opacity = opacity.clamp(0.0, 1.0);
         self
     }
 
-    pub fn with_auto_hide(mut self) -> Self {
+    pub fn con_auto_hide(mut self) -> Self {
         self.auto_hide = true;
         self
     }
@@ -55,8 +55,8 @@ impl Widget for AnimatedOpacity {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -65,32 +65,38 @@ impl Widget for AnimatedOpacity {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
         if self.auto_hide && self.opacity < 0.01 {
             return Length::ZERO;
         }
         // Adopta el tamaño del hijo (como el `layout` viejo, que devolvía el del hijo).
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => Length::ZERO,
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        if let Some(ref mut child) = self.child {
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        if let Some(ref mut hijo) = self.hijo {
             // Si está oculto, el hijo se colapsa a cero (antes no se hacía layout de él).
-            let child_size = if self.auto_hide && self.opacity < 0.01 {
+            let hijo_tamano = if self.auto_hide && self.opacity < 0.01 {
                 Size::ZERO
             } else {
-                size
+                tamano
             };
-            ctx.run_layout(child, child_size);
-            ctx.place_child(child, Point::ORIGIN);
+            ctx.run_layout(hijo, hijo_tamano);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -104,10 +110,10 @@ impl Widget for AnimatedOpacity {
             return;
         }
         if self.opacity < 0.999 && !self.auto_hide {
-            let size = ctx.border_box().size();
+            let tamano = ctx.border_box().size();
             let alpha = (1.0 - self.opacity) as f32;
             let overlay_color = AlphaColor::from_rgba8(0, 0, 0, (alpha * 255.0) as u8);
-            let rect = crate::kurbo::Rect::from_origin_size(Point::ORIGIN, size);
+            let rect = crate::kurbo::Rect::from_origin_size(Point::ORIGIN, tamano);
             painter.fill_rect(rect, overlay_color);
         }
     }
@@ -120,13 +126,13 @@ impl Widget for AnimatedOpacity {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        match &self.child {
-            Some(child) => ChildrenIds::from_slice(&[child.id()]),
+        match &self.hijo {
+            Some(hijo) => ChildrenIds::from_slice(&[hijo.id()]),
             None => ChildrenIds::from_slice(&[]),
         }
     }
@@ -138,21 +144,21 @@ impl Widget for AnimatedOpacity {
 
 /// Widget que desplaza a su hijo horizontal y/o verticalmente.
 pub struct AnimatedSlide {
-    child: Option<WidgetPod<dyn Widget>>,
+    hijo: Option<WidgetPod<dyn Widget>>,
     offset_x: f64,
     offset_y: f64,
 }
 
 impl AnimatedSlide {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: Some(child.erased().to_pod()),
+            hijo: Some(hijo.erased().to_pod()),
             offset_x: 0.0,
             offset_y: 0.0,
         }
     }
 
-    pub fn with_offset(mut self, x: f64, y: f64) -> Self {
+    pub fn con_offset(mut self, x: f64, y: f64) -> Self {
         self.offset_x = x;
         self.offset_y = y;
         self
@@ -167,8 +173,8 @@ impl Widget for AnimatedSlide {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -177,22 +183,28 @@ impl Widget for AnimatedSlide {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => Length::ZERO,
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        if let Some(ref mut child) = self.child {
-            ctx.run_layout(child, size);
-            ctx.place_child(child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.run_layout(hijo, tamano);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -213,13 +225,13 @@ impl Widget for AnimatedSlide {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        match &self.child {
-            Some(child) => ChildrenIds::from_slice(&[child.id()]),
+        match &self.hijo {
+            Some(hijo) => ChildrenIds::from_slice(&[hijo.id()]),
             None => ChildrenIds::from_slice(&[]),
         }
     }
@@ -231,21 +243,21 @@ impl Widget for AnimatedSlide {
 
 /// Widget que escala a su hijo horizontal y/o verticalmente.
 pub struct AnimatedScale {
-    child: Option<WidgetPod<dyn Widget>>,
+    hijo: Option<WidgetPod<dyn Widget>>,
     scale_x: f64,
     scale_y: f64,
 }
 
 impl AnimatedScale {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: Some(child.erased().to_pod()),
+            hijo: Some(hijo.erased().to_pod()),
             scale_x: 1.0,
             scale_y: 1.0,
         }
     }
 
-    pub fn with_scale(mut self, sx: f64, sy: f64) -> Self {
+    pub fn con_scale(mut self, sx: f64, sy: f64) -> Self {
         self.scale_x = sx;
         self.scale_y = sy;
         self
@@ -260,8 +272,8 @@ impl Widget for AnimatedScale {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -270,22 +282,28 @@ impl Widget for AnimatedScale {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => Length::ZERO,
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        if let Some(ref mut child) = self.child {
-            ctx.run_layout(child, size);
-            ctx.place_child(child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.run_layout(hijo, tamano);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -306,13 +324,13 @@ impl Widget for AnimatedScale {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        match &self.child {
-            Some(child) => ChildrenIds::from_slice(&[child.id()]),
+        match &self.hijo {
+            Some(hijo) => ChildrenIds::from_slice(&[hijo.id()]),
             None => ChildrenIds::from_slice(&[]),
         }
     }
@@ -324,42 +342,42 @@ impl Widget for AnimatedScale {
 
 /// Widget que dibuja un efecto ripple (onda expansiva) de Material Design.
 pub struct RippleWidget {
-    child: Option<WidgetPod<dyn Widget>>,
+    hijo: Option<WidgetPod<dyn Widget>>,
     ripple_progress: f64,
     ripple_origin: (f64, f64),
     ripple_rgba: [u8; 4],
     duracion_ms: f64,
-    anim_start: Option<Instant>,
+    anim_inicio: Option<Instant>,
     max_radius: f64,
 }
 
 impl RippleWidget {
-    pub fn new(child: NewWidget<impl Widget + ?Sized>) -> Self {
+    pub fn nuevo(hijo: NewWidget<impl Widget + ?Sized>) -> Self {
         Self {
-            child: Some(child.erased().to_pod()),
+            hijo: Some(hijo.erased().to_pod()),
             ripple_progress: 0.0,
             ripple_origin: (0.0, 0.0),
             ripple_rgba: [255, 255, 255, 80],
             duracion_ms: 150.0,
-            anim_start: None,
+            anim_inicio: None,
             max_radius: 0.0,
         }
     }
 
-    pub fn with_color(mut self, r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub fn con_color(mut self, r: u8, g: u8, b: u8, a: u8) -> Self {
         self.ripple_rgba = [r, g, b, a];
         self
     }
 
     pub fn trigger(this: &mut WidgetMut<'_, Self>) {
-        let size = this.ctx.border_box().size();
-        let cx = size.width / 2.0;
-        let cy = size.height / 2.0;
+        let tamano = this.ctx.border_box().size();
+        let cx = tamano.width / 2.0;
+        let cy = tamano.height / 2.0;
         let max_r = (cx * cx + cy * cy).sqrt();
         this.widget.ripple_progress = 0.0;
         this.widget.ripple_origin = (cx, cy);
         this.widget.max_radius = max_r;
-        this.widget.anim_start = Some(Instant::now());
+        this.widget.anim_inicio = Some(Instant::now());
         this.ctx.request_paint_only();
     }
 }
@@ -372,8 +390,8 @@ impl Widget for RippleWidget {
     }
 
     fn register_children(&mut self, ctx: &mut RegisterCtx<'_>) {
-        if let Some(ref mut child) = self.child {
-            ctx.register_child(child);
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.register_child(hijo);
         }
     }
 
@@ -382,22 +400,28 @@ impl Widget for RippleWidget {
         ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         axis: Axis,
-        len_req: LenReq,
-        cross_length: Option<Length>,
+        longitud_req: LenReq,
+        cross_longitud: Option<Length>,
     ) -> Length {
-        match self.child.as_mut() {
-            Some(child) => {
-                let context_size = LayoutSize::maybe(axis.cross(), cross_length);
-                ctx.compute_length(child, len_req.into(), context_size, axis, cross_length)
+        match self.hijo.as_mut() {
+            Some(hijo) => {
+                let context_tamano = LayoutSize::maybe(axis.cross(), cross_longitud);
+                ctx.compute_length(
+                    hijo,
+                    longitud_req.into(),
+                    context_tamano,
+                    axis,
+                    cross_longitud,
+                )
             }
             None => Length::ZERO,
         }
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
-        if let Some(ref mut child) = self.child {
-            ctx.run_layout(child, size);
-            ctx.place_child(child, Point::ORIGIN);
+    fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, tamano: Size) {
+        if let Some(ref mut hijo) = self.hijo {
+            ctx.run_layout(hijo, tamano);
+            ctx.place_child(hijo, Point::ORIGIN);
         }
     }
 
@@ -409,11 +433,11 @@ impl Widget for RippleWidget {
     ) {
         if self.ripple_progress <= 0.0 || self.ripple_progress >= 1.0 {
             // Si la animación sigue activa, avanzar progreso
-            if let Some(start) = self.anim_start {
-                let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+            if let Some(inicio) = self.anim_inicio {
+                let elapsed = inicio.elapsed().as_secs_f64() * 1000.0;
                 self.ripple_progress = (elapsed / self.duracion_ms).clamp(0.0, 1.0);
                 if self.ripple_progress >= 1.0 {
-                    self.anim_start = None;
+                    self.anim_inicio = None;
                 }
             }
             if self.ripple_progress <= 0.0 {
@@ -442,13 +466,13 @@ impl Widget for RippleWidget {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        _node: &mut Node,
+        _nodo: &mut Node,
     ) {
     }
 
     fn children_ids(&self) -> ChildrenIds {
-        match &self.child {
-            Some(child) => ChildrenIds::from_slice(&[child.id()]),
+        match &self.hijo {
+            Some(hijo) => ChildrenIds::from_slice(&[hijo.id()]),
             None => ChildrenIds::from_slice(&[]),
         }
     }

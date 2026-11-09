@@ -9,7 +9,7 @@ use crate::layout::AsUnit as _;
 use crate::view;
 use crate::Length;
 use crate::{
-    AnyWidgetView, Background, DesignStyle, FontWeight, MaterialTheme, RgbColor, ShapeFamily,
+    AnyWidgetView, Background, DesignStyle, FontWeight, FormaFamily, MaterialTheme, RgbColor,
 };
 use forja_syntax::ast::Declaracion;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ use xilem::style::Style;
 // ─── MaterialCard ───────────────────────────────────────────────
 
 pub(crate) fn render_card(
-    child: &Layout,
+    hijo: &Layout,
     variant: &CardVariant,
     seleccionado: &bool,
     data: &mut AppStateNativo,
@@ -26,17 +26,17 @@ pub(crate) fn render_card(
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let scheme = &theme.scheme;
-    let inner = crate::gui_nativa::layout_a_view(child, data, prog, theme);
+    let inner = crate::gui_nativa::layout_a_vista(hijo, data, prog, theme);
     let padded = view::sized_box(inner).padding(16.0.px());
     let base =
-        view::sized_box(padded).corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+        view::sized_box(padded).corner_radius(theme.shapes.for_family(FormaFamily::Container).px());
     // Cada diseño tiene su propia superficie de tarjeta:
     // - Liquid Glass: translúcida sobre el fondo vidrioso, con borde claro.
     // - Fluent: fondo de superficie sólido y hairline de 1px (Windows 11).
     // - Material You: las variantes de siempre.
     let superficie = |solido: RgbColor, translucido: f64| -> crate::Color {
         match theme.design {
-            DesignStyle::LiquidGlass => solido.with_alpha(translucido),
+            DesignStyle::LiquidGlass => solido.con_alpha(translucido),
             _ => solido.into(),
         }
     };
@@ -48,7 +48,7 @@ pub(crate) fn render_card(
                 // 70% de blanco en claro, 5% en oscuro. Así la tarjeta se lee como
                 // una capa y no como un bloque opaco.
                 let capa =
-                    RgbColor(255, 255, 255).with_alpha(if theme.is_dark { 0.05 } else { 0.7 });
+                    RgbColor(255, 255, 255).con_alpha(if theme.es_dark { 0.05 } else { 0.7 });
                 Box::new(
                     base.background(Background::Color(capa))
                         .border_color(borde)
@@ -101,7 +101,7 @@ pub(crate) fn render_card(
 
 // ─── MaterialListItem ────────────────────────────────────────────
 
-pub(crate) fn render_list_item(
+pub(crate) fn render_lista_elemento(
     leading: &Option<Box<Layout>>,
     titulo: &str,
     subtitulo: &Option<String>,
@@ -114,8 +114,8 @@ pub(crate) fn render_list_item(
     let fg: crate::Color = scheme.on_surface.into();
     let fg_var: crate::Color = scheme.on_surface_variant.into();
 
-    let mut text_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
-    text_children.push(Box::new(
+    let mut texto_children: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+    texto_children.push(Box::new(
         view::label(titulo.to_string())
             .text_size(16.0)
             .weight(FontWeight::MEDIUM)
@@ -124,27 +124,27 @@ pub(crate) fn render_list_item(
 
     if let Some(sub) = subtitulo {
         if !sub.is_empty() {
-            text_children.push(
+            texto_children.push(
                 Box::new(view::label(sub.clone()).text_size(14.0).color(fg_var))
                     as Box<AnyWidgetView<AppStateNativo>>,
             );
         }
     }
 
-    let text_col =
-        Box::new(view::flex(crate::Axis::Vertical, (text_children,)).gap(Length::px(2.0)))
+    let texto_col =
+        Box::new(view::flex(crate::Axis::Vertical, (texto_children,)).gap(Length::px(2.0)))
             as Box<AnyWidgetView<AppStateNativo>>;
 
-    let leading_view = leading
+    let leading_vista = leading
         .as_ref()
-        .map(|l| crate::gui_nativa::layout_a_view(l, data, prog, theme))
+        .map(|l| crate::gui_nativa::layout_a_vista(l, data, prog, theme))
         .unwrap_or_else(|| {
             Box::new(view::sized_box(view::label(String::new())))
                 as Box<AnyWidgetView<AppStateNativo>>
         });
-    let trailing_view = trailing
+    let trailing_vista = trailing
         .as_ref()
-        .map(|t| crate::gui_nativa::layout_a_view(t, data, prog, theme))
+        .map(|t| crate::gui_nativa::layout_a_vista(t, data, prog, theme))
         .unwrap_or_else(|| {
             Box::new(view::sized_box(view::label(String::new())))
                 as Box<AnyWidgetView<AppStateNativo>>
@@ -153,9 +153,9 @@ pub(crate) fn render_list_item(
     let row = view::flex(
         crate::Axis::Horizontal,
         (
-            leading_view,
-            xilem::view::FlexExt::flex(text_col, 1.0),
-            trailing_view,
+            leading_vista,
+            xilem::view::FlexExt::flex(texto_col, 1.0),
+            trailing_vista,
         ),
     );
 
@@ -164,13 +164,13 @@ pub(crate) fn render_list_item(
         view::sized_box(row)
             .padding(12.0.px())
             .background(Background::Color(bg))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px()),
     )
 }
 
 // ─── MaterialList ───────────────────────────────────────────────
 
-pub(crate) fn render_list(
+pub(crate) fn render_lista(
     items: &[Layout],
     dividers: &bool,
     data: &mut AppStateNativo,
@@ -179,7 +179,7 @@ pub(crate) fn render_list(
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for (i, item) in items.iter().enumerate() {
-        widgets.push(crate::gui_nativa::layout_a_view(item, data, prog, theme));
+        widgets.push(crate::gui_nativa::layout_a_vista(item, data, prog, theme));
         if *dividers && i < items.len() - 1 {
             widgets.push(Box::new(
                 view::sized_box(view::label(String::new())).height(Length::px(1.0)),
@@ -191,7 +191,7 @@ pub(crate) fn render_list(
 
 // ─── MaterialListControl ────────────────────────────────────────
 
-pub(crate) fn render_list_control(
+pub(crate) fn render_lista_control(
     items: &[Layout],
     data: &mut AppStateNativo,
     prog: &[Declaracion],
@@ -199,14 +199,14 @@ pub(crate) fn render_list_control(
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for item in items.iter() {
-        widgets.push(crate::gui_nativa::layout_a_view(item, data, prog, theme));
+        widgets.push(crate::gui_nativa::layout_a_vista(item, data, prog, theme));
     }
     Box::new(view::flex(crate::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── MaterialListSelection ──────────────────────────────────────
 
-pub(crate) fn render_list_selection(
+pub(crate) fn render_lista_selection(
     items: &[Layout],
     data: &mut AppStateNativo,
     prog: &[Declaracion],
@@ -214,27 +214,27 @@ pub(crate) fn render_list_selection(
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for item in items.iter() {
-        widgets.push(crate::gui_nativa::layout_a_view(item, data, prog, theme));
+        widgets.push(crate::gui_nativa::layout_a_vista(item, data, prog, theme));
     }
     Box::new(view::flex(crate::Axis::Vertical, (widgets,)).gap(Length::px(0.0)))
 }
 
 // ─── DynamicList ────────────────────────────────────────────────
 
-pub(crate) fn render_dynamic_list(
+pub(crate) fn render_dynamic_lista(
     variable: &str,
-    item_fn: &str,
+    elemento_fn: &str,
     data: &mut AppStateNativo,
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let var_name = variable.to_string();
-    let fn_name = item_fn.to_string();
+    let fn_name = elemento_fn.to_string();
     let p = prog.to_vec();
-    let store = data.store.clone();
+    let almacen = data.almacen.clone();
     let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
 
-    if let Some(v) = store.get(&var_name) {
+    if let Some(v) = almacen.obtener(&var_name) {
         let s = match &v {
             serde_json::Value::String(s) => s.clone(),
             other => other.to_string(),
@@ -260,10 +260,10 @@ pub(crate) fn render_dynamic_list(
                                 if let Some(param) = parametros.first() {
                                     params.insert(param.nombre.clone(), ValorGUI::from_serde(item));
                                 }
-                                if let Some(layout) =
-                                    crate::gui_nativa::expr_a_layout_item(expr, &params, &store, &p)
-                                {
-                                    widgets.push(crate::gui_nativa::layout_a_view(
+                                if let Some(layout) = crate::gui_nativa::expresion_a_layout_elemento(
+                                    expr, &params, &almacen, &p,
+                                ) {
+                                    widgets.push(crate::gui_nativa::layout_a_vista(
                                         &layout, data, &p, theme,
                                     ));
                                 }
@@ -284,7 +284,7 @@ pub(crate) fn render_dynamic_list(
 
 // ─── MaterialDataTable ──────────────────────────────────────────
 
-pub(crate) fn render_data_table(
+pub(crate) fn render_data_tabla(
     columnas: &[String],
     filas: &[Vec<String>],
     ordenable: &bool,
@@ -298,7 +298,7 @@ pub(crate) fn render_data_table(
         theme,
     } = ctx;
     let scheme = &theme.scheme;
-    let label_style = get_text_style(&theme.typography, "label_small");
+    let etiqueta_style = obtener_texto_style(&theme.typography, "label_small");
     let fg_header: crate::Color = scheme.on_surface.into();
     let fg_body: crate::Color = scheme.on_surface.into();
     let bg_header: crate::Color = scheme.surface_variant.into();
@@ -308,14 +308,14 @@ pub(crate) fn render_data_table(
     // Header row
     let mut header_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
     for (i, col) in columnas.iter().enumerate() {
-        let is_ordered = *ordenable && i == *col_orden;
-        let display = if is_ordered {
+        let es_ordered = *ordenable && i == *col_orden;
+        let display = if es_ordered {
             format!("{} {}", col, if *orden_asc { "↑" } else { "↓" })
         } else {
             col.clone()
         };
         let hdr = view::label(display)
-            .text_size(label_style.font_size as f32)
+            .text_size(etiqueta_style.font_tamano as f32)
             .weight(FontWeight::BOLD)
             .color(fg_header);
         header_widgets
@@ -330,7 +330,7 @@ pub(crate) fn render_data_table(
     let header_container = Box::new(
         view::sized_box(header_row)
             .background(Background::Color(bg_header))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
     );
 
     // Body rows
@@ -360,14 +360,14 @@ pub(crate) fn render_data_table(
 // ─── MaterialSurface ────────────────────────────────────────────
 
 pub(crate) fn render_surface(
-    child: &Layout,
+    hijo: &Layout,
     color_role: &str,
     data: &mut AppStateNativo,
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
     let scheme = &theme.scheme;
-    let inner = crate::gui_nativa::layout_a_view(child, data, prog, theme);
+    let inner = crate::gui_nativa::layout_a_vista(hijo, data, prog, theme);
     let bg: crate::Color = match color_role {
         "tonal" => scheme.secondary_container.into(),
         "primary" => scheme.primary.into(),
@@ -376,7 +376,7 @@ pub(crate) fn render_surface(
     Box::new(
         view::sized_box(inner)
             .background(Background::Color(bg))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px()),
     )
 }
 
@@ -390,18 +390,18 @@ pub(crate) fn render_scaffold(
     prog: &[Declaracion],
     theme: &MaterialTheme,
 ) -> Box<AnyWidgetView<AppStateNativo>> {
-    let body_view = crate::gui_nativa::layout_a_view(body, data, prog, theme);
-    let body_flex = xilem::view::FlexExt::flex(body_view, 1.0);
+    let body_vista = crate::gui_nativa::layout_a_vista(body, data, prog, theme);
+    let body_flex = xilem::view::FlexExt::flex(body_vista, 1.0);
     let tv = top
         .as_ref()
-        .map(|t| crate::gui_nativa::layout_a_view(t, data, prog, theme))
+        .map(|t| crate::gui_nativa::layout_a_vista(t, data, prog, theme))
         .unwrap_or_else(|| {
             Box::new(view::sized_box(view::label(String::new())))
                 as Box<AnyWidgetView<AppStateNativo>>
         });
     let bv = bottom
         .as_ref()
-        .map(|b| crate::gui_nativa::layout_a_view(b, data, prog, theme))
+        .map(|b| crate::gui_nativa::layout_a_vista(b, data, prog, theme))
         .unwrap_or_else(|| {
             Box::new(view::sized_box(view::label(String::new())))
                 as Box<AnyWidgetView<AppStateNativo>>
@@ -416,8 +416,8 @@ pub(crate) fn render_scaffold(
                 )),
         )
         .dims((
-            Length::px(data.window_width.max(200.0)),
-            Length::px(data.window_height.max(200.0)),
+            Length::px(data.ventana_ancho.max(200.0)),
+            Length::px(data.ventana_alto.max(200.0)),
         )),
     )
 }

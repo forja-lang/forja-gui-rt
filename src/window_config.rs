@@ -14,7 +14,7 @@ use xilem::winit::window::Icon as XilemIcon;
 /// Configuración de la ventana nativa. Los valores por defecto son los que usaba
 /// el runtime antes de existir esta función.
 #[derive(Clone, Debug, PartialEq)]
-pub struct WindowConfig {
+pub struct VentanaConfig {
     /// Título de la barra. Si es `None` se arma con el diseño del tema.
     pub titulo: Option<String>,
     pub ancho: f64,
@@ -31,7 +31,7 @@ pub struct WindowConfig {
     pub decoraciones: bool,
 }
 
-impl Default for WindowConfig {
+impl Default for VentanaConfig {
     fn default() -> Self {
         Self {
             titulo: None,
@@ -46,7 +46,7 @@ impl Default for WindowConfig {
     }
 }
 
-impl WindowConfig {
+impl VentanaConfig {
     /// Carga el icono desde disco (PNG, JPG, BMP, ICO o cualquier formato que
     /// entienda el crate `image`) y lo convierte al tipo de winit.
     pub fn cargar_icono(&self) -> Option<XilemIcon> {
@@ -69,8 +69,8 @@ const FN_VENTANA: &[&str] = &[
 ///
 /// Es tolerante a propósito: un argumento con el tipo equivocado se ignora y se
 /// queda el valor por defecto, porque un error acá impediría abrir la ventana.
-pub fn extraer_config_ventana(decls: &[Declaracion]) -> WindowConfig {
-    let mut cfg = WindowConfig::default();
+pub fn extraer_config_ventana(decls: &[Declaracion]) -> VentanaConfig {
+    let mut cfg = VentanaConfig::default();
 
     for decl in decls {
         // `ventana(...)` suelto a nivel superior
@@ -86,7 +86,7 @@ pub fn extraer_config_ventana(decls: &[Declaracion]) -> WindowConfig {
     cfg
 }
 
-fn aplicar(cfg: &mut WindowConfig, decl: &Declaracion) {
+fn aplicar(cfg: &mut VentanaConfig, decl: &Declaracion) {
     let (nombre, argumentos) = match decl {
         Declaracion::LlamadaFuncion { nombre, argumentos } => (nombre, argumentos),
         Declaracion::Expresion(Expresion::LlamadaFuncion { nombre, argumentos }) => {

@@ -3,7 +3,7 @@
 // Funciones de rendering extraídas de gui_nativa.rs
 
 use crate::gui_nativa::{
-    AppStateNativo, IconAction, Layout, NavItem, NavigatorAnim, NavigatorScreen, NavigatorType,
+    AppStateNativo, IconAction, Layout, NavElemento, NavigatorAnim, NavigatorScreen, NavigatorTipo,
     ValorGUI,
 };
 use crate::helpers::*;
@@ -11,7 +11,7 @@ use crate::layout::AsUnit as _;
 use crate::theme::motion::EASE_EMPHASIZED;
 use crate::view;
 use crate::Length;
-use crate::{AnyWidgetView, Background, FontWeight, MaterialTheme, RgbColor, ShapeFamily};
+use crate::{AnyWidgetView, Background, FontWeight, FormaFamily, MaterialTheme, RgbColor};
 use forja_syntax::ast::Declaracion;
 use xilem::style::Style;
 
@@ -19,8 +19,8 @@ use xilem::style::Style;
 
 pub(crate) fn render_navigator(
     screens: &[NavigatorScreen],
-    current_var: &str,
-    nav_type: &NavigatorType,
+    actual_variable: &str,
+    nav_tipo: &NavigatorTipo,
     anim: &NavigatorAnim,
     on_change: &Option<String>,
     ctx: ContextoRender<'_>,
@@ -30,19 +30,19 @@ pub(crate) fn render_navigator(
     let p = prog.to_vec();
 
     // Leer la pantalla actual desde el store reactivo
-    let current_id = data.leer(current_var).to_string();
-    let current_idx = screens.iter().position(|s| s.id == current_id).unwrap_or(0);
-    let idx = current_idx % screens.len();
+    let actual_id = data.leer(actual_variable).to_string();
+    let actual_indice = screens.iter().position(|s| s.id == actual_id).unwrap_or(0);
+    let idx = actual_indice % screens.len();
 
     // Obtener la pantalla actual y renderizar su contenido
-    let current_screen = &screens[idx];
-    let a11y_screen_name = current_screen.titulo.clone();
+    let actual_screen = &screens[idx];
+    let a11y_screen_name = actual_screen.titulo.clone();
     data.a11y_focus("navigation", &a11y_screen_name, "", "Pantalla activa");
 
     // Evaluar el contenido: si content_fn está presente, buscar la función en el AST
     let mut deferred_layout = Layout::Spacer(0.0);
     let content_layout = if let (Layout::Spacer(0.0), Some(fn_name)) =
-        (&*current_screen.contenido, &current_screen.content_fn)
+        (&*actual_screen.contenido, &actual_screen.content_fn)
     {
         let mut found = false;
         for decl in prog {
@@ -75,19 +75,19 @@ pub(crate) fn render_navigator(
                 fn_name,
                 screens.len()
             );
-            &*current_screen.contenido
+            &*actual_screen.contenido
         }
     } else {
-        &*current_screen.contenido
+        &*actual_screen.contenido
     };
-    let content = crate::gui_nativa::layout_a_view(content_layout, data, prog, theme);
+    let content = crate::gui_nativa::layout_a_vista(content_layout, data, prog, theme);
 
     // Animación de transición entre pantallas
     let content = match anim {
         NavigatorAnim::None => content,
         NavigatorAnim::Fade | NavigatorAnim::Slide => {
-            if current_id != data.nav_prev_screen {
-                data.nav_transition_start(&current_id);
+            if actual_id != data.nav_prev_screen {
+                data.nav_transition_inicio(&actual_id);
             }
             let elapsed = data
                 .nav_anim_start
@@ -101,7 +101,7 @@ pub(crate) fn render_navigator(
                 content
             } else {
                 let overlay_alpha = 1.0 - eased;
-                let fade_color = RgbColor(0, 0, 0).with_alpha(overlay_alpha * 0.5);
+                let fade_color = RgbColor(0, 0, 0).con_alpha(overlay_alpha * 0.5);
                 Box::new(view::sized_box(content).background(Background::Color(fade_color)))
             }
         }
@@ -114,16 +114,18 @@ pub(crate) fn render_navigator(
         .map(|s| s.icono.clone().unwrap_or_else(|| "•".to_string()))
         .collect();
 
-    let cb_name = on_change.clone().unwrap_or_else(|| current_var.to_string());
+    let cb_name = on_change
+        .clone()
+        .unwrap_or_else(|| actual_variable.to_string());
 
     // Construir la navegación según el tipo
-    match nav_type {
-        NavigatorType::None => content,
-        NavigatorType::BottomBar => {
-            let cv = current_var.to_string();
+    match nav_tipo {
+        NavigatorTipo::None => content,
+        NavigatorTipo::BottomBar => {
+            let cv = actual_variable.to_string();
             let cb = cb_name.clone();
             let sc = scheme.clone();
-            let label_style = get_text_style(&theme.typography, "label_small");
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_small");
             let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for i in 0..screens.len() {
                 let cv_inner = cv.clone();
@@ -143,22 +145,22 @@ pub(crate) fn render_navigator(
                 } else {
                     crate::Color::TRANSPARENT
                 };
-                let icono_view = view::sized_box(crate::svg_icon::<AppStateNativo>(
+                let icono_vista = view::sized_box(crate::svg_icon::<AppStateNativo>(
                     &icono,
                     24.0,
                     fg_rgb,
                     crate::IconStyle::Filled,
                 ))
                 .padding(8.0.px())
-                .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px())
+                .corner_radius(theme.shapes.for_family(FormaFamily::Button).px())
                 .background(Background::Color(pill_bg));
                 let titulo_valor = titulo.clone();
                 let w = view::flex(
                     crate::Axis::Vertical,
                     (
-                        icono_view,
+                        icono_vista,
                         view::label(titulo)
-                            .text_size(label_style.font_size as f32)
+                            .text_size(etiqueta_style.font_tamano as f32)
                             .weight(if sel {
                                 FontWeight::MEDIUM
                             } else {
@@ -200,18 +202,18 @@ pub(crate) fn render_navigator(
                             xilem::masonry::layout::Dim::Stretch,
                         )),
                 )
-                .height(Length::px(data.window_height)),
+                .height(Length::px(data.ventana_alto)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             Box::new(view::zstack((
                 Box::new(scrollable_content) as Box<AnyWidgetView<AppStateNativo>>,
                 nav_overlay,
             )))
         }
-        NavigatorType::Tabs => {
-            let cv = current_var.to_string();
+        NavigatorTipo::Tabs => {
+            let cv = actual_variable.to_string();
             let cb = cb_name.clone();
             let sc = scheme.clone();
-            let label_style = get_text_style(&theme.typography, "label_large");
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_large");
             let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for (i, titulo) in nav_titles.iter().enumerate().take(screens.len()) {
                 let cv_inner = cv.clone();
@@ -229,7 +231,7 @@ pub(crate) fn render_navigator(
                     crate::Axis::Vertical,
                     (
                         view::label(titulo)
-                            .text_size(label_style.font_size as f32)
+                            .text_size(etiqueta_style.font_tamano as f32)
                             .weight(if sel {
                                 FontWeight::BOLD
                             } else {
@@ -282,15 +284,15 @@ pub(crate) fn render_navigator(
                             xilem::masonry::layout::Dim::Stretch,
                         )),
                 )
-                .height(Length::px(data.window_height)),
+                .height(Length::px(data.ventana_alto)),
             ) as Box<AnyWidgetView<AppStateNativo>>;
             Box::new(view::zstack((
                 Box::new(scrollable_content) as Box<AnyWidgetView<AppStateNativo>>,
                 nav_overlay,
             )))
         }
-        NavigatorType::Rail | NavigatorType::Drawer => {
-            let cv = current_var.to_string();
+        NavigatorTipo::Rail | NavigatorTipo::Drawer => {
+            let cv = actual_variable.to_string();
             let cb = cb_name.clone();
             let sc = scheme.clone();
             let mut items: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
@@ -340,7 +342,7 @@ pub(crate) fn render_navigator(
                 items.push(Box::new(
                     view::sized_box(btn)
                         .background(Background::Color(bg))
-                        .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::Container).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>);
             }
             let rail = Box::new(
@@ -363,7 +365,7 @@ pub(crate) fn render_navigator(
 // ─── NavigationBar ──────────────────────────────────────────────
 
 pub(crate) fn render_navigation_bar(
-    items: &[NavItem],
+    items: &[NavElemento],
     seleccion: &usize,
     variable_seleccion: Option<&str>,
     on_change: &str,
@@ -382,25 +384,25 @@ pub(crate) fn render_navigation_bar(
         let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
-        let etiqueta_item = item.label.clone();
-        let is_selected = i == *seleccion;
+        let etiqueta_elemento = item.etiqueta.clone();
+        let es_selected = i == *seleccion;
 
-        let fg_color: crate::Color = if is_selected {
+        let fg_color: crate::Color = if es_selected {
             scheme.primary.into()
         } else {
             scheme.on_surface_variant.into()
         };
 
-        let label_style = get_text_style(&theme.typography, "label_small");
-        let item_widget = view::flex(
+        let etiqueta_style = obtener_texto_style(&theme.typography, "label_small");
+        let elemento_widget = view::flex(
             crate::Axis::Vertical,
             (
                 view::label(item.icono.clone())
                     .text_size(24.0)
                     .color(fg_color),
-                view::label(item.label.clone())
-                    .text_size(label_style.font_size as f32)
-                    .weight(if is_selected {
+                view::label(item.etiqueta.clone())
+                    .text_size(etiqueta_style.font_tamano as f32)
+                    .weight(if es_selected {
                         FontWeight::MEDIUM
                     } else {
                         FontWeight::NORMAL
@@ -410,14 +412,14 @@ pub(crate) fn render_navigation_bar(
         )
         .gap(Length::px(2.0));
 
-        let btn = view::button(item_widget, move |data: &mut AppStateNativo| {
+        let btn = view::button(elemento_widget, move |data: &mut AppStateNativo| {
             data.escribir(
                 variable_seleccion.as_deref().unwrap_or(&cb_inner),
                 ValorGUI::Entero(idx as i64),
             );
             ejecutar_callback_con_valor(
                 &cb_inner,
-                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                Some(ValorGUI::Texto(etiqueta_elemento.clone())),
                 data,
                 &p_inner,
             );
@@ -436,7 +438,7 @@ pub(crate) fn render_navigation_bar(
 // ─── NavigationRail ─────────────────────────────────────────────
 
 pub(crate) fn render_navigation_rail(
-    items: &[NavItem],
+    items: &[NavElemento],
     seleccion: &usize,
     variable_seleccion: Option<&str>,
     on_change: &str,
@@ -459,15 +461,15 @@ pub(crate) fn render_navigation_rail(
         let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
-        let etiqueta_item = item.label.clone();
-        let is_selected = i == *seleccion;
+        let etiqueta_elemento = item.etiqueta.clone();
+        let es_selected = i == *seleccion;
 
-        let fg_color: crate::Color = if is_selected {
+        let fg_color: crate::Color = if es_selected {
             scheme.primary.into()
         } else {
             scheme.on_surface_variant.into()
         };
-        let bg_color: crate::Color = if is_selected {
+        let bg_color: crate::Color = if es_selected {
             scheme.primary_container.into()
         } else {
             crate::Color::TRANSPARENT
@@ -478,14 +480,14 @@ pub(crate) fn render_navigation_rail(
             .color(fg_color);
 
         let content: Box<AnyWidgetView<AppStateNativo>> = if *extended {
-            let label_style = get_text_style(&theme.typography, "label_medium");
+            let etiqueta_style = obtener_texto_style(&theme.typography, "label_medium");
             Box::new(
                 view::flex(
                     crate::Axis::Horizontal,
                     (
                         icon,
-                        view::label(item.label.clone())
-                            .text_size(label_style.font_size as f32)
+                        view::label(item.etiqueta.clone())
+                            .text_size(etiqueta_style.font_tamano as f32)
                             .color(fg_color),
                     ),
                 )
@@ -497,7 +499,7 @@ pub(crate) fn render_navigation_rail(
                     crate::Axis::Vertical,
                     (
                         icon,
-                        view::label(item.label.clone())
+                        view::label(item.etiqueta.clone())
                             .text_size(10.0)
                             .color(fg_color),
                     ),
@@ -513,7 +515,7 @@ pub(crate) fn render_navigation_rail(
             );
             ejecutar_callback_con_valor(
                 &cb_inner,
-                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                Some(ValorGUI::Texto(etiqueta_elemento.clone())),
                 data,
                 &p_inner,
             );
@@ -521,7 +523,7 @@ pub(crate) fn render_navigation_rail(
 
         let styled_btn = view::sized_box(btn)
             .background(Background::Color(bg_color))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px());
 
         nav_items.push(Box::new(styled_btn) as Box<AnyWidgetView<AppStateNativo>>);
     }
@@ -541,7 +543,7 @@ pub(crate) fn render_navigation_rail(
 // ─── NavigationDrawer ───────────────────────────────────────────
 
 pub(crate) fn render_navigation_drawer(
-    items: &[NavItem],
+    items: &[NavElemento],
     seleccion: &usize,
     variable_seleccion: Option<&str>,
     on_change: &str,
@@ -568,61 +570,61 @@ pub(crate) fn render_navigation_drawer(
         let variable_seleccion = variable_seleccion.clone();
         let p_inner = p.clone();
         let idx = i;
-        let etiqueta_item = item.label.clone();
-        let is_selected = i == *seleccion;
+        let etiqueta_elemento = item.etiqueta.clone();
+        let es_selected = i == *seleccion;
 
-        let fg_color: crate::Color = if is_selected {
+        let fg_color: crate::Color = if es_selected {
             scheme.on_secondary_container.into()
         } else {
             scheme.on_surface_variant.into()
         };
-        let bg_color: crate::Color = if is_selected {
+        let bg_color: crate::Color = if es_selected {
             scheme.secondary_container.into()
         } else {
             crate::Color::TRANSPARENT
         };
 
-        let label_style = get_text_style(&theme.typography, "label_large");
-        let item_content = view::flex(
+        let etiqueta_style = obtener_texto_style(&theme.typography, "label_large");
+        let elemento_content = view::flex(
             crate::Axis::Horizontal,
             (
                 view::label(item.icono.clone())
                     .text_size(24.0)
                     .color(fg_color),
-                view::label(item.label.clone())
-                    .text_size(label_style.font_size as f32)
+                view::label(item.etiqueta.clone())
+                    .text_size(etiqueta_style.font_tamano as f32)
                     .color(fg_color),
             ),
         )
         .gap(Length::px(16.0));
 
-        let btn = view::button(item_content, move |data: &mut AppStateNativo| {
+        let btn = view::button(elemento_content, move |data: &mut AppStateNativo| {
             data.escribir(
                 variable_seleccion.as_deref().unwrap_or(&cb_inner),
                 ValorGUI::Entero(idx as i64),
             );
             ejecutar_callback_con_valor(
                 &cb_inner,
-                Some(ValorGUI::Texto(etiqueta_item.clone())),
+                Some(ValorGUI::Texto(etiqueta_elemento.clone())),
                 data,
                 &p_inner,
             );
         });
 
-        let styled_item = view::sized_box(btn)
+        let styled_elemento = view::sized_box(btn)
             .background(Background::Color(bg_color))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px());
 
-        nav_items.push(Box::new(styled_item) as Box<AnyWidgetView<AppStateNativo>>);
+        nav_items.push(Box::new(styled_elemento) as Box<AnyWidgetView<AppStateNativo>>);
     }
 
     let drawer =
         view::sized_box(view::flex(crate::Axis::Vertical, (nav_items,)).gap(Length::px(4.0)))
             .background(Background::Color(scheme.surface.into()))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px());
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px());
 
     if *modal {
-        let overlay_color: crate::Color = RgbColor(0, 0, 0).with_alpha(0.32);
+        let overlay_color: crate::Color = RgbColor(0, 0, 0).con_alpha(0.32);
         Box::new(view::zstack((
             view::sized_box(view::label(String::new()))
                 .background(Background::Color(overlay_color)),
@@ -645,11 +647,11 @@ pub(crate) fn render_top_app_bar(
     let scheme = &theme.scheme;
     let p = prog.to_vec();
 
-    let title_size = 22.0;
+    let title_tamano = 22.0;
     let fg_title: crate::Color = scheme.on_surface.into();
 
-    let title_label = view::label(titulo.to_string())
-        .text_size(title_size as f32)
+    let title_etiqueta = view::label(titulo.to_string())
+        .text_size(title_tamano as f32)
         .weight(FontWeight::BOLD)
         .color(fg_title);
 
@@ -658,13 +660,13 @@ pub(crate) fn render_top_app_bar(
         let cb_inner = action.callback.clone();
         let p_inner = p.clone();
         let icon_fg_rgb: RgbColor = scheme.on_surface_variant;
-        let icon_view = crate::svg_icon::<AppStateNativo>(
+        let icon_vista = crate::svg_icon::<AppStateNativo>(
             &action.icono,
             24.0,
             icon_fg_rgb,
             crate::IconStyle::Filled,
         );
-        let icon_btn = view::button(icon_view, move |data: &mut AppStateNativo| {
+        let icon_btn = view::button(icon_vista, move |data: &mut AppStateNativo| {
             ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
         });
         action_widgets.push(Box::new(icon_btn) as Box<AnyWidgetView<AppStateNativo>>);
@@ -673,7 +675,7 @@ pub(crate) fn render_top_app_bar(
     let bar = view::flex(
         crate::Axis::Horizontal,
         (
-            title_label,
+            title_etiqueta,
             view::flex(crate::Axis::Horizontal, (action_widgets,)).gap(Length::px(4.0)),
         ),
     )
@@ -703,13 +705,13 @@ pub(crate) fn render_bottom_app_bar(
         let cb_inner = action.callback.clone();
         let p_inner = p.clone();
         let icon_fg_rgb: RgbColor = scheme.on_surface_variant;
-        let icon_view = crate::svg_icon::<AppStateNativo>(
+        let icon_vista = crate::svg_icon::<AppStateNativo>(
             &action.icono,
             24.0,
             icon_fg_rgb,
             crate::IconStyle::Filled,
         );
-        let icon_btn = view::button(icon_view, move |data: &mut AppStateNativo| {
+        let icon_btn = view::button(icon_vista, move |data: &mut AppStateNativo| {
             ejecutar_callback_y_actualizar(&cb_inner, data, &p_inner);
         });
         action_widgets.push(Box::new(icon_btn) as Box<AnyWidgetView<AppStateNativo>>);
@@ -721,7 +723,7 @@ pub(crate) fn render_bottom_app_bar(
     ) as Box<AnyWidgetView<AppStateNativo>>);
 
     if let Some(f) = fab {
-        children.push(crate::gui_nativa::layout_a_view(f, data, prog, theme));
+        children.push(crate::gui_nativa::layout_a_vista(f, data, prog, theme));
     }
 
     Box::new(
@@ -751,28 +753,28 @@ pub(crate) fn render_tabs(
         let p_inner = p.clone();
         let idx = i;
         let t = tab.clone();
-        let is_selected = i == *seleccion;
+        let es_selected = i == *seleccion;
 
-        let fg_color: crate::Color = if is_selected {
+        let fg_color: crate::Color = if es_selected {
             scheme.primary.into()
         } else {
             scheme.on_surface_variant.into()
         };
 
-        let label_style = get_text_style(&theme.typography, "label_large");
+        let etiqueta_style = obtener_texto_style(&theme.typography, "label_large");
         let t_valor = t.clone();
         let tab_content = view::flex(
             crate::Axis::Vertical,
             (
                 view::label(t.clone())
-                    .text_size(label_style.font_size as f32)
-                    .weight(if is_selected {
+                    .text_size(etiqueta_style.font_tamano as f32)
+                    .weight(if es_selected {
                         FontWeight::BOLD
                     } else {
                         FontWeight::MEDIUM
                     })
                     .color(fg_color),
-                if is_selected {
+                if es_selected {
                     Box::new(
                         view::sized_box(view::label(String::new()))
                             .height(Length::px(3.0))
@@ -804,7 +806,7 @@ pub(crate) fn render_tabs(
 
 // ─── SearchBar ──────────────────────────────────────────────────
 
-pub(crate) fn render_search_bar(
+pub(crate) fn render_buscar_bar(
     placeholder: &str,
     variable: &str,
     data: &mut AppStateNativo,
@@ -818,8 +820,8 @@ pub(crate) fn render_search_bar(
 
     let bg: crate::Color = scheme.surface_variant.into();
 
-    let ti = view::text_input(val, move |data: &mut AppStateNativo, new_val: String| {
-        data.escribir(&var_name, ValorGUI::Texto(new_val));
+    let ti = view::text_input(val, move |data: &mut AppStateNativo, nuevo_val: String| {
+        data.escribir(&var_name, ValorGUI::Texto(nuevo_val));
     })
     .placeholder(ph.as_str());
 
@@ -838,14 +840,14 @@ pub(crate) fn render_search_bar(
         )
         .gap(Length::px(8.0))
         .background(Background::Color(bg))
-        .corner_radius(theme.shapes.for_family(ShapeFamily::Button).px())
+        .corner_radius(theme.shapes.for_family(FormaFamily::Button).px())
         .padding(12.0.px()),
     )
 }
 
 // ─── SearchView ─────────────────────────────────────────────────
 
-pub(crate) fn render_search_view(
+pub(crate) fn render_buscar_vista(
     resultados: &[Layout],
     visible: &str,
     data: &mut AppStateNativo,
@@ -855,16 +857,16 @@ pub(crate) fn render_search_view(
     let scheme = &theme.scheme;
     let show = data.leer(visible).to_string() == "true";
     if show {
-        let mut result_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
+        let mut resultado_widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
         for r in resultados.iter() {
-            result_widgets.push(crate::gui_nativa::layout_a_view(r, data, prog, theme));
+            resultado_widgets.push(crate::gui_nativa::layout_a_vista(r, data, prog, theme));
         }
         Box::new(
             view::sized_box(
-                view::flex(crate::Axis::Vertical, (result_widgets,)).gap(Length::px(8.0)),
+                view::flex(crate::Axis::Vertical, (resultado_widgets,)).gap(Length::px(8.0)),
             )
             .background(Background::Color(scheme.surface.into()))
-            .corner_radius(theme.shapes.for_family(ShapeFamily::Container).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::Container).px()),
         )
     } else {
         Box::new(view::sized_box(view::label(String::new())))

@@ -43,7 +43,7 @@ pub struct MaterialSvgIcon {
 
 impl MaterialSvgIcon {
     /// Crea un nuevo widget de icono SVG con color RgbColor y estilo IconStyle
-    pub fn new(nombre: &str, tamaño: f64, color: RgbColor, estilo: IconStyle) -> Self {
+    pub fn nuevo(nombre: &str, tamaño: f64, color: RgbColor, estilo: IconStyle) -> Self {
         let mut icon = Self {
             nombre: nombre.to_string(),
             tamaño,
@@ -67,7 +67,7 @@ impl MaterialSvgIcon {
         if let Some(bez) = bez_paths_cacheados(&self.nombre) {
             self.bez_paths = (*bez).clone();
             if let Some(icon) = icons::catalog::by_name(&self.nombre) {
-                self.paths.push(icon.svg_path.to_string());
+                self.paths.push(icon.svg_ruta.to_string());
             }
         }
     }
@@ -83,13 +83,13 @@ impl Widget for MaterialSvgIcon {
         _ctx: &mut MeasureCtx<'_>,
         _props: &PropertiesRef<'_>,
         _axis: Axis,
-        len_req: LenReq,
-        _cross_length: Option<Length>,
+        longitud_req: LenReq,
+        _cross_longitud: Option<Length>,
     ) -> Length {
         // El icono tiene tamaño propio fijo: lo respeta, pero se achica si el
         // espacio disponible es menor (equivalente al `bc.constrain` anterior).
         let fijo = Length::px(self.tamaño);
-        match len_req {
+        match longitud_req {
             LenReq::FitContent(space) => fijo.min(space),
             _ => fijo,
         }
@@ -143,9 +143,9 @@ impl Widget for MaterialSvgIcon {
         &mut self,
         _ctx: &mut AccessCtx<'_>,
         _props: &PropertiesRef<'_>,
-        node: &mut xilem::masonry::accesskit::Node,
+        nodo: &mut xilem::masonry::accesskit::Node,
     ) {
-        node.set_label(format!("Icono: {}", self.nombre));
+        nodo.set_label(format!("Icono: {}", self.nombre));
     }
 
     fn children_ids(&self) -> ChildrenIds {
@@ -161,7 +161,7 @@ impl Widget for MaterialSvgIcon {
 ///
 /// Sigue el patrón de `WidthObservedView`: implementa View<State, (), ViewCtx>
 /// con Element = Pod<MaterialSvgIcon>.
-pub struct SvgIconView<State> {
+pub struct SvgIconVista<State> {
     nombre: String,
     tamaño: f64,
     color: RgbColor,
@@ -175,8 +175,8 @@ pub fn svg_icon<State: 'static>(
     tamaño: f64,
     color: RgbColor,
     estilo: IconStyle,
-) -> SvgIconView<State> {
-    SvgIconView {
+) -> SvgIconVista<State> {
+    SvgIconVista {
         nombre: nombre.to_string(),
         tamaño,
         color,
@@ -185,30 +185,30 @@ pub fn svg_icon<State: 'static>(
     }
 }
 
-impl<State: 'static> ViewMarker for SvgIconView<State> {}
+impl<State: 'static> ViewMarker for SvgIconVista<State> {}
 
-impl<State: 'static> View<State, (), ViewCtx> for SvgIconView<State> {
+impl<State: 'static> View<State, (), ViewCtx> for SvgIconVista<State> {
     type Element = Pod<MaterialSvgIcon>;
     type ViewState = ();
 
     fn build(&self, ctx: &mut ViewCtx, _app_state: &mut State) -> (Pod<MaterialSvgIcon>, ()) {
-        let icon = MaterialSvgIcon::new(&self.nombre, self.tamaño, self.color, self.estilo);
+        let icon = MaterialSvgIcon::nuevo(&self.nombre, self.tamaño, self.color, self.estilo);
         (ctx.create_pod(icon), ())
     }
 
     fn rebuild(
         &self,
-        prev: &Self,
-        _view_state: &mut (),
+        anterior: &Self,
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, Pod<MaterialSvgIcon>>,
         _app_state: &mut State,
     ) {
         // Si el nombre, tamaño o color cambian, necesitamos reconstruir completamente.
         // Por ahora, comparamos parámetros y solo reconstruimos si hay cambios.
-        if self.nombre != prev.nombre
-            || (self.tamaño - prev.tamaño).abs() > 0.01
-            || self.color != prev.color
+        if self.nombre != anterior.nombre
+            || (self.tamaño - anterior.tamaño).abs() > 0.01
+            || self.color != anterior.color
         {
             // full rebuild required - handled by Xilem's diff mechanism
         }
@@ -216,7 +216,7 @@ impl<State: 'static> View<State, (), ViewCtx> for SvgIconView<State> {
 
     fn teardown(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _ctx: &mut ViewCtx,
         _element: Mut<'_, Pod<MaterialSvgIcon>>,
     ) {
@@ -224,7 +224,7 @@ impl<State: 'static> View<State, (), ViewCtx> for SvgIconView<State> {
 
     fn message(
         &self,
-        _view_state: &mut (),
+        _vista_state: &mut (),
         _message: &mut crate::MessageContext,
         _element: Mut<'_, Pod<MaterialSvgIcon>>,
         _app_state: &mut State,
@@ -251,7 +251,7 @@ fn bez_paths_cacheados(nombre: &str) -> Option<Arc<Vec<BezPath>>> {
         return Some(hit.clone());
     }
     let icon = icons::catalog::by_name(nombre)?;
-    let bez = BezPath::from_svg(icon.svg_path).ok()?;
+    let bez = BezPath::from_svg(icon.svg_ruta).ok()?;
     let entrada = Arc::new(vec![bez]);
     cache()
         .lock()
