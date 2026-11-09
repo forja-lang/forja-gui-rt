@@ -30,7 +30,7 @@ fn main() -> Result<(), String> {
     };
     let mut lexer = forja_syntax::lexer::Lexer::new(&fuente);
     let tokens = lexer.tokenize().map_err(|e| format!("{:?}", e))?;
-    let mut parser = forja_syntax::parser::Parser::new(tokens);
+    let mut parser = forja_syntax::parser::Parser::nuevo(tokens);
     let programa = parser.parse().map_err(|e| format!("{:?}", e))?;
 
     // Chequeo previo sin ventana: si el layout sale vacío, no tiene sentido abrir.

@@ -8009,7 +8009,7 @@ mod tests_layout {
     fn layout_de(src: &str) -> Layout {
         let mut lexer = Lexer::new(src);
         let tokens = lexer.tokenize().expect("lex");
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::nuevo(tokens);
         let programa = parser.parse().expect("parse");
         let mut store = VariableStore::new();
         extraer_layout(&programa.declaraciones, &mut store)
@@ -8087,7 +8087,7 @@ mod tests_ejemplo_galeria {
         let src = include_str!("../../../ejemplos/gui/208_gui_galeria.fa");
         let mut lexer = Lexer::new(src);
         let tokens = lexer.tokenize().expect("lex");
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::nuevo(tokens);
         let programa = parser.parse().expect("parse");
         let mut store = VariableStore::new();
         let layout = extraer_layout(&programa.declaraciones, &mut store);
@@ -8273,7 +8273,7 @@ mod tests_config_ventana {
     fn parsear(src: &str) -> Programa {
         let mut lexer = Lexer::new(src);
         let tokens = lexer.tokenize().expect("lex");
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::nuevo(tokens);
         parser.parse().expect("parse")
     }
 
