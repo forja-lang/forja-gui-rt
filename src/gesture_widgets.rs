@@ -116,7 +116,7 @@ impl GestureTracker {
         self.threshold_crossed = false;
     }
 
-    pub fn update(&mut self, x: f64, y: f64) {
+    pub fn actualizar(&mut self, x: f64, y: f64) {
         let now = Instant::now();
         self.ultimo_x = self.actual_x;
         self.ultimo_y = self.actual_y;
@@ -203,7 +203,7 @@ impl Widget for SwipeWidget {
             PointerEvent::Move(PointerUpdate { current, .. }) => {
                 if ctx.is_active() {
                     let pos = ctx.local_position(current.position);
-                    self.tracker.update(pos.x, pos.y);
+                    self.tracker.actualizar(pos.x, pos.y);
                     // Desplazar visualmente el hijo
                     self.offset_x = self.tracker.total_dx;
                     ctx.request_render();
@@ -343,7 +343,7 @@ impl Widget for PanWidget {
             PointerEvent::Move(PointerUpdate { current, .. }) => {
                 if ctx.is_active() {
                     let pos = ctx.local_position(current.position);
-                    self.tracker.update(pos.x, pos.y);
+                    self.tracker.actualizar(pos.x, pos.y);
                     self.offset_x = self.tracker.total_dx;
                     self.offset_y = self.tracker.total_dy;
                     ctx.submit_action::<GestureResultado>(GestureResultado::Pan {
@@ -505,7 +505,7 @@ impl Widget for PullToRefreshWidget {
             PointerEvent::Move(PointerUpdate { current, .. }) => {
                 if ctx.is_active() {
                     let pos = ctx.local_position(current.position);
-                    self.tracker.update(pos.x, pos.y);
+                    self.tracker.actualizar(pos.x, pos.y);
                     // Solo arrastrando hacia abajo (total_dy > 0)
                     if self.tracker.total_dy > 0.0 {
                         self.pull_distance = self.tracker.total_dy;
@@ -677,12 +677,12 @@ impl MultiTouchState {
     }
 
     /// Agregar o actualizar un punto táctil
-    pub fn update(&mut self, pointer_id: PointerId, pos: Point) {
+    pub fn actualizar(&mut self, pointer_id: PointerId, pos: Point) {
         self.active_pointers.insert(pointer_id, pos);
     }
 
     /// Eliminar un punto táctil
-    pub fn remove(&mut self, pointer_id: &PointerId) {
+    pub fn quitar(&mut self, pointer_id: &PointerId) {
         self.active_pointers.remove(pointer_id);
     }
 
@@ -839,13 +839,13 @@ impl Widget for PinchZoomWidget {
             PointerEvent::Down(_) => {
                 if let (Some(id), Some(pos)) = (id, pos) {
                     self.anterior_multi_touch = self.multi_touch.clone();
-                    self.multi_touch.update(id, pos);
+                    self.multi_touch.actualizar(id, pos);
                 }
             }
             PointerEvent::Move { .. } => {
                 if let (Some(id), Some(pos)) = (id, pos) {
                     self.anterior_multi_touch = self.multi_touch.clone();
-                    self.multi_touch.update(id, pos);
+                    self.multi_touch.actualizar(id, pos);
 
                     if let Some(scale_factor) =
                         self.multi_touch.detect_pinch(&self.anterior_multi_touch)
@@ -864,7 +864,7 @@ impl Widget for PinchZoomWidget {
             }
             PointerEvent::Up(_) | PointerEvent::Cancel(_) => {
                 if let Some(ref id) = id {
-                    self.multi_touch.remove(id);
+                    self.multi_touch.quitar(id);
                     // Reset transform when last pointer is removed
                     if self.multi_touch.active_pointers.is_empty() {
                         ctx.set_transform(Affine::IDENTITY);
@@ -977,13 +977,13 @@ impl Widget for RotateWidget {
             PointerEvent::Down(_) => {
                 if let (Some(id), Some(pos)) = (id, pos) {
                     self.anterior_multi_touch = self.multi_touch.clone();
-                    self.multi_touch.update(id, pos);
+                    self.multi_touch.actualizar(id, pos);
                 }
             }
             PointerEvent::Move { .. } => {
                 if let (Some(id), Some(pos)) = (id, pos) {
                     self.anterior_multi_touch = self.multi_touch.clone();
-                    self.multi_touch.update(id, pos);
+                    self.multi_touch.actualizar(id, pos);
 
                     if let Some(delta) = self.multi_touch.detect_rotate(&self.anterior_multi_touch)
                     {
@@ -1001,7 +1001,7 @@ impl Widget for RotateWidget {
             }
             PointerEvent::Up(_) | PointerEvent::Cancel(_) => {
                 if let Some(ref id) = id {
-                    self.multi_touch.remove(id);
+                    self.multi_touch.quitar(id);
                 }
             }
             _ => {}

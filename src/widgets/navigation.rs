@@ -86,16 +86,16 @@ pub(crate) fn render_navigator(
     let content = match anim {
         NavigatorAnim::None => content,
         NavigatorAnim::Fade | NavigatorAnim::Slide => {
-            if actual_id != data.nav_prev_screen {
+            if actual_id != data.pantalla_anterior {
                 data.nav_transition_inicio(&actual_id);
             }
             let elapsed = data
-                .nav_anim_start
+                .inicio_animacion_nav
                 .map(|s| s.elapsed().as_secs_f64())
                 .unwrap_or(0.0);
             let duration = 0.25;
             let progress = (elapsed / duration).clamp(0.0, 1.0);
-            let eased = EASE_EMPHASIZED.apply(progress);
+            let eased = EASE_EMPHASIZED.aplicar(progress);
 
             if eased >= 1.0 {
                 content

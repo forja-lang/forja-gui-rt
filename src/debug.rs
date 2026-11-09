@@ -133,7 +133,7 @@ pub fn formato_layout_arbol(layout: &crate::gui_nativa::Layout, depth: usize) ->
             }
             out
         }
-        ZStack(children) => {
+        PilaZ(children) => {
             let mut out = format!("{}ZStack\n", sangria);
             for c in children {
                 out.push_str(&formato_layout_arbol(c, depth + 1));
@@ -186,7 +186,7 @@ pub fn formato_layout_arbol(layout: &crate::gui_nativa::Layout, depth: usize) ->
                 sangria, texto, callback, variant, disabled
             )
         }
-        TextInput {
+        EntradaTexto {
             variable,
             multiline,
             placeholder,

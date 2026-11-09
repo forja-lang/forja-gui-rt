@@ -39,7 +39,7 @@ pub fn default_properties(theme: &MaterialTheme) -> DefaultProperties {
     let (texto, texto_suave, borde, acento, relleno) = paleta(theme);
     let s = &theme.scheme;
     let superficie: Color = s.surface.into();
-    let radio_control = theme.shapes.for_family(FormaFamily::TextField);
+    let radio_control = theme.shapes.for_family(FormaFamily::CampoTexto);
 
     // Label y texto en general
     props.insert::<Label, _>(ContentColor::new(texto));

@@ -85,9 +85,9 @@ pub struct AppStateNativo {
     /// Animation start times for transitions keyed by variable name
     anim_inicio_time: HashMap<String, Instant>,
     /// Previous screen ID for navigator transitions
-    pub(crate) nav_prev_screen: String,
+    pub(crate) pantalla_anterior: String,
     /// Animation start time for navigator screen transitions
-    pub(crate) nav_anim_start: Option<Instant>,
+    pub(crate) inicio_animacion_nav: Option<Instant>,
     pub orientation: Orientation,
     /// 5.7: Contexto reactivo para tracking de dependencias de widgets
     pub reactive_ctx: ReactiveCtx,
@@ -158,8 +158,8 @@ impl AppStateNativo {
             animation_engine: AnimationEngine::nuevo(),
             anim_anterior_visibility: HashMap::new(),
             anim_inicio_time: HashMap::new(),
-            nav_prev_screen: String::new(),
-            nav_anim_start: None,
+            pantalla_anterior: String::new(),
+            inicio_animacion_nav: None,
             orientation: Orientation::Portrait,
             reactive_ctx: ReactiveCtx::nuevo(),
         }
@@ -196,13 +196,13 @@ impl AppStateNativo {
     /// Obtiene el progreso de animación suavizado con easing emphasized
     pub fn anim_progress_eased(&self, var_name: &str, duracion_ms: f64) -> f64 {
         let raw = self.anim_progress(var_name, duracion_ms);
-        EASE_EMPHASIZED.apply(raw)
+        EASE_EMPHASIZED.aplicar(raw)
     }
 
     pub fn nav_transition_inicio(&mut self, screen_id: &str) {
-        if self.nav_prev_screen != screen_id {
-            self.nav_prev_screen = screen_id.to_string();
-            self.nav_anim_start = Some(Instant::now());
+        if self.pantalla_anterior != screen_id {
+            self.pantalla_anterior = screen_id.to_string();
+            self.inicio_animacion_nav = Some(Instant::now());
         }
     }
 
@@ -332,7 +332,7 @@ pub enum IconButtonVariant {
 pub enum ChipVariant {
     Assist,
     Filter,
-    Input,
+    Entrada,
     Suggestion,
 }
 
@@ -449,7 +449,7 @@ pub enum Layout {
         gap: f64,
         alignment: String,
     },
-    ZStack(Vec<Layout>),
+    PilaZ(Vec<Layout>),
     Portal(Box<Layout>),
     Container {
         hijo: Box<Layout>,
@@ -522,7 +522,7 @@ pub enum Layout {
         texto: String,
         callback: String,
     },
-    TextInput {
+    EntradaTexto {
         variable: String,
         multiline: bool,
         placeholder: String,
@@ -577,7 +577,7 @@ pub enum Layout {
     FAB {
         icono: String,
         callback: String,
-        size: FabTamano,
+        tamano: FabTamano,
         texto_extendido: Option<String>,
     },
     IconButton {
@@ -601,7 +601,7 @@ pub enum Layout {
     },
 
     // ─── Inputs Material Design 3 ────────────────────────────────
-    MaterialTextField {
+    CampoTextoMaterial {
         variable: String,
         etiqueta: String,
         placeholder: String,
@@ -610,19 +610,19 @@ pub enum Layout {
         error: String,
         counter: bool,
     },
-    MaterialPasswordField {
+    CampoContrasenaMaterial {
         variable: String,
         etiqueta: String,
         visible: bool,
     },
-    MaterialNumberField {
+    CampoNumeroMaterial {
         variable: String,
         etiqueta: String,
         min: f64,
         max: f64,
         decimales: i32,
     },
-    MaterialSearchField {
+    CampoBusquedaMaterial {
         variable: String,
         placeholder: String,
     },
@@ -686,23 +686,23 @@ pub enum Layout {
         on_click: Option<String>,
         seleccionado: bool,
     },
-    MaterialListItem {
+    ElementoListaMaterial {
         leading: Option<Box<Layout>>,
         titulo: String,
         subtitulo: Option<String>,
         trailing: Option<Box<Layout>>,
         on_click: Option<String>,
     },
-    MaterialList {
+    ListaMaterial {
         items: Vec<Layout>,
         dividers: bool,
     },
-    MaterialListControl {
+    ControlListaMaterial {
         items: Vec<Layout>,
         control_tipo: String,
         variables: Vec<String>,
     },
-    MaterialListSelection {
+    SeleccionListaMaterial {
         items: Vec<Layout>,
         seleccion: Vec<bool>,
         callback: String,
@@ -710,7 +710,7 @@ pub enum Layout {
     },
     /// Lista dinámica: renderiza los items de una variable (JSON array)
     /// usando una función Forja como callback de render (lista_dinamica).
-    DynamicList {
+    ListaDinamica {
         variable: String,
         elemento_fn: String,
     },
@@ -726,7 +726,7 @@ pub enum Layout {
         expr: Box<Expresion>,
         params: HashMap<String, ValorGUI>,
     },
-    MaterialDataTable {
+    TablaDatosMaterial {
         columnas: Vec<String>,
         filas: Vec<Vec<String>>,
         ordenable: bool,
@@ -746,7 +746,7 @@ pub enum Layout {
     },
     /// Barra de progreso lineal con valor directo (para items de listas
     /// donde el valor viene de un mapa, ej: barra_progreso(item["porcentaje"])).
-    LinearProgressValue(f64),
+    ValorProgresoLineal(f64),
 
     // ─── Feedback y Superposiciones ──────────────────────────────
 
@@ -859,12 +859,12 @@ pub enum Layout {
         on_change: String,
         scrollable: bool,
     },
-    SearchBar {
+    BarraBusqueda {
         placeholder: String,
         on_buscar: String,
         variable: String,
     },
-    SearchView {
+    VistaBusqueda {
         query: String,
         resultados: Vec<Layout>,
         visible: String,
@@ -881,7 +881,7 @@ pub enum Layout {
     /// Círculo de progreso
     CircularProgress {
         variable: String,
-        size: f64,
+        tamano: f64,
         indeterminado: bool,
     },
     /// Badge (distintivo) sobre un hijo
@@ -971,7 +971,7 @@ pub enum Layout {
     // GRÁFICOS (Fase 9)
     // ═══════════════════════════════════════════════════════════════════
     /// Gráfico de líneas
-    LineChart {
+    GraficoLineas {
         datos: Vec<f64>,
         color: String,
         etiquetas: Vec<String>,
@@ -1042,7 +1042,7 @@ pub enum Layout {
         tamaño: f64,
     },
     /// Selector de archivos
-    FilePicker {
+    SelectorArchivo {
         tipos: Vec<String>,
         multiple: bool,
         callback: String,
@@ -1154,7 +1154,7 @@ fn layouts_de_bloque(
 }
 
 /// Cuántas llamadas a funciones de usuario se inlinean como máximo.
-const MAX_INLINE_LAYOUT: u8 = 8;
+const MAXIMO_LAYOUT_EN_LINEA: u8 = 8;
 
 /// Busca el cuerpo de una función de usuario (distinta de `main`).
 fn cuerpo_de_funcion<'a>(nombre: &str, decls: &'a [Declaracion]) -> Option<&'a Vec<Declaracion>> {
@@ -1219,7 +1219,7 @@ fn expandir_declaracion_layout(
 /// 1. `si (…) { … } sino { … }` → se evalúa la condición con el estado actual y
 ///    se expanden las sentencias de la rama elegida.
 /// 2. Llamada a una función de usuario (nombre que no es widget) → se inlinea el
-///    cuerpo, con tope [`MAX_INLINE_LAYOUT`] para no colgarse con recursión.
+///    cuerpo, con tope [`MAXIMO_LAYOUT_EN_LINEA`] para no colgarse con recursión.
 /// 3. Cualquier otra expresión se devuelve tal cual, expandiendo sus argumentos.
 fn expandir_expresion_layout(
     expr: &Expresion,
@@ -1258,7 +1258,7 @@ fn expandir_expresion_layout(
             // evaluarla: si devuelve un valor, se reemplaza la llamada por el
             // literal; si no (las llamadas a widgets no son evaluables), se inlinea
             // el cuerpo, que es lo que espera `expr_a_layout`.
-            if depth < MAX_INLINE_LAYOUT {
+            if depth < MAXIMO_LAYOUT_EN_LINEA {
                 if let Some(cuerpo) = cuerpo_de_funcion(nombre, decls) {
                     let args: Result<Vec<ValorGUI>, String> = argumentos
                         .iter()
@@ -1614,7 +1614,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    Some(Layout::TextInput {
+                    Some(Layout::EntradaTexto {
                         variable,
                         multiline: false,
                         placeholder,
@@ -1636,7 +1636,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    Some(Layout::TextInput {
+                    Some(Layout::EntradaTexto {
                         variable,
                         multiline: true,
                         placeholder,
@@ -1731,7 +1731,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     gap: 0.0,
                     alignment: "start".to_string(),
                 }),
-                "pila" | "gui_pila" | "zstack" => Some(Layout::ZStack(procesar_args(argumentos))),
+                "pila" | "gui_pila" | "zstack" => Some(Layout::PilaZ(procesar_args(argumentos))),
                 "desplazable" | "gui_desplazable" | "scroll" => argumentos
                     .first()
                     .and_then(expr_a_layout)
@@ -2182,7 +2182,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabTamano::Medium,
+                        tamano: FabTamano::Medium,
                         texto_extendido: None,
                     })
                 }
@@ -2192,7 +2192,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabTamano::Small,
+                        tamano: FabTamano::Small,
                         texto_extendido: None,
                     })
                 }
@@ -2202,7 +2202,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabTamano::Large,
+                        tamano: FabTamano::Large,
                         texto_extendido: None,
                     })
                 }
@@ -2213,7 +2213,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::FAB {
                         icono,
                         callback,
-                        size: FabTamano::Medium,
+                        tamano: FabTamano::Medium,
                         texto_extendido: Some(texto),
                     })
                 }
@@ -2367,7 +2367,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     Some(Layout::Chip {
                         texto,
                         callback: cb_fn,
-                        variant: ChipVariant::Input,
+                        variant: ChipVariant::Entrada,
                         activo: true,
                         on_quitar: Some(cb_clone),
                     })
@@ -2395,7 +2395,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     } else {
                         String::new()
                     };
-                    Some(Layout::MaterialTextField {
+                    Some(Layout::CampoTextoMaterial {
                         variable,
                         etiqueta,
                         placeholder: String::new(),
@@ -2408,7 +2408,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "campo_perfilado" => {
                     let variable = extraer_texto(argumentos, 0);
                     let etiqueta = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialTextField {
+                    Some(Layout::CampoTextoMaterial {
                         variable,
                         etiqueta,
                         placeholder: String::new(),
@@ -2421,7 +2421,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "campo_email" => {
                     let variable = extraer_texto(argumentos, 0);
                     let etiqueta = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialTextField {
+                    Some(Layout::CampoTextoMaterial {
                         variable,
                         etiqueta,
                         placeholder: "email@ejemplo.com".to_string(),
@@ -2434,7 +2434,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "campo_telefono" => {
                     let variable = extraer_texto(argumentos, 0);
                     let etiqueta = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialTextField {
+                    Some(Layout::CampoTextoMaterial {
                         variable,
                         etiqueta,
                         placeholder: "+54 11 1234-5678".to_string(),
@@ -2447,7 +2447,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "campo_url" => {
                     let variable = extraer_texto(argumentos, 0);
                     let etiqueta = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialTextField {
+                    Some(Layout::CampoTextoMaterial {
                         variable,
                         etiqueta,
                         placeholder: "https://".to_string(),
@@ -2460,7 +2460,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "campo_contraseña" | "campo_contrasena" => {
                     let variable = extraer_texto(argumentos, 0);
                     let etiqueta = extraer_texto(argumentos, 1);
-                    Some(Layout::MaterialPasswordField {
+                    Some(Layout::CampoContrasenaMaterial {
                         variable,
                         etiqueta,
                         visible: false,
@@ -2471,7 +2471,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let etiqueta = extraer_texto(argumentos, 1);
                     let min = extraer_f64(argumentos, 2);
                     let max = extraer_f64(argumentos, 3);
-                    Some(Layout::MaterialNumberField {
+                    Some(Layout::CampoNumeroMaterial {
                         variable,
                         etiqueta,
                         min,
@@ -2481,7 +2481,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 }
                 "campo_busqueda" | "campo_search" => {
                     let variable = extraer_texto(argumentos, 0);
-                    Some(Layout::MaterialSearchField {
+                    Some(Layout::CampoBusquedaMaterial {
                         variable,
                         placeholder: "Buscar...".to_string(),
                     })
@@ -2642,7 +2642,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let leading = argumentos.first().and_then(expr_a_layout).map(Box::new);
                     let titulo = extraer_texto(argumentos, 1);
                     let trailing = argumentos.get(2).and_then(expr_a_layout).map(Box::new);
-                    Some(Layout::MaterialListItem {
+                    Some(Layout::ElementoListaMaterial {
                         leading,
                         titulo,
                         subtitulo: None,
@@ -2655,7 +2655,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let titulo = extraer_texto(argumentos, 1);
                     let subtitulo = Some(extraer_texto(argumentos, 2));
                     let trailing = argumentos.get(3).and_then(expr_a_layout).map(Box::new);
-                    Some(Layout::MaterialListItem {
+                    Some(Layout::ElementoListaMaterial {
                         leading,
                         titulo,
                         subtitulo,
@@ -2671,7 +2671,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or_default();
-                    Some(Layout::MaterialList {
+                    Some(Layout::ListaMaterial {
                         items,
                         dividers: false,
                     })
@@ -2684,7 +2684,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => None,
                         })
                         .unwrap_or_default();
-                    Some(Layout::MaterialList {
+                    Some(Layout::ListaMaterial {
                         items,
                         dividers: true,
                     })
@@ -2699,7 +2699,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         .unwrap_or_default();
                     let control_tipo = extraer_texto(argumentos, 1);
                     let variables = extraer_array_strings(argumentos, 2);
-                    Some(Layout::MaterialListControl {
+                    Some(Layout::ControlListaMaterial {
                         items,
                         control_tipo,
                         variables,
@@ -2715,7 +2715,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         .unwrap_or_default();
                     let seleccion = extraer_array_bool(argumentos, 1);
                     let callback = extraer_callback(argumentos, 2);
-                    Some(Layout::MaterialListSelection {
+                    Some(Layout::SeleccionListaMaterial {
                         items,
                         seleccion,
                         callback,
@@ -2737,7 +2737,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                             _ => String::new(),
                         })
                         .unwrap_or_default();
-                    Some(Layout::DynamicList {
+                    Some(Layout::ListaDinamica {
                         variable,
                         elemento_fn,
                     })
@@ -2747,7 +2747,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "tabla_datos" | "data_table" => {
                     let columnas = extraer_array_strings(argumentos, 0);
                     let filas = extraer_array_arrays_strings(argumentos, 1);
-                    Some(Layout::MaterialDataTable {
+                    Some(Layout::TablaDatosMaterial {
                         columnas,
                         filas,
                         ordenable: false,
@@ -2759,7 +2759,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "tabla_ordenable" | "sortable_table" => {
                     let columnas = extraer_array_strings(argumentos, 0);
                     let filas = extraer_array_arrays_strings(argumentos, 1);
-                    Some(Layout::MaterialDataTable {
+                    Some(Layout::TablaDatosMaterial {
                         columnas,
                         filas,
                         ordenable: true,
@@ -2771,7 +2771,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "tabla_seleccion" | "selectable_table" => {
                     let columnas = extraer_array_strings(argumentos, 0);
                     let filas = extraer_array_arrays_strings(argumentos, 1);
-                    Some(Layout::MaterialDataTable {
+                    Some(Layout::TablaDatosMaterial {
                         columnas,
                         filas,
                         ordenable: false,
@@ -3177,7 +3177,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 "barra_busqueda" | "search_bar_widget" => {
                     let placeholder = extraer_texto(argumentos, 0);
                     let variable = extraer_texto(argumentos, 1);
-                    Some(Layout::SearchBar {
+                    Some(Layout::BarraBusqueda {
                         placeholder,
                         on_buscar: String::new(),
                         variable,
@@ -3218,7 +3218,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                 // ─── CircularProgress ────────────────────────────────
                 "circulo_progreso" | "circular_progress" => {
                     let variable = extraer_texto(argumentos, 0);
-                    let size = argumentos
+                    let tamano = argumentos
                         .get(1)
                         .and_then(|a| match a {
                             Expresion::LiteralNumero(n) => Some(*n as f64),
@@ -3228,12 +3228,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         .unwrap_or(40.0);
                     Some(Layout::CircularProgress {
                         variable,
-                        size,
+                        tamano,
                         indeterminado: false,
                     })
                 }
                 "circulo_progreso_indeterminado" | "circular_progress_indeterminate" => {
-                    let size = argumentos
+                    let tamano = argumentos
                         .first()
                         .and_then(|a| match a {
                             Expresion::LiteralNumero(n) => Some(*n as f64),
@@ -3243,7 +3243,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                         .unwrap_or(40.0);
                     Some(Layout::CircularProgress {
                         variable: String::new(),
-                        size,
+                        tamano,
                         indeterminado: true,
                     })
                 }
@@ -3553,7 +3553,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let datos = extraer_array_f64(argumentos, 0);
                     let etiquetas = extraer_array_strings(argumentos, 1);
                     let color = extraer_texto(argumentos, 2);
-                    Some(Layout::LineChart {
+                    Some(Layout::GraficoLineas {
                         datos,
                         color: if color.is_empty() {
                             "primary".to_string()
@@ -3715,7 +3715,7 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                     let tipos = extraer_array_strings(argumentos, 0);
                     let multiple = extraer_booleano(argumentos, 1);
                     let callback = extraer_callback(argumentos, 2);
-                    Some(Layout::FilePicker {
+                    Some(Layout::SelectorArchivo {
                         tipos,
                         multiple,
                         callback,
@@ -4176,7 +4176,7 @@ pub(crate) fn expresion_a_layout_elemento(
                             expresion_a_layout_elemento(a, params, almacen, declaraciones)
                         })
                         .map(Box::new);
-                    Some(Layout::MaterialListItem {
+                    Some(Layout::ElementoListaMaterial {
                         leading,
                         titulo,
                         subtitulo,
@@ -4268,7 +4268,7 @@ pub(crate) fn expresion_a_layout_elemento(
                         .and_then(|a| expr_a_valor(a, params, almacen, declaraciones))
                         .map(|v| v.to_f64())
                         .unwrap_or(0.0);
-                    Some(Layout::LinearProgressValue(val))
+                    Some(Layout::ValorProgresoLineal(val))
                 }
                 _ => expr_a_layout(expr),
             }
@@ -4312,7 +4312,7 @@ fn estimate_hijo_ancho(layout: &Layout) -> Option<f64> {
         Layout::Label { texto, .. } => Some((texto.len() as f64) * 8.0),
         Layout::MaterialCard { .. } => Some(300.0),
         Layout::Container { max_ancho, .. } => Some(*max_ancho),
-        Layout::MaterialListItem { .. } => Some(280.0),
+        Layout::ElementoListaMaterial { .. } => Some(280.0),
         Layout::Row { gap, .. } => Some(200.0 + gap),
         Layout::Column { gap, .. } => Some(200.0 + gap),
         _ => None,
@@ -4394,7 +4394,7 @@ pub fn layout_a_vista<'a>(
             let flex_eligible = children.iter().all(|h| {
                 matches!(
                     h,
-                    Layout::MaterialCard { .. } | Layout::MaterialListItem { .. }
+                    Layout::MaterialCard { .. } | Layout::ElementoListaMaterial { .. }
                 )
             });
             if flex_eligible && !children.is_empty() && children.len() <= 3 {
@@ -4453,7 +4453,7 @@ pub fn layout_a_vista<'a>(
                     .gap(Length::px(*gap)),
             )
         }
-        Layout::ZStack(hijos) => {
+        Layout::PilaZ(hijos) => {
             let mut widgets: Vec<Box<AnyWidgetView<AppStateNativo>>> = Vec::new();
             for h in hijos {
                 widgets.push(layout_a_vista(h, data, _prog, theme));
@@ -4535,7 +4535,7 @@ pub fn layout_a_vista<'a>(
             // Nota: xilem 0.4 text_button no expone color de fondo directamente;
             // el color primario se aplica donde la API lo permita
         }
-        Layout::TextInput {
+        Layout::EntradaTexto {
             variable,
             multiline: _,
             placeholder,
@@ -5022,12 +5022,12 @@ pub fn layout_a_vista<'a>(
         Layout::FAB {
             icono,
             callback,
-            size,
+            tamano,
             texto_extendido,
         } => crate::widgets::material_buttons::render_fab(
             icono,
             callback,
-            size,
+            tamano,
             texto_extendido,
             data,
             _prog,
@@ -5111,7 +5111,7 @@ pub fn layout_a_vista<'a>(
                         )
                     }
                 }
-                ChipVariant::Input => crear_chip_button(
+                ChipVariant::Entrada => crear_chip_button(
                     texto,
                     ColoresBoton {
                         fg: scheme.on_secondary_container.into(),
@@ -5129,7 +5129,7 @@ pub fn layout_a_vista<'a>(
         // ─── Inputs Material Design 3 ──────────────────────────────────
 
         // ─── MaterialTextField ─────────────────────────────────────────
-        Layout::MaterialTextField {
+        Layout::CampoTextoMaterial {
             variable,
             etiqueta,
             placeholder,
@@ -5151,7 +5151,7 @@ pub fn layout_a_vista<'a>(
         ),
 
         // ─── MaterialPasswordField ─────────────────────────────────────
-        Layout::MaterialPasswordField {
+        Layout::CampoContrasenaMaterial {
             variable,
             etiqueta,
             visible: _,
@@ -5160,7 +5160,7 @@ pub fn layout_a_vista<'a>(
         ),
 
         // ─── MaterialNumberField ───────────────────────────────────────
-        Layout::MaterialNumberField {
+        Layout::CampoNumeroMaterial {
             variable,
             etiqueta,
             min,
@@ -5171,7 +5171,7 @@ pub fn layout_a_vista<'a>(
         ),
 
         // ─── MaterialSearchField ───────────────────────────────────────
-        Layout::MaterialSearchField {
+        Layout::CampoBusquedaMaterial {
             variable,
             placeholder,
         } => crate::widgets::material_inputs::render_buscar_campo(
@@ -5307,7 +5307,7 @@ pub fn layout_a_vista<'a>(
             theme,
         ),
 
-        Layout::MaterialListItem {
+        Layout::ElementoListaMaterial {
             leading,
             titulo,
             subtitulo,
@@ -5317,17 +5317,17 @@ pub fn layout_a_vista<'a>(
             leading, titulo, subtitulo, trailing, data, _prog, theme,
         ),
 
-        Layout::MaterialList { items, dividers } => {
+        Layout::ListaMaterial { items, dividers } => {
             crate::widgets::material_cards::render_lista(items, dividers, data, _prog, theme)
         }
 
-        Layout::MaterialListControl {
+        Layout::ControlListaMaterial {
             items,
             control_tipo: _,
             variables: _,
         } => crate::widgets::material_cards::render_lista_control(items, data, _prog, theme),
 
-        Layout::MaterialListSelection {
+        Layout::SeleccionListaMaterial {
             items,
             seleccion: _,
             callback: _,
@@ -5340,7 +5340,7 @@ pub fn layout_a_vista<'a>(
         // render_dynamic_list usa expr_a_layout_item → Box<AnyWidgetView>, la virtualización
         // directa no es compatible sin un wrapper intermedio. Se documenta para futura
         // migración cuando xilem soporte virtual_scroll con type erasure.
-        Layout::DynamicList {
+        Layout::ListaDinamica {
             variable,
             elemento_fn,
         } => crate::widgets::material_cards::render_dynamic_lista(
@@ -5351,7 +5351,7 @@ pub fn layout_a_vista<'a>(
             theme,
         ),
 
-        Layout::MaterialDataTable {
+        Layout::TablaDatosMaterial {
             columnas,
             filas,
             ordenable,
@@ -5393,7 +5393,7 @@ pub fn layout_a_vista<'a>(
             // Detectar cambio y animar progreso
             data.anim_visibility_changed(visible, show);
             let progress = data.anim_progress(visible, 200.0);
-            let eased = EASE_EMPHASIZED.apply(progress);
+            let eased = EASE_EMPHASIZED.aplicar(progress);
 
             if show || progress > 0.0 {
                 let inner = layout_a_vista(dialog, data, _prog, theme);
@@ -5591,7 +5591,7 @@ pub fn layout_a_vista<'a>(
             // Detectar cambio y animar
             data.anim_visibility_changed(visible, show);
             let progress = data.anim_progress(visible, 250.0);
-            let eased = EASE_EMPHASIZED.apply(progress);
+            let eased = EASE_EMPHASIZED.aplicar(progress);
 
             if show || progress > 0.0 {
                 let scheme = &theme.scheme;
@@ -5948,7 +5948,7 @@ pub fn layout_a_vista<'a>(
         }
 
         // ─── SearchBar ───────────────────────────────────────────────
-        Layout::SearchBar {
+        Layout::BarraBusqueda {
             placeholder,
             on_buscar: _,
             variable,
@@ -5957,7 +5957,7 @@ pub fn layout_a_vista<'a>(
         }
 
         // ─── SearchView ──────────────────────────────────────────────
-        Layout::SearchView {
+        Layout::VistaBusqueda {
             query: _,
             resultados,
             visible,
@@ -5982,18 +5982,18 @@ pub fn layout_a_vista<'a>(
         ),
 
         // ─── LinearProgressValue: barra con valor directo (items de lista) ──
-        Layout::LinearProgressValue(val) => {
+        Layout::ValorProgresoLineal(val) => {
             crate::widgets::indicators::render_linear_progress_valor(val, theme)
         }
 
         // ─── CircularProgress ────────────────────────────────────────
         Layout::CircularProgress {
             variable,
-            size,
+            tamano,
             indeterminado,
         } => crate::widgets::indicators::render_circular_progress(
             variable,
-            size,
+            tamano,
             indeterminado,
             data,
             _prog,
@@ -6062,7 +6062,7 @@ pub fn layout_a_vista<'a>(
             data.anim_visibility_changed(visible, show);
             let d = if *duracion > 0.0 { *duracion } else { 200.0 };
             let progress = data.anim_progress(visible, d);
-            let eased = EASE_STANDARD.apply(progress);
+            let eased = EASE_STANDARD.aplicar(progress);
 
             if show || progress > 0.0 {
                 let inner = layout_a_vista(hijo, data, _prog, theme);
@@ -6210,7 +6210,7 @@ pub fn layout_a_vista<'a>(
         // Usa widgets Masonry personalizados con View wrappers Xilem.
 
         // ─── LineChart ────────────────────────────────────────────────
-        Layout::LineChart {
+        Layout::GraficoLineas {
             datos,
             color,
             etiquetas,
@@ -6751,7 +6751,7 @@ pub fn layout_a_vista<'a>(
         }
 
         // ─── FilePicker (con rfd) ─────────────────────────────────────
-        Layout::FilePicker {
+        Layout::SelectorArchivo {
             tipos,
             multiple: _,
             callback,
@@ -7083,18 +7083,18 @@ use std::marker::PhantomData;
 
 // Almacena el ancho y alto actuales de la ventana para que la función de vista lo lea.
 thread_local! {
-    static WINDOW_WIDTH_TL: Cell<f64> = const { Cell::new(800.0) };
-    static WINDOW_HEIGHT_TL: Cell<f64> = const { Cell::new(600.0) };
+    static ANCHO_VENTANA_TL: Cell<f64> = const { Cell::new(800.0) };
+    static ALTO_VENTANA_TL: Cell<f64> = const { Cell::new(600.0) };
 }
 
 /// Obtiene el ancho de ventana almacenado en el thread-local.
 pub fn actual_ventana_ancho() -> f64 {
-    WINDOW_WIDTH_TL.with(|w| w.get())
+    ANCHO_VENTANA_TL.with(|w| w.get())
 }
 
 /// Obtiene el alto de ventana almacenado en el thread-local.
 pub fn actual_ventana_alto() -> f64 {
-    WINDOW_HEIGHT_TL.with(|h| h.get())
+    ALTO_VENTANA_TL.with(|h| h.get())
 }
 
 /// Widget Masonry que observa el ancho disponible durante el layout
@@ -7167,8 +7167,8 @@ impl Widget for VentanaAnchoProbe {
 
     fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
         // Guardar el ancho y alto resueltos en el thread-local
-        WINDOW_WIDTH_TL.with(|w| w.set(size.width));
-        WINDOW_HEIGHT_TL.with(|h| h.set(size.height));
+        ANCHO_VENTANA_TL.with(|w| w.set(size.width));
+        ALTO_VENTANA_TL.with(|h| h.set(size.height));
 
         // Layout del hijo ocupando todo el espacio disponible
         if let Some(hijo) = self.hijo.as_mut() {
@@ -7411,8 +7411,8 @@ pub fn construir_y_ejecutar(
     let initial_ancho: f64 = config.ancho;
     let initial_alto: f64 = config.alto;
     state.actualizar_ventana_tamano(initial_ancho, initial_alto);
-    WINDOW_WIDTH_TL.with(|w| w.set(initial_ancho));
-    WINDOW_HEIGHT_TL.with(|h| h.set(initial_alto));
+    ANCHO_VENTANA_TL.with(|w| w.set(initial_ancho));
+    ALTO_VENTANA_TL.with(|h| h.set(initial_alto));
     if depuracion_activo() {
         println!(
             "  📐 Clase de tamaño inicial: {:?} ({:.0}px)",
@@ -7501,8 +7501,8 @@ pub fn construir_y_ejecutar_android(
     let initial_ancho: f64 = 1200.0;
     let initial_alto: f64 = 800.0;
     state.actualizar_ventana_tamano(initial_ancho, initial_alto);
-    WINDOW_WIDTH_TL.with(|w| w.set(initial_ancho));
-    WINDOW_HEIGHT_TL.with(|h| h.set(initial_alto));
+    ANCHO_VENTANA_TL.with(|w| w.set(initial_ancho));
+    ALTO_VENTANA_TL.with(|h| h.set(initial_alto));
 
     let app = Xilem::new_simple(
         state,

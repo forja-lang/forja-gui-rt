@@ -159,7 +159,7 @@ pub(crate) fn render_skeleton(
     let radius = match tipo {
         "circulo" => ancho / 2.0,
         "tarjeta" => theme.shapes.for_family(FormaFamily::Container),
-        _ => theme.shapes.for_family(FormaFamily::TextField),
+        _ => theme.shapes.for_family(FormaFamily::CampoTexto),
     };
     Box::new(
         view::sized_box(view::label(String::new()))

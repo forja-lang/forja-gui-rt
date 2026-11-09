@@ -330,7 +330,7 @@ pub(crate) fn render_data_tabla(
     let header_container = Box::new(
         view::sized_box(header_row)
             .background(Background::Color(bg_header))
-            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
     );
 
     // Body rows

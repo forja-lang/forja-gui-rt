@@ -145,11 +145,11 @@ impl ValorGUI {
                 .unwrap_or(serde_json::Value::Null),
             ValorGUI::Booleano(b) => serde_json::Value::Bool(*b),
             ValorGUI::Mapa(m) => {
-                let mut map = serde_json::Map::new();
+                let mut mapa = serde_json::Map::new();
                 for (k, v) in m {
-                    map.insert(k.clone(), v.to_json_valor());
+                    mapa.insert(k.clone(), v.to_json_valor());
                 }
-                serde_json::Value::Object(map)
+                serde_json::Value::Object(mapa)
             }
             ValorGUI::Nulo => serde_json::Value::Null,
         }
@@ -186,8 +186,8 @@ impl ValorGUI {
     /// Para arrays pequeños (≤10 elems), también preserva como Mapa con claves numéricas.
     pub fn from_serde_lazy(val: &serde_json::Value) -> Self {
         match val {
-            serde_json::Value::Object(map) => {
-                let inner: HashMap<String, ValorGUI> = map
+            serde_json::Value::Object(mapa) => {
+                let inner: HashMap<String, ValorGUI> = mapa
                     .iter()
                     .map(|(k, v)| (k.clone(), ValorGUI::from_serde(v)))
                     .collect();
@@ -197,12 +197,12 @@ impl ValorGUI {
                 if arr.len() <= 10 {
                     let inner: Vec<ValorGUI> = arr.iter().map(ValorGUI::from_serde).collect();
                     // Usar Mapa con claves numéricas como workaround para arrays pequeños
-                    let map: HashMap<String, ValorGUI> = inner
+                    let mapa: HashMap<String, ValorGUI> = inner
                         .into_iter()
                         .enumerate()
                         .map(|(i, v)| (i.to_string(), v))
                         .collect();
-                    ValorGUI::Mapa(map)
+                    ValorGUI::Mapa(mapa)
                 } else {
                     // Arrays grandes: serializar a JSON string (comportamiento original)
                     let json_str = val.to_string();
@@ -313,10 +313,10 @@ impl Ambito {
 /// Registro de funciones nativas: nombre → implementación
 /// El segundo argumento `&mut VariableStore` permite a las funciones nativas
 /// leer/escribir variables del store (útil para SQLite, callbacks, etc.).
-type NativeFn = fn(&[ValorGUI], &mut VariableAlmacen) -> Result<ValorGUI, String>;
+type FuncionNativa = fn(&[ValorGUI], &mut VariableAlmacen) -> Result<ValorGUI, String>;
 
-fn obtener_nativas() -> HashMap<&'static str, NativeFn> {
-    let mut m: HashMap<&'static str, NativeFn> = HashMap::new();
+fn obtener_nativas() -> HashMap<&'static str, FuncionNativa> {
+    let mut m: HashMap<&'static str, FuncionNativa> = HashMap::new();
     m.insert("timestamp", nativa_timestamp);
     m.insert("fecha_desde_timestamp", nativa_fecha_desde_timestamp);
     m.insert("_fecha_desde_timestamp", nativa_fecha_desde_timestamp);
@@ -614,7 +614,7 @@ fn nativa_empujar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<V
 
 /// Heap global de conexiones SQLite (envueltas en Arc<Mutex<>>).
 /// Cada conexión se almacena como `Option` para permitir cerrado lógico.
-static SQLITE_HEAP: Mutex<Vec<Option<Arc<Mutex<Connection>>>>> = Mutex::new(Vec::new());
+static MONTICULO_SQLITE: Mutex<Vec<Option<Arc<Mutex<Connection>>>>> = Mutex::new(Vec::new());
 
 /// Extrae un índice entero de un ValorGUI, aceptando Entero y Decimal.
 fn extraer_indice(valor: &ValorGUI, nombre_fn: &str) -> Result<usize, String> {
@@ -631,7 +631,7 @@ fn extraer_indice(valor: &ValorGUI, nombre_fn: &str) -> Result<usize, String> {
 
 /// Obtiene una conexión del heap por índice (retorna Arc clonado).
 fn sqlite_obtener_conn(idx: usize) -> Result<Arc<Mutex<Connection>>, String> {
-    let monticulo = SQLITE_HEAP
+    let monticulo = MONTICULO_SQLITE
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
     if idx >= monticulo.len() {
@@ -688,11 +688,11 @@ fn args_a_params(val: &ValorGUI) -> Result<Vec<Box<dyn rusqlite::types::ToSql>>,
                 })?
             } else {
                 // Fallback: serializar como objeto
-                let map: serde_json::Map<String, serde_json::Value> = m
+                let mapa: serde_json::Map<String, serde_json::Value> = m
                     .iter()
                     .map(|(k, v)| (k.clone(), v.to_json_valor()))
                     .collect();
-                serde_json::to_string(&serde_json::Value::Object(map))
+                serde_json::to_string(&serde_json::Value::Object(mapa))
                     .map_err(|e| format!("sqlite_error: no se pudo serializar mapa: {}", e))?
             }
         }
@@ -737,7 +737,7 @@ fn sqlite_abrir(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<Val
         _ => return Err("_sqlite_abrir(ruta) requiere 1 argumento: ruta (texto)".to_string()),
     };
     let conn = Connection::open(&ruta).map_err(|e| format!("sqlite_error_apertura: {}", e))?;
-    let mut monticulo = SQLITE_HEAP
+    let mut monticulo = MONTICULO_SQLITE
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
     let idx = monticulo.len() as i64;
@@ -751,7 +751,7 @@ fn sqlite_cerrar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<Va
         Some(v) => extraer_indice(v, "_sqlite_cerrar")?,
         None => return Err("_sqlite_cerrar(indice) requiere 1 argumento: entero".to_string()),
     };
-    let mut monticulo = SQLITE_HEAP
+    let mut monticulo = MONTICULO_SQLITE
         .lock()
         .map_err(|e| format!("sqlite_error_interno: {}", e))?;
     if idx < monticulo.len() {
@@ -826,11 +826,11 @@ fn sqlite_consultar(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result
     let json_rows: Vec<serde_json::Value> = rows_data
         .into_iter()
         .map(|row| {
-            let mut map = serde_json::Map::new();
+            let mut mapa = serde_json::Map::new();
             for (name, val) in row {
-                map.insert(name, sqlite_valor_a_json(val));
+                mapa.insert(name, sqlite_valor_a_json(val));
             }
-            serde_json::Value::Object(map)
+            serde_json::Value::Object(mapa)
         })
         .collect();
 
@@ -938,11 +938,11 @@ fn sqlite_consultar_params(
     let json_rows: Vec<serde_json::Value> = rows_data
         .into_iter()
         .map(|row| {
-            let mut map = serde_json::Map::new();
+            let mut mapa = serde_json::Map::new();
             for (name, val) in row {
-                map.insert(name, sqlite_valor_a_json(val));
+                mapa.insert(name, sqlite_valor_a_json(val));
             }
-            serde_json::Value::Object(map)
+            serde_json::Value::Object(mapa)
         })
         .collect();
 
@@ -1018,20 +1018,20 @@ fn sqlite_columnas(args: &[ValorGUI], _almacen: &mut VariableAlmacen) -> Result<
     let json_rows: Vec<serde_json::Value> = cols
         .into_iter()
         .map(|(cid, nombre, tipo, not_null, default, pk)| {
-            let mut map = serde_json::Map::new();
-            map.insert("cid".to_string(), serde_json::Value::Number(cid.into()));
-            map.insert("nombre".to_string(), serde_json::Value::String(nombre));
-            map.insert("tipo".to_string(), serde_json::Value::String(tipo));
-            map.insert("not_null".to_string(), serde_json::Value::Bool(not_null));
-            map.insert(
+            let mut mapa = serde_json::Map::new();
+            mapa.insert("cid".to_string(), serde_json::Value::Number(cid.into()));
+            mapa.insert("nombre".to_string(), serde_json::Value::String(nombre));
+            mapa.insert("tipo".to_string(), serde_json::Value::String(tipo));
+            mapa.insert("not_null".to_string(), serde_json::Value::Bool(not_null));
+            mapa.insert(
                 "default".to_string(),
                 match default {
                     Some(d) => serde_json::Value::String(d),
                     None => serde_json::Value::Null,
                 },
             );
-            map.insert("pk".to_string(), serde_json::Value::Number(pk.into()));
-            serde_json::Value::Object(map)
+            mapa.insert("pk".to_string(), serde_json::Value::Number(pk.into()));
+            serde_json::Value::Object(mapa)
         })
         .collect();
 
@@ -1407,12 +1407,12 @@ fn evaluar_declaracion(
                         ambito.asignar(nombre.to_string(), ValorGUI::Mapa(m));
                     }
                     ValorGUI::Texto(s) => {
-                        if let Ok(serde_json::Value::Object(mut map)) =
+                        if let Ok(serde_json::Value::Object(mut mapa)) =
                             serde_json::from_str::<serde_json::Value>(&s)
                         {
-                            map.insert(idx_val.to_display(), val.to_json_valor());
+                            mapa.insert(idx_val.to_display(), val.to_json_valor());
                             if let Ok(nuevo) =
-                                serde_json::to_string(&serde_json::Value::Object(map))
+                                serde_json::to_string(&serde_json::Value::Object(mapa))
                             {
                                 ambito.asignar(nombre.to_string(), ValorGUI::Texto(nuevo));
                             }
@@ -1451,7 +1451,7 @@ fn evaluar_declaracion(
             // Manejar nombres con punto: "objeto.metodo" → método(objeto, args...)
             if let Some(dot_pos) = nombre.find('.') {
                 let obj_name = &nombre[..dot_pos];
-                let method = &nombre[dot_pos + 1..];
+                let metodo = &nombre[dot_pos + 1..];
                 let obj_val = if let Some(val) = ambito.obtener(obj_name) {
                     val.clone()
                 } else if let Some(json_val) = almacen.obtener(obj_name) {
@@ -1461,9 +1461,9 @@ fn evaluar_declaracion(
                 };
                 let mut metodo_args = vec![obj_val];
                 metodo_args.extend(args);
-                let resultado = ejecutar_funcion(method, &metodo_args, declaraciones, almacen)?;
+                let resultado = ejecutar_funcion(metodo, &metodo_args, declaraciones, almacen)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
-                if method == "empujar" {
+                if metodo == "empujar" {
                     ambito.asignar(obj_name.to_string(), resultado.clone());
                     almacen.fijar(obj_name, resultado.to_json_valor());
                 }
@@ -1604,7 +1604,7 @@ fn evaluar_expresion(
             // luego llamar al método (la parte después del punto).
             if let Some(dot_pos) = nombre.find('.') {
                 let obj_name = &nombre[..dot_pos];
-                let method = &nombre[dot_pos + 1..];
+                let metodo = &nombre[dot_pos + 1..];
                 let obj_val = if let Some(val) = ambito.obtener(obj_name) {
                     val.clone()
                 } else if let Some(json_val) = almacen.obtener(obj_name) {
@@ -1614,9 +1614,9 @@ fn evaluar_expresion(
                 };
                 let mut metodo_args = vec![obj_val];
                 metodo_args.extend(args);
-                let resultado = ejecutar_funcion(method, &metodo_args, declaraciones, almacen)?;
+                let resultado = ejecutar_funcion(metodo, &metodo_args, declaraciones, almacen)?;
                 // Métodos que mutan (ej: params.empujar): actualizar variable original
-                if method == "empujar" {
+                if metodo == "empujar" {
                     ambito.asignar(obj_name.to_string(), resultado.clone());
                     almacen.fijar(obj_name, resultado.to_json_valor());
                 }
@@ -1673,13 +1673,13 @@ fn evaluar_expresion(
 
         // ── Mapa literal ──────────────────────────────────────
         Expresion::Mapa(pares) => {
-            let mut map = serde_json::Map::new();
+            let mut mapa = serde_json::Map::new();
             for (k, v) in pares {
                 let clave_val = evaluar_expresion(k, ambito, almacen, declaraciones)?;
                 let val = evaluar_expresion(v, ambito, almacen, declaraciones)?;
-                map.insert(clave_val.to_display(), val.to_json_valor());
+                mapa.insert(clave_val.to_display(), val.to_json_valor());
             }
-            let json_str = serde_json::to_string(&serde_json::Value::Object(map))
+            let json_str = serde_json::to_string(&serde_json::Value::Object(mapa))
                 .map_err(|e| format!("Error serializando mapa: {}", e))?;
             Ok(ValorGUI::Texto(json_str))
         }
@@ -1729,10 +1729,10 @@ fn evaluar_expresion(
                 }
                 ValorGUI::Texto(clave) => {
                     // Acceso a mapa por clave string (ej: filtros["tipo"])
-                    if let Ok(serde_json::Value::Object(map)) =
+                    if let Ok(serde_json::Value::Object(mapa)) =
                         serde_json::from_str::<serde_json::Value>(&obj_str)
                     {
-                        match map.get(&clave) {
+                        match mapa.get(&clave) {
                             Some(val) => Ok(ValorGUI::from_serde(val)),
                             None => Ok(ValorGUI::Nulo),
                         }
@@ -1850,12 +1850,12 @@ fn evaluar_expresion(
                                 ambito.asignar(nombre.clone(), ValorGUI::Mapa(m));
                             }
                             ValorGUI::Texto(s) => {
-                                if let Ok(serde_json::Value::Object(mut map)) =
+                                if let Ok(serde_json::Value::Object(mut mapa)) =
                                     serde_json::from_str::<serde_json::Value>(&s)
                                 {
-                                    map.insert(idx_val.to_display(), val.to_json_valor());
+                                    mapa.insert(idx_val.to_display(), val.to_json_valor());
                                     if let Ok(nuevo) =
-                                        serde_json::to_string(&serde_json::Value::Object(map))
+                                        serde_json::to_string(&serde_json::Value::Object(mapa))
                                     {
                                         ambito.asignar(nombre.clone(), ValorGUI::Texto(nuevo));
                                     }

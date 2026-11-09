@@ -18,7 +18,7 @@ use xilem::winit::platform::windows::Color as WinitColor;
 /// - Fluent → Mica (`DWMSBT_MAINWINDOW`).
 /// - Liquid Glass / Material You → sin material (pintan su propio fondo).
 #[cfg(target_os = "windows")]
-pub fn aplicar_chrome<S>(options: WindowOptions<S>, theme: &MaterialTheme) -> WindowOptions<S> {
+pub fn aplicar_chrome<S>(opciones: WindowOptions<S>, theme: &MaterialTheme) -> WindowOptions<S> {
     use xilem::winit::platform::windows::{BackdropType, CornerPreference};
     use xilem::WindowOptionsExtWindows;
 
@@ -30,7 +30,7 @@ pub fn aplicar_chrome<S>(options: WindowOptions<S>, theme: &MaterialTheme) -> Wi
     let coincide_con_sistema = theme.es_dark == crate::theme::es_system_dark();
     let con_mica = theme.design == DesignStyle::Fluent && coincide_con_sistema;
 
-    let options = options
+    let opciones = opciones
         .with_corner_preference(CornerPreference::Round)
         .with_system_backdrop(if con_mica {
             BackdropType::MainWindow
@@ -41,21 +41,21 @@ pub fn aplicar_chrome<S>(options: WindowOptions<S>, theme: &MaterialTheme) -> Wi
     // queda demasiado claro). `Color` de winit es u32 en formato 0x00BBGGRR.
     let c = theme.scheme.outline_variant;
     let borde = WinitColor::from_rgb(c.0, c.1, c.2);
-    let options = options.with_border_color(Some(borde));
+    let opciones = opciones.with_border_color(Some(borde));
 
     if !con_mica {
         let fondo = theme.scheme.background;
         let texto = theme.scheme.on_surface;
-        return options
+        return opciones
             .with_title_background_color(Some(WinitColor::from_rgb(fondo.0, fondo.1, fondo.2)))
             .with_title_text_color(WinitColor::from_rgb(texto.0, texto.1, texto.2));
     }
-    options
+    opciones
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn aplicar_chrome<S>(options: WindowOptions<S>, _theme: &MaterialTheme) -> WindowOptions<S> {
-    options
+pub fn aplicar_chrome<S>(opciones: WindowOptions<S>, _theme: &MaterialTheme) -> WindowOptions<S> {
+    opciones
 }
 
 /// `true` si la plataforma pinta el fondo con un material del sistema (Mica).

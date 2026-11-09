@@ -74,7 +74,7 @@ pub(crate) fn render_texto_campo(
     }
 
     // Aplicar colores según variante
-    let input_widget = match variant {
+    let widget_entrada = match variant {
         TextoCampoVariant::Filled => {
             let (bg, borde, ancho) = superficie_campo(theme);
             Box::new(
@@ -82,7 +82,7 @@ pub(crate) fn render_texto_campo(
                     .background(Background::Color(bg))
                     .border_color(borde)
                     .border_width(ancho.px())
-                    .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                    .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
             ) as Box<AnyWidgetView<AppStateNativo>>
         }
         TextoCampoVariant::Outlined => {
@@ -98,14 +98,14 @@ pub(crate) fn render_texto_campo(
                         .border_color(border)
                         .border_width(1.0.px())
                         .background(Background::Color(bg))
-                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>
             } else {
                 Box::new(
                     view::sized_box(ti)
                         .border_color(border)
                         .border_width(1.0.px())
-                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
                 ) as Box<AnyWidgetView<AppStateNativo>>
             }
         }
@@ -120,11 +120,11 @@ pub(crate) fn render_texto_campo(
         match etiqueta_widget {
             Some(lw) => vec![
                 Box::new(lw) as Box<AnyWidgetView<AppStateNativo>>,
-                input_widget,
+                widget_entrada,
                 Box::new(err_etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
             ],
             None => vec![
-                input_widget,
+                widget_entrada,
                 Box::new(err_etiqueta) as Box<AnyWidgetView<AppStateNativo>>,
             ],
         }
@@ -132,9 +132,9 @@ pub(crate) fn render_texto_campo(
         match etiqueta_widget {
             Some(lw) => vec![
                 Box::new(lw) as Box<AnyWidgetView<AppStateNativo>>,
-                input_widget,
+                widget_entrada,
             ],
-            None => vec![input_widget],
+            None => vec![widget_entrada],
         }
     };
 
@@ -168,14 +168,14 @@ pub(crate) fn render_contrasena_campo(
     .placeholder("••••••••")
     .text_color(scheme.on_surface.into());
 
-    let input_widget = Box::new(
+    let widget_entrada = Box::new(
         view::sized_box(ti)
             .background(Background::Color(bg))
-            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
     ) as Box<AnyWidgetView<AppStateNativo>>;
 
     let children: Vec<Box<AnyWidgetView<AppStateNativo>>> = if etiqueta_texto.is_empty() {
-        vec![input_widget]
+        vec![widget_entrada]
     } else {
         vec![
             Box::new(
@@ -183,7 +183,7 @@ pub(crate) fn render_contrasena_campo(
                     .text_size(12.0)
                     .color(etiqueta_color),
             ) as Box<AnyWidgetView<AppStateNativo>>,
-            input_widget,
+            widget_entrada,
         ]
     };
 
@@ -227,12 +227,12 @@ pub(crate) fn render_numero_campo(
     })
     .placeholder(range_texto.as_str());
 
-    let input_widget: Box<AnyWidgetView<AppStateNativo>> = if etiqueta_texto.is_empty() {
+    let widget_entrada: Box<AnyWidgetView<AppStateNativo>> = if etiqueta_texto.is_empty() {
         Box::new(
             view::sized_box(ti)
                 .border_color(border)
                 .border_width(1.0.px())
-                .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
         )
     } else {
         Box::new(
@@ -245,14 +245,14 @@ pub(crate) fn render_numero_campo(
                     view::sized_box(ti)
                         .border_color(border)
                         .border_width(1.0.px())
-                        .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                        .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
                 ),
             )
             .gap(Length::px(4.0)),
         )
     };
 
-    input_widget
+    widget_entrada
 }
 
 // ─── MaterialSearchField ─────────────────────────────────────────
@@ -323,7 +323,7 @@ pub(crate) fn render_dropdown(
             .background(Background::Color(bg))
             .border_color(border)
             .border_width(1.0.px())
-            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
     )
 }
 
@@ -365,7 +365,7 @@ pub(crate) fn render_select(
                 )
                 .border_color(border)
                 .border_width(1.0.px())
-                .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+                .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
             ),
         )
         .gap(Length::px(4.0)),
@@ -394,7 +394,7 @@ pub(crate) fn render_autocomplete(
         view::sized_box(ti)
             .border_color(border)
             .border_width(1.0.px())
-            .corner_radius(theme.shapes.for_family(FormaFamily::TextField).px()),
+            .corner_radius(theme.shapes.for_family(FormaFamily::CampoTexto).px()),
     )
 }
 

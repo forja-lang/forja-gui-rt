@@ -341,7 +341,7 @@ pub mod atajos {
     /// Activar widget enfocado
     pub const ACTIVATE: &str = "Enter";
     /// Cerrar diálogo/menú
-    pub const CLOSE: &str = "Escape";
+    pub const CERRAR: &str = "Escape";
     /// Leer descripción del widget enfocado
     pub const LEER_ENFOCADO: &str = "Ctrl+F";
     /// Leer título de la ventana

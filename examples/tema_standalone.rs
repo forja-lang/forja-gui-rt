@@ -27,7 +27,7 @@ fn main() {
     println!("  ¿oscuro?       = {}", oscuro.es_dark);
 
     // Tipografía: consultar un estilo del TypeScale.
-    let estilo = oscuro.typography.apply("headlineLarge");
+    let estilo = oscuro.typography.aplicar("headlineLarge");
     println!(
         "\nheadlineLarge: {}px, peso {:?}",
         estilo.font_tamano, estilo.weight
