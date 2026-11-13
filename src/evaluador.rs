@@ -1105,6 +1105,15 @@ const NOMBRES_MES: [&str; 12] = [
     "diciembre",
 ];
 
+// ─── Señales de control ────────────────────────
+//
+// `romper` y `continuar` tienen que atravesar bloques anidados (`si`, `coincidir`)
+// hasta el bucle. Se usan dos textos imposibles como señal por el canal de error:
+// antes se evaluaban a `Nulo` y se perdían, así que `mientras (verdadero) {
+// si (...) { romper } }` **nunca** terminaba (colgaba la ventana).
+const SENAL_ROMPER: &str = "\u{0}romper";
+const SENAL_CONTINUAR: &str = "\u{0}continuar";
+
 // ─── Evaluación de funciones ─────────────────────────────────────
 
 /// Evalúa una función Forja a partir del AST
@@ -1253,15 +1262,30 @@ fn evaluar_bloque(
     let mut ultimo = ValorGUI::Nulo;
     for declaracion in bloque {
         let resultado = evaluar_declaracion(declaracion, ambito, almacen, declaraciones)?;
-        // Si la declaración fue un retornar, propagar el valor
-        if es_retorno(declaracion) {
+        // `retornar` directo, o un `retornar` escondido dentro de un bloque
+        // (`si`, `mientras`, `para`, `repetir`, `coincidir`, `cuando`): se
+        // propaga. Antes sólo se miraba `retornar` al tope, así que
+        // `si (x) { retornar 1 }` se perdía y la función seguía de largo.
+        if es_retorno(declaracion)
+            || (es_compuesta(declaracion) && !matches!(resultado, ValorGUI::Nulo))
+        {
             return Ok(resultado);
         }
         ultimo = resultado;
     }
-    // Retornar el último valor (permite que retornos dentro de Coincidir
-    // y otras expresiones anidadas se propaguen al bloque contenedor)
     Ok(ultimo)
+}
+
+/// ¿La declaración es un bloque que puede contener un `retornar`?
+fn es_compuesta(decl: &Declaracion) -> bool {
+    matches!(
+        decl,
+        Declaracion::Si { .. }
+            | Declaracion::Mientras { .. }
+            | Declaracion::Para { .. }
+            | Declaracion::Repetir { .. }
+            | Declaracion::Cuando { .. }
+    )
 }
 
 /// Indica si una declaración es de tipo retornar
@@ -1307,9 +1331,12 @@ fn evaluar_declaracion(
                 if !cond_val.es_verdadero() {
                     break;
                 }
-                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
-                if !matches!(resultado, ValorGUI::Nulo) {
-                    return Ok(resultado);
+                match evaluar_bloque(bloque, ambito, almacen, declaraciones) {
+                    Ok(ValorGUI::Nulo) => {}
+                    Ok(valor) => return Ok(valor),
+                    Err(senal) if senal == SENAL_ROMPER => break,
+                    Err(senal) if senal == SENAL_CONTINUAR => continue,
+                    Err(error) => return Err(error),
                 }
             }
             Ok(ValorGUI::Nulo)
@@ -1332,9 +1359,13 @@ fn evaluar_declaracion(
                         break;
                     }
                 }
-                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
-                if !matches!(resultado, ValorGUI::Nulo) {
-                    return Ok(resultado);
+                // `continuar` en un `para` salta al incremento, no al inicio.
+                match evaluar_bloque(bloque, ambito, almacen, declaraciones) {
+                    Ok(ValorGUI::Nulo) => {}
+                    Ok(valor) => return Ok(valor),
+                    Err(senal) if senal == SENAL_ROMPER => break,
+                    Err(senal) if senal == SENAL_CONTINUAR => {}
+                    Err(error) => return Err(error),
                 }
                 if let Some(inc) = incremento {
                     evaluar_declaracion(inc, ambito, almacen, declaraciones)?;
@@ -1350,9 +1381,12 @@ fn evaluar_declaracion(
                 _ => 0,
             };
             for _ in 0..n {
-                let resultado = evaluar_bloque(bloque, ambito, almacen, declaraciones)?;
-                if !matches!(resultado, ValorGUI::Nulo) {
-                    return Ok(resultado);
+                match evaluar_bloque(bloque, ambito, almacen, declaraciones) {
+                    Ok(ValorGUI::Nulo) => {}
+                    Ok(valor) => return Ok(valor),
+                    Err(senal) if senal == SENAL_ROMPER => break,
+                    Err(senal) if senal == SENAL_CONTINUAR => continue,
+                    Err(error) => return Err(error),
                 }
             }
             Ok(ValorGUI::Nulo)
@@ -1510,9 +1544,10 @@ fn evaluar_declaracion(
         | Declaracion::Enum { .. }
         | Declaracion::Rasgo { .. }
         | Declaracion::Implementacion { .. }
-        | Declaracion::AccesoMiembro { .. }
-        | Declaracion::Romper
-        | Declaracion::Continuar => Ok(ValorGUI::Nulo),
+        | Declaracion::AccesoMiembro { .. } => Ok(ValorGUI::Nulo),
+
+        Declaracion::Romper => Err(SENAL_ROMPER.to_string()),
+        Declaracion::Continuar => Err(SENAL_CONTINUAR.to_string()),
     }
 }
 
@@ -2104,5 +2139,91 @@ pub fn inicializar_estado(declaraciones: &[Declaracion], almacen: &mut VariableA
                 return;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pruebas_control {
+    use super::*;
+
+    fn declaraciones_de(fuente: &str) -> Vec<Declaracion> {
+        let mut lexer = forja_syntax::lexer::Lexer::nuevo(fuente);
+        let tokens = lexer.tokenize().expect("lexer");
+        let mut parser = forja_syntax::parser::Parser::nuevo(tokens);
+        parser.parsear().expect("parser").declaraciones
+    }
+
+    fn ejecutar(fuente: &str, funcion: &str) -> Result<ValorGUI, String> {
+        let decls = declaraciones_de(fuente);
+        let mut almacen = VariableAlmacen::nuevo();
+        ejecutar_funcion(funcion, &[], &decls, &mut almacen)
+    }
+
+    #[test]
+    fn romper_dentro_de_si_corta_el_bucle() {
+        // Antes esto colgaba (romper se evaluaba a Nulo y el bucle seguía).
+        let resultado = ejecutar(
+            r#"
+funcion calcular() -> Texto {
+    variable i = 0
+    variable suma = 0
+    mientras (verdadero) {
+        si (i >= 5) {
+            romper
+        }
+        suma = suma + i
+        i = i + 1
+    }
+    retornar a_texto(suma)
+}
+"#,
+            "calcular",
+        );
+        assert_eq!(resultado.expect("no debería fallar"), ValorGUI::Texto("10".to_string()));
+    }
+
+    #[test]
+    fn continuar_salta_la_iteracion() {
+        let resultado = ejecutar(
+            r#"
+funcion calcular() -> Texto {
+    variable suma = 0
+    variable i = 0
+    mientras (i < 5) {
+        i = i + 1
+        si (i == 3) {
+            continuar
+        }
+        suma = suma + i
+    }
+    retornar a_texto(suma)
+}
+"#,
+            "calcular",
+        );
+        assert_eq!(resultado.expect("no debería fallar"), ValorGUI::Texto("12".to_string()));
+    }
+
+    #[test]
+    fn retornar_dentro_de_bucle_devuelve_el_valor() {
+        let resultado = ejecutar(
+            r#"
+funcion calcular() -> Texto {
+    variable i = 0
+    mientras (verdadero) {
+        i = i + 1
+        si (i == 4) {
+            retornar "cortó en " + a_texto(i)
+        }
+    }
+    retornar "no llegó"
+}
+"#,
+            "calcular",
+        );
+        assert_eq!(
+            resultado.expect("no debería fallar"),
+            ValorGUI::Texto("cortó en 4".to_string())
+        );
     }
 }
