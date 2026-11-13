@@ -26,7 +26,11 @@ const DIVERGENCIAS_CONOCIDAS: &[(&str, &str)] = &[
     ),
     (
         "empujar no muta el arreglo",
-        "`empujar(xs, valor)` en la GUI no modifica `xs` (el arreglo viaja por          valor); la VM sí. Afecta también `remover`/asignación por índice",
+        "en la GUI los arreglos son TEXTO JSON (`ValorGUI::Texto`), así que          `empujar`/`remover`/`xs[i] = v` no pueden mutar el original: el valor          viaja por copia. Arreglarlo necesita un Arreglo real en el modelo de          valores (Fase 1), no un parche en el nativo",
+    ),
+    (
+        "remover no muta",
+        "misma causa: `remover(xs, 0)` no cambia el arreglo",
     ),
 ];
 
@@ -255,6 +259,34 @@ clase Punto {
 funcion calcular() -> Texto {
     variable p = nuevo Punto(2, 3)
     retornar a_texto(p.suma())
+}
+"#,
+    );
+}
+
+#[test]
+fn asignacion_por_indice() {
+    comprobar_paridad(
+        "asignación por índice",
+        r#"
+funcion calcular() -> Texto {
+    variable xs = [1, 2, 3]
+    xs[1] = 9
+    retornar a_texto(xs[1])
+}
+"#,
+    );
+}
+
+#[test]
+fn remover_elemento() {
+    comprobar_paridad(
+        "remover no muta",
+        r#"
+funcion calcular() -> Texto {
+    variable xs = [1, 2, 3]
+    remover(xs, 0)
+    retornar a_texto(longitud(xs))
 }
 "#,
     );
