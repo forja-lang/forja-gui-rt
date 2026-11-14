@@ -22,56 +22,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 // icons module used implicitly through svg_icon() call
 
-#[derive(Debug, Clone)]
-pub enum ValorGUI {
-    Texto(String),
-    Entero(i64),
-    Decimal(f64),
-    Booleano(bool),
-    Nulo,
-    /// Mapa con claves String para representar valores estructurados (Ok, Error, Algo, etc.)
-    Mapa(HashMap<String, ValorGUI>),
-}
+// El modelo de valores vive en `forja-interprete` (compartido con la web).
+pub use forja_interprete::ValorGUI;
 
-impl std::fmt::Display for ValorGUI {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ValorGUI::Texto(s) => f.write_str(s),
-            ValorGUI::Entero(n) => write!(f, "{}", n),
-            ValorGUI::Decimal(d) => write!(f, "{}", d),
-            ValorGUI::Booleano(true) => f.write_str("verdadero"),
-            ValorGUI::Booleano(false) => f.write_str("falso"),
-            ValorGUI::Nulo => f.write_str("nulo"),
-            ValorGUI::Mapa(m) => write!(f, "Mapa({:?})", m),
-        }
-    }
-}
-
-impl ValorGUI {
-    pub(crate) fn to_f64(&self) -> f64 {
-        match self {
-            ValorGUI::Entero(n) => *n as f64,
-            ValorGUI::Decimal(f) => *f,
-            ValorGUI::Texto(s) => s.parse().unwrap_or(0.0),
-            _ => 0.0,
-        }
-    }
-
-    pub(crate) fn to_bool(&self) -> bool {
-        match self {
-            ValorGUI::Booleano(b) => *b,
-            ValorGUI::Texto(s) => s == "verdadero" || s == "true",
-            ValorGUI::Entero(n) => *n != 0,
-            _ => false,
-        }
-    }
-}
-
-impl From<&str> for ValorGUI {
-    fn from(s: &str) -> Self {
-        ValorGUI::Texto(s.to_string())
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct AppStateNativo {
@@ -95,58 +48,7 @@ pub struct AppStateNativo {
 
 // ─── Conversión ValorGUI ↔ serde_json::Value ─────────────────────
 
-impl From<ValorGUI> for serde_json::Value {
-    fn from(val: ValorGUI) -> Self {
-        match val {
-            ValorGUI::Texto(s) => serde_json::Value::String(s),
-            ValorGUI::Entero(n) => serde_json::Value::Number(n.into()),
-            ValorGUI::Decimal(f) => serde_json::Value::String(f.to_string()),
-            ValorGUI::Booleano(b) => serde_json::Value::Bool(b),
-            ValorGUI::Nulo => serde_json::Value::Null,
-            ValorGUI::Mapa(m) => {
-                let mut mapa = serde_json::Map::new();
-                for (k, v) in m {
-                    mapa.insert(k, serde_json::Value::from(v));
-                }
-                serde_json::Value::Object(mapa)
-            }
-        }
-    }
-}
 
-impl From<serde_json::Value> for ValorGUI {
-    fn from(val: serde_json::Value) -> Self {
-        match val {
-            serde_json::Value::String(s) => ValorGUI::Texto(s),
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    ValorGUI::Entero(i)
-                } else if let Some(f) = n.as_f64() {
-                    ValorGUI::Decimal(f)
-                } else {
-                    ValorGUI::Nulo
-                }
-            }
-            serde_json::Value::Bool(b) => ValorGUI::Booleano(b),
-            serde_json::Value::Object(obj) => {
-                let mut mapa = HashMap::new();
-                for (k, v) in obj {
-                    mapa.insert(k, ValorGUI::from(v));
-                }
-                ValorGUI::Mapa(mapa)
-            }
-            serde_json::Value::Array(arr) => {
-                // Convertir array a JSON string para mantener compatibilidad
-                if let Some(first) = arr.first() {
-                    ValorGUI::from(first.clone())
-                } else {
-                    ValorGUI::Nulo
-                }
-            }
-            serde_json::Value::Null => ValorGUI::Nulo,
-        }
-    }
-}
 
 impl AppStateNativo {
     pub fn nuevo() -> Self {
@@ -1234,7 +1136,7 @@ fn expandir_expresion_layout(
             bloque_falso,
         } => {
             let condicion_verdadera =
-                crate::evaluador::evaluar_condicion(condicion, almacen, decls).unwrap_or(true);
+                crate::evaluador::evaluar_condicion(condicion, &crate::evaluador::AlmacenGui(almacen), decls).unwrap_or(true);
             let rama = if condicion_verdadera {
                 Some(bloque_verdadero)
             } else {
@@ -1262,11 +1164,11 @@ fn expandir_expresion_layout(
                 if let Some(cuerpo) = cuerpo_de_funcion(nombre, decls) {
                     let args: Result<Vec<ValorGUI>, String> = argumentos
                         .iter()
-                        .map(|a| crate::evaluador::evaluar_valor(a, almacen, decls))
+                        .map(|a| crate::evaluador::evaluar_valor(a, &crate::evaluador::AlmacenGui(almacen), decls))
                         .collect();
                     if let Ok(args) = args {
                         if let Ok(valor) =
-                            crate::evaluador::ejecutar_funcion(nombre, &args, decls, almacen)
+                            crate::evaluador::ejecutar_funcion(nombre, &args, decls, &crate::evaluador::AlmacenGui(almacen))
                         {
                             return vec![valor_a_expresion(&valor)];
                         }
@@ -4065,7 +3967,7 @@ pub(crate) fn expr_a_valor(
                 }
             }
             let mut almacen_clonar = almacen.clone();
-            crate::evaluador::ejecutar_funcion(nombre, &args, declaraciones, &mut almacen_clonar)
+            crate::evaluador::ejecutar_funcion(nombre, &args, declaraciones, &crate::evaluador::AlmacenGui(&almacen_clonar))
                 .ok()
         }
         _ => None,
@@ -7544,7 +7446,7 @@ pub fn ejecutar_callback_forja(
     programa: &[Declaracion],
 ) -> ValorGUI {
     let mut almacen = state.almacen.clone();
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &mut almacen) {
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &crate::evaluador::AlmacenGui(&almacen)) {
         Ok(val) => val,
         Err(e) => ValorGUI::Texto(format!("Error: {}", e)),
     }
@@ -7554,7 +7456,7 @@ pub fn ejecutar_callback_forja(
 
 /// Inicializa el estado de la GUI evaluando las variables de la función `main`.
 pub fn inicializar_estado(decls: &[Declaracion], state: &mut AppStateNativo) {
-    crate::evaluador::inicializar_estado(decls, &mut state.almacen);
+    crate::evaluador::inicializar_estado(decls, &crate::evaluador::AlmacenGui(&state.almacen));
 }
 
 // ═══════════════════════════════════════════════════════════════════

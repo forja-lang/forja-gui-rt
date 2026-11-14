@@ -13,7 +13,7 @@
 //! Esto es la red de seguridad para poder borrar el evaluador propio de
 //! `wasm-gui` (Fase 1) sin cambiar el comportamiento del lenguaje.
 
-use forja_gui_rt::evaluador::ejecutar_funcion;
+use forja_gui_rt::evaluador::{ejecutar_funcion, AlmacenGui};
 use forja_gui_rt::gui_nativa::ValorGUI;
 use forja_gui_rt::signals::VariableAlmacen;
 use forja_syntax::ast::Declaracion;
@@ -41,8 +41,8 @@ fn por_la_vm(fuente: &str) -> String {
 
 fn por_la_gui(fuente: &str) -> Result<String, String> {
     let decls = declaraciones(fuente);
-    let mut almacen = VariableAlmacen::nuevo();
-    let valor = ejecutar_funcion("calcular", &[], &decls, &mut almacen)?;
+    let almacen = VariableAlmacen::nuevo();
+    let valor = ejecutar_funcion("calcular", &[], &decls, &AlmacenGui(&almacen))?;
     Ok(match valor {
         ValorGUI::Texto(texto) => texto,
         otro => format!("{:?}", otro),

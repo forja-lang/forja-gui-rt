@@ -19,6 +19,7 @@ xilem = { git = "https://github.com/linebender/xilem", branch = "main" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 forja-syntax = { version = "0.11.0", path = "../../compiler/forja-syntax" }
+forja-interprete = { version = "0.11.0", path = "../../compiler/forja-interprete" }
 chrono = "0.4"
 qrcode = "0.14"
 image = "0.25"

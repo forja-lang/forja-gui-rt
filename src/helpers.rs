@@ -519,7 +519,7 @@ pub(crate) fn ejecutar_callback_con_valor(
 ) {
     crate::debug::registrar_callback_inicio(nombre_fn);
     let args: Vec<ValorGUI> = valor.into_iter().collect();
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &args, programa, &mut state.almacen) {
+    match crate::evaluador::ejecutar_funcion(nombre_fn, &args, programa, &crate::evaluador::AlmacenGui(&state.almacen)) {
         Ok(valor) => {
             crate::debug::registrar_callback_exito(nombre_fn, &valor.to_display());
             state.almacen.fijar("resultado", valor.to_json_valor());
