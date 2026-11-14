@@ -1478,6 +1478,12 @@ fn evaluar_declaracion(
         }
 
         Declaracion::LlamadaFuncion { nombre, argumentos } => {
+            // `empujar(xs, v)` / `remover(xs, i)` como sentencia: mutan la variable.
+            if let Some(resultado) =
+                nativa_sobre_variable(nombre, argumentos, ambito, almacen, declaraciones)
+            {
+                return resultado;
+            }
             let mut args = Vec::new();
             for arg in argumentos {
                 args.push(evaluar_expresion(arg, ambito, almacen, declaraciones)?);
@@ -1554,6 +1560,68 @@ fn evaluar_declaracion(
 // ─── Evaluación de expresiones ──────────────────────────────────
 
 /// Evalúa una expresión y retorna su valor como ValorGUI
+/// `empujar(arreglo, valor)` y `remover(arreglo, indice)` mutando la variable.
+///
+/// En la GUI los arreglos son texto JSON: si el nativo los recibe como valor,
+/// modifica una copia y el original no cambia (divergencia con la VM). Como el
+/// primer argumento es una variable, la mutación se hace acá y se escribe de
+/// vuelta en el ámbito y en el almacén.
+///
+/// Devuelve `None` si la llamada no es de este tipo (se sigue el camino normal).
+fn nativa_sobre_variable(
+    nombre: &str,
+    argumentos: &[Expresion],
+    ambito: &mut Ambito,
+    almacen: &mut VariableAlmacen,
+    declaraciones: &[Declaracion],
+) -> Option<Result<ValorGUI, String>> {
+    if nombre != "empujar" && nombre != "remover" {
+        return None;
+    }
+    if argumentos.len() != 2 {
+        return None;
+    }
+    let Expresion::Identificador { nombre: variable, .. } = &argumentos[0] else {
+        return None;
+    };
+
+    let previo = ambito
+        .obtener(variable)
+        .cloned()
+        .or_else(|| almacen.obtener(variable).map(|json| ValorGUI::from_serde(&json)))?;
+    let mut valores: Vec<serde_json::Value> = match &previo {
+        ValorGUI::Texto(texto) => match serde_json::from_str(texto) {
+            Ok(serde_json::Value::Array(items)) => items,
+            _ => return Some(Err(format!("{nombre}: '{}' no es un arreglo", variable))),
+        },
+        _ => return Some(Err(format!("{nombre}: '{}' no es un arreglo", variable))),
+    };
+
+    let siguiente = match evaluar_expresion(&argumentos[1], ambito, almacen, declaraciones) {
+        Ok(valor) => valor,
+        Err(error) => return Some(Err(error)),
+    };
+
+    if nombre == "empujar" {
+        valores.push(siguiente.to_json_valor());
+    } else {
+        let indice = match siguiente {
+            ValorGUI::Entero(i) if i >= 0 && (i as usize) < valores.len() => i as usize,
+            _ => return Some(Err("remover: índice fuera de rango".to_string())),
+        };
+        valores.remove(indice);
+    }
+
+    let texto = match serde_json::to_string(&serde_json::Value::Array(valores)) {
+        Ok(texto) => texto,
+        Err(e) => return Some(Err(format!("{nombre}: {e}"))),
+    };
+    let nuevo = ValorGUI::Texto(texto);
+    ambito.asignar(variable.clone(), nuevo.clone());
+    almacen.fijar(variable, nuevo.to_json_valor());
+    Some(Ok(ValorGUI::Nulo))
+}
+
 fn evaluar_expresion(
     expr: &Expresion,
     ambito: &mut Ambito,
@@ -1629,6 +1697,12 @@ fn evaluar_expresion(
 
         // ── Llamada a función ─────────────────────────────────
         Expresion::LlamadaFuncion { nombre, argumentos } => {
+            // Mutaciones de arreglo que necesitan la variable, no su copia.
+            if let Some(resultado) =
+                nativa_sobre_variable(nombre, argumentos, ambito, almacen, declaraciones)
+            {
+                return resultado;
+            }
             let mut args = Vec::new();
             for arg in argumentos {
                 args.push(evaluar_expresion(arg, ambito, almacen, declaraciones)?);

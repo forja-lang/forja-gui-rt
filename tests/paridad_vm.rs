@@ -24,14 +24,6 @@ const DIVERGENCIAS_CONOCIDAS: &[(&str, &str)] = &[
         "clases con métodos",
         "el evaluador de la GUI no resuelve métodos declarados dentro de la clase          (falla con «Función 'suma' no encontrada»); lo arregla la Fase 3",
     ),
-    (
-        "empujar no muta el arreglo",
-        "en la GUI los arreglos son TEXTO JSON (`ValorGUI::Texto`), así que          `empujar`/`remover`/`xs[i] = v` no pueden mutar el original: el valor          viaja por copia. Arreglarlo necesita un Arreglo real en el modelo de          valores (Fase 1), no un parche en el nativo",
-    ),
-    (
-        "remover no muta",
-        "misma causa: `remover(xs, 0)` no cambia el arreglo",
-    ),
 ];
 
 fn declaraciones(fuente: &str) -> Vec<Declaracion> {
@@ -168,7 +160,7 @@ funcion calcular() -> Texto {
 #[test]
 fn bucle_para_y_arreglos() {
     comprobar_paridad(
-        "empujar no muta el arreglo",
+        "empujar y arreglos",
         r#"
 funcion calcular() -> Texto {
     variable xs = [10, 20, 30]
@@ -281,7 +273,7 @@ funcion calcular() -> Texto {
 #[test]
 fn remover_elemento() {
     comprobar_paridad(
-        "remover no muta",
+        "remover",
         r#"
 funcion calcular() -> Texto {
     variable xs = [1, 2, 3]
