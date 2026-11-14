@@ -19,12 +19,8 @@ use forja_gui_rt::signals::VariableAlmacen;
 use forja_syntax::ast::Declaracion;
 
 /// (nombre, fuente, motivo) de los casos que hoy divergen a propósito.
-const DIVERGENCIAS_CONOCIDAS: &[(&str, &str)] = &[
-    (
-        "clases con métodos",
-        "el evaluador de la GUI no resuelve métodos declarados dentro de la clase          (falla con «Función 'suma' no encontrada»); lo arregla la Fase 3",
-    ),
-];
+// Vacía: la VM y la GUI coinciden en los 12 programas del corpus.
+const DIVERGENCIAS_CONOCIDAS: &[(&str, &str)] = &[];
 
 fn declaraciones(fuente: &str) -> Vec<Declaracion> {
     let mut lexer = forja_syntax::lexer::Lexer::nuevo(fuente);
@@ -232,7 +228,7 @@ funcion calcular() -> Texto {
 #[test]
 fn clases_y_campos() {
     comprobar_paridad(
-        "clases con métodos",
+        "clases con métodos y campos",
         r#"
 clase Punto {
     x
