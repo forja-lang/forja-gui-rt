@@ -25,7 +25,6 @@ use std::time::Instant;
 // El modelo de valores vive en `forja-interprete` (compartido con la web).
 pub use forja_interprete::ValorGUI;
 
-
 #[derive(Debug, Clone)]
 pub struct AppStateNativo {
     pub almacen: VariableAlmacen,
@@ -47,8 +46,6 @@ pub struct AppStateNativo {
 }
 
 // ─── Conversión ValorGUI ↔ serde_json::Value ─────────────────────
-
-
 
 impl AppStateNativo {
     pub fn nuevo() -> Self {
@@ -1135,8 +1132,12 @@ fn expandir_expresion_layout(
             bloque_verdadero,
             bloque_falso,
         } => {
-            let condicion_verdadera =
-                crate::evaluador::evaluar_condicion(condicion, &crate::evaluador::AlmacenGui(almacen), decls).unwrap_or(true);
+            let condicion_verdadera = crate::evaluador::evaluar_condicion(
+                condicion,
+                &crate::evaluador::AlmacenGui(almacen),
+                decls,
+            )
+            .unwrap_or(true);
             let rama = if condicion_verdadera {
                 Some(bloque_verdadero)
             } else {
@@ -1164,12 +1165,21 @@ fn expandir_expresion_layout(
                 if let Some(cuerpo) = cuerpo_de_funcion(nombre, decls) {
                     let args: Result<Vec<ValorGUI>, String> = argumentos
                         .iter()
-                        .map(|a| crate::evaluador::evaluar_valor(a, &crate::evaluador::AlmacenGui(almacen), decls))
+                        .map(|a| {
+                            crate::evaluador::evaluar_valor(
+                                a,
+                                &crate::evaluador::AlmacenGui(almacen),
+                                decls,
+                            )
+                        })
                         .collect();
                     if let Ok(args) = args {
-                        if let Ok(valor) =
-                            crate::evaluador::ejecutar_funcion(nombre, &args, decls, &crate::evaluador::AlmacenGui(almacen))
-                        {
+                        if let Ok(valor) = crate::evaluador::ejecutar_funcion(
+                            nombre,
+                            &args,
+                            decls,
+                            &crate::evaluador::AlmacenGui(almacen),
+                        ) {
                             return vec![valor_a_expresion(&valor)];
                         }
                     }
@@ -3967,8 +3977,13 @@ pub(crate) fn expr_a_valor(
                 }
             }
             let mut almacen_clonar = almacen.clone();
-            crate::evaluador::ejecutar_funcion(nombre, &args, declaraciones, &crate::evaluador::AlmacenGui(&almacen_clonar))
-                .ok()
+            crate::evaluador::ejecutar_funcion(
+                nombre,
+                &args,
+                declaraciones,
+                &crate::evaluador::AlmacenGui(&almacen_clonar),
+            )
+            .ok()
         }
         _ => None,
     }
@@ -7446,7 +7461,12 @@ pub fn ejecutar_callback_forja(
     programa: &[Declaracion],
 ) -> ValorGUI {
     let mut almacen = state.almacen.clone();
-    match crate::evaluador::ejecutar_funcion(nombre_fn, &[], programa, &crate::evaluador::AlmacenGui(&almacen)) {
+    match crate::evaluador::ejecutar_funcion(
+        nombre_fn,
+        &[],
+        programa,
+        &crate::evaluador::AlmacenGui(&almacen),
+    ) {
         Ok(val) => val,
         Err(e) => ValorGUI::Texto(format!("Error: {}", e)),
     }
