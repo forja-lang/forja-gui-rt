@@ -82,3 +82,26 @@ fn callback_muta_el_estado_y_devuelve_el_texto() {
     assert_eq!(valor.to_string(), "1");
     assert_eq!(state.almacen.obtener("cuenta"), Some(serde_json::json!(1)));
 }
+
+#[test]
+fn el_estado_guardado_pisa_las_variables_de_main() {
+    // `forja ejecutar` pasa `--load-state=<json>` (clave `estado:` de forja.yaml):
+    // el snapshot tiene que pisar lo que dejó `main()`.
+    let decls = declaraciones(PROGRAMA);
+    let mut state = AppStateNativo::nuevo();
+    inicializar_estado(&decls, &mut state);
+    assert_eq!(state.almacen.obtener("cuenta"), Some(serde_json::json!(0)));
+
+    state.cargar_estado(r#"{"cuenta": 7, "resultado": "7"}"#);
+    assert_eq!(state.almacen.obtener("cuenta"), Some(serde_json::json!(7)));
+    assert_eq!(
+        state.almacen.obtener("resultado"),
+        Some(serde_json::json!("7"))
+    );
+
+    // Y el layout se re-extrae con ese estado: el label sigue siendo la variable.
+    let layout = extraer_layout(&decls, &mut state.almacen);
+    let mut labels = Vec::new();
+    etiquetas(&layout, &mut labels);
+    assert!(labels.iter().any(|(texto, _)| texto == "resultado"));
+}
