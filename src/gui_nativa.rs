@@ -8438,3 +8438,91 @@ funcion main() {
         }
     }
 }
+
+/// Click real sin ventana: recorre el mismo camino que dispara el botón.
+///
+/// `view::text_button` llama a `ejecutar_callback_y_actualizar(&callback, ...)`,
+/// así que acá se busca el callback en el `Layout` y se invoca esa misma función.
+/// No se usa `masonry_testing`: en esta revisión de xilem el `TestHarness` monta
+/// widgets de Masonry, no vistas de Xilem, y el árbol de la app es una vista.
+#[cfg(test)]
+mod tests_click {
+    use super::*;
+    use forja_syntax::{lexer::Lexer, parser::Parser};
+
+    const APP: &str = r#"
+importar gui
+funcion main() {
+    variable cuenta = 0
+    variable resultado = "0"
+    columna(escribir(resultado), boton("+1", &incrementar))
+}
+funcion incrementar() -> Texto {
+    cuenta = cuenta + 1
+    retornar a_texto(cuenta)
+}
+"#;
+
+    fn declaraciones(src: &str) -> Vec<Declaracion> {
+        let mut lexer = Lexer::nuevo(src);
+        let tokens = lexer.tokenize().expect("lex");
+        let mut parser = Parser::nuevo(tokens);
+        parser.parsear().expect("parse").declaraciones
+    }
+
+    fn callback_del_primer_boton(layout: &Layout) -> Option<String> {
+        match layout {
+            Layout::Button { callback, .. } | Layout::MaterialButton { callback, .. } => {
+                Some(callback.clone())
+            }
+            Layout::Column { children, .. } | Layout::Row { children, .. } => {
+                children.iter().find_map(callback_del_primer_boton)
+            }
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn el_click_del_boton_actualiza_el_store_y_el_label() {
+        let decls = declaraciones(APP);
+        let mut state = AppStateNativo::nuevo();
+        inicializar_estado(&decls, &mut state);
+
+        let layout = extraer_layout(&decls, &mut state.almacen);
+        let callback =
+            callback_del_primer_boton(&layout)
+                .unwrap_or_else(|| panic!("`boton(...)` tiene que traer su callback: {layout:?}"));
+        assert_eq!(callback, "incrementar");
+
+        // Esto es lo que ejecuta el botón al recibir el click.
+        crate::helpers::ejecutar_callback_y_actualizar(&callback, &mut state, &decls);
+
+        assert_eq!(state.almacen.obtener("cuenta"), Some(serde_json::json!(1)));
+        assert_eq!(
+            state.almacen.obtener("resultado"),
+            Some(serde_json::json!("1")),
+            "el valor del callback tiene que quedar en `resultado` (lo que pinta el label)"
+        );
+
+        // Re-render: el layout se vuelve a extraer con el estado nuevo y sigue
+        // apuntando a la variable (el valor lo resuelve `expr_a_valor` al pintar).
+        let layout2 = extraer_layout(&decls, &mut state.almacen);
+        assert!(
+            matches!(&layout2, Layout::Column { children, .. }
+                if children.iter().any(|h| matches!(h, Layout::Label { es_variable: true, .. }))),
+            "el label de `resultado` tiene que seguir siendo de variable: {layout2:?}"
+        );
+    }
+
+    #[test]
+    fn dos_clicks_seguidos_acumulan() {
+        let decls = declaraciones(APP);
+        let mut state = AppStateNativo::nuevo();
+        inicializar_estado(&decls, &mut state);
+        for _ in 0..2 {
+            crate::helpers::ejecutar_callback_y_actualizar("incrementar", &mut state, &decls);
+        }
+        assert_eq!(state.almacen.obtener("cuenta"), Some(serde_json::json!(2)));
+        assert_eq!(state.almacen.obtener("resultado"), Some(serde_json::json!("2")));
+    }
+}
