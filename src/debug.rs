@@ -9,8 +9,23 @@
 // Se activa mediante la variable de entorno FORJA_GUI_DEBUG=1 o FORJA_DEBUG=1
 
 /// Retorna true si el modo depuración de GUI está activo
+/// (`FORJA_GUI_DEBUG=1`, `FORJA_DEBUG=1` o `FORJA_GUI_PERF=1`).
+///
+/// Antes devolvía `true` fijo: cada render, cambio de variable y callback
+/// armaba y escribía trazas en stderr, y el arranque de la app tardaba segundos
+/// (y la salida se perdía: la app GUI no tiene consola).
 pub fn es_depuracion_enabled() -> bool {
-    true // FORZADO PARA DEPURACIÓN INTEGRAL EN ANDROID
+    use std::sync::OnceLock;
+    static ACTIVO: OnceLock<bool> = OnceLock::new();
+    *ACTIVO.get_or_init(|| {
+        ["FORJA_GUI_DEBUG", "FORJA_DEBUG", "FORJA_GUI_PERF"]
+            .iter()
+            .any(|var| {
+                std::env::var(var)
+                    .map(|v| v != "0" && !v.trim().is_empty())
+                    .unwrap_or(false)
+            })
+    })
 }
 
 /// Imprime un mensaje formateado con prefijo si el modo debug está activo

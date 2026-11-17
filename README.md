@@ -57,8 +57,8 @@ funcion main() {
 Ejecutar con:
 
 ```bash
-# Desde el CLI de Forja:
-forja ejecutar --native app.fa
+# Desde el CLI de Forja (con `destino: nativo` en forja.yaml):
+forja ejecutar app.fa
 
 # O transpilar y compilar manualmente:
 forja transpile app.fa
@@ -75,7 +75,7 @@ Código Forja (.fa) ──→ AST (forja::ast::Programa)
                               │
               ┌───────────────┼───────────────┐
               ▼               ▼               ▼
-      inicializar_estado  extraer_layout  build_and_run
+      inicializar_estado  extraer_layout  construir_y_ejecutar
        (evalúa vars y     (convierte AST    (crea ventana
         main() nativo)     → Layout enum)    Xilem + Vello)
                               │
@@ -85,8 +85,8 @@ Código Forja (.fa) ──→ AST (forja::ast::Programa)
 ```
 
 **Flujo completo:**
-1. El transpilador genera `static PROGRAMA: Programa` con el AST completo
-2. `build_and_run()` inicia el runtime GUI
+1. El transpilador genera `fn programa() -> Programa` con el AST completo
+2. `gui_nativa::construir_y_ejecutar()` inicia el runtime GUI
 3. `inicializar_estado()` evalúa las variables del módulo y `main()` usando el evaluador tree-walking
 4. `extraer_layout()` busca la función `main()` y convierte sus expresiones al enum `Layout`
 5. `layout_a_view()` convierte cada `Layout` en un widget Xilem/Masonry
@@ -223,6 +223,24 @@ texto_enriquecido("<b>Negrita</b> y <i>itálica</i>")
 ```
 
 ---
+
+## Callbacks y cierre de la app
+
+Un callback es una función Forja sin parámetros que devuelve `Texto`; ese texto
+queda en la variable `resultado` del store (para mostrarlo con
+`escribir(resultado)`). Las variables de `main()` viven en el store: asignarlas
+dentro de un callback (por ejemplo `cuenta = cuenta + 1`) actualiza la UI.
+
+Devolver un texto **no** cierra la ventana. Para terminar la app:
+
+```fa
+boton("Cerrar", &cerrar_app)
+
+funcion cerrar_app() -> Texto {
+    salir_app()      // cierra el proceso (en la web no hace nada)
+    retornar ""
+}
+```
 
 ## Botones Material Design 3
 
@@ -946,7 +964,7 @@ store.init_from(iterador);       // inicialización batch
 El estado se preserva entre recargas gracias a `snapshot()` y `cargar_estado()`:
 
 ```bash
-forja ejecutar --native app.fa     # primera ejecución
+forja ejecutar app.fa     # primera ejecución (destino: nativo)
 # Al modificar app.fa y re-ejecutar, el estado se restaura
 ```
 
@@ -1165,7 +1183,7 @@ state.a11y_focus("button", "Enviar", "", "Activo");
 use forja_gui_rt::*;
 
 // Punto de entrada
-build_and_run(&programa, load_state, theme, auto_theme)?;
+forja_gui_rt::gui_nativa::construir_y_ejecutar(&programa, load_state, theme, auto_theme)?;
 
 // Conversión de expresiones
 let layout = extraer_layout(&declaraciones);
@@ -1315,10 +1333,6 @@ forja build app.fa
 ### Ejecución directa con hot reload
 
 ```bash
-forja ejecutar --native app.fa
-# Al modificar app.fa y re-ejecutar:
-forja ejecutar --native app.fa --load-state=<snapshot>
-# O simplemente:
-forja ejecutar --native app.fa
-# (el estado se restaura automáticamente)
+forja ejecutar app.fa     # con destino: nativo en forja.yaml
+# Al modificar app.fa y re-ejecutar, el estado se restaura automáticamente.
 ```

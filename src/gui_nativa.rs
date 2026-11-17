@@ -1448,6 +1448,12 @@ pub fn expr_a_layout(expr: &Expresion) -> Option<Layout> {
                                 texto: v.clone(),
                                 es_variable: true,
                             }),
+                            // `escribir(resultado)`: keyword del lenguaje, variable
+                            // donde el runtime deja el valor del último callback.
+                            Expresion::Resultado => Some(Layout::Label {
+                                texto: "resultado".to_string(),
+                                es_variable: true,
+                            }),
                             Expresion::LiteralTexto(s) => Some(Layout::Label {
                                 texto: s.clone(),
                                 es_variable: false,
@@ -3888,6 +3894,10 @@ pub(crate) fn expr_a_valor(
             }
             almacen.obtener(nombre).map(|v| ValorGUI::from_serde(&v))
         }
+        // `resultado` es keyword del lenguaje (valor de retorno en
+        // postcondiciones), pero es también donde el runtime guarda el valor que
+        // devuelve un callback: `escribir(resultado)` tiene que leer la variable.
+        Expresion::Resultado => almacen.obtener("resultado").map(|v| ValorGUI::from_serde(&v)),
         Expresion::Index { objeto, indice } => {
             let obj = expr_a_valor(objeto, params, almacen, declaraciones)?;
             let idx = expr_a_valor(indice, params, almacen, declaraciones)?;
@@ -7225,17 +7235,119 @@ fn depuracion_activo() -> bool {
         .unwrap_or(false)
 }
 
+/// Pide a Windows que traiga la ventana propia al frente.
+///
+/// Se ejecuta en un hilo aparte, ~400 ms después: cuando vuelve
+/// `construir_y_ejecutar` la ventana ya existe, y no se bloquea el event loop.
+#[cfg(target_os = "windows")]
+fn traer_al_frente_al_arrancar() {
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumThreadWindows(
+            hilo: u32,
+            callback: extern "system" fn(isize, isize) -> i32,
+            datos: isize,
+        ) -> i32;
+        fn SetForegroundWindow(ventana: isize) -> i32;
+        fn ShowWindow(ventana: isize, comando: i32) -> i32;
+        fn IsWindowVisible(ventana: isize) -> i32;
+        fn GetClassNameW(ventana: isize, buffer: *mut u16, largo: i32) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentThreadId() -> u32;
+    }
+
+    /// HWND encontrado (0 = ninguno).
+    static ENCONTRADA: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+    extern "system" fn visitar(ventana: isize, _datos: isize) -> i32 {
+        if unsafe { IsWindowVisible(ventana) } == 0 {
+            return 1; // seguir
+        }
+        // Ignorar consolas: la app GUI tiene que ser la otra ventana del hilo.
+        let mut clase = [0u16; 64];
+        let largo = unsafe { GetClassNameW(ventana, clase.as_mut_ptr(), clase.len() as i32) };
+        let clase = String::from_utf16_lossy(&clase[..largo.max(0) as usize]);
+        if clase.contains("ConsoleWindow") {
+            return 1;
+        }
+        ENCONTRADA.store(ventana, std::sync::atomic::Ordering::Release);
+        0 // cortar
+    }
+
+    let hilo = unsafe { GetCurrentThreadId() };
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        unsafe {
+            EnumThreadWindows(hilo, visitar, 0);
+        }
+        let ventana = ENCONTRADA.load(std::sync::atomic::Ordering::Acquire);
+        if ventana != 0 {
+            unsafe {
+                ShowWindow(ventana, 9); // SW_RESTORE
+                SetForegroundWindow(ventana);
+            }
+        }
+    });
+}
+
+/// Fuera de Windows el gestor de ventanas ya enfoca la ventana nueva.
+#[cfg(not(target_os = "windows"))]
+fn traer_al_frente_al_arrancar() {}
+
+/// Posición centrada en la pantalla primaria.
+///
+/// En Windows se consulta con `GetSystemMetrics` (no hay `Window` todavía: el
+/// event loop se construye después, y `EventLoopBuilder` no expone monitores).
+#[cfg(target_os = "windows")]
+fn posicion_centrada(ancho: f64, alto: f64) -> Option<winit::dpi::Position> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetSystemMetrics(indice: i32) -> i32;
+        fn GetDpiForSystem() -> u32;
+    }
+    const SM_CXSCREEN: i32 = 0;
+    const SM_CYSCREEN: i32 = 1;
+    let (ancho_pantalla, alto_pantalla, dpi) = unsafe {
+        (
+            f64::from(GetSystemMetrics(SM_CXSCREEN)),
+            f64::from(GetSystemMetrics(SM_CYSCREEN)),
+            f64::from(GetDpiForSystem()),
+        )
+    };
+    if ancho_pantalla <= 0.0 || alto_pantalla <= 0.0 {
+        return None;
+    }
+    let escala = if dpi > 0.0 { dpi / 96.0 } else { 1.0 };
+    let x = ((ancho_pantalla - ancho * escala) / 2.0).max(0.0) as i32;
+    let y = ((alto_pantalla - alto * escala) / 2.0).max(0.0) as i32;
+    Some(winit::dpi::Position::Physical(
+        winit::dpi::PhysicalPosition::new(x, y),
+    ))
+}
+
+/// Fuera de Windows se deja la posición que elige el sistema.
+#[cfg(not(target_os = "windows"))]
+fn posicion_centrada(_ancho: f64, _alto: f64) -> Option<winit::dpi::Position> {
+    None
+}
+
 /// Arma las `WindowOptions` con lo declarado en `ventana(...)`.
 fn opciones_ventana(
     titulo: String,
     config: &crate::window_config::VentanaConfig,
     ancho: f64,
     alto: f64,
+    posicion: Option<winit::dpi::Position>,
 ) -> WindowOptions<AppStateNativo> {
     let mut opciones = WindowOptions::new(titulo)
         .with_initial_inner_size(LogicalSize::new(ancho, alto))
         .with_resizable(config.redimensionable)
         .with_decorations(config.decoraciones);
+    if let Some(posicion) = posicion {
+        opciones = opciones.with_initial_position(posicion);
+    }
     if let (Some(w), Some(h)) = (config.ancho_minimo, config.alto_minimo) {
         opciones = opciones.with_min_inner_size(LogicalSize::new(w, h));
     }
@@ -7265,6 +7377,10 @@ pub fn construir_y_ejecutar(
     // Lo antes posible: si el binario es de consola, despegarse para que no
     // aparezca la ventana negra antes de la GUI.
     crate::window_config::ocultar_consola_si_corresponde();
+    // Una app lanzada desde otra app (p. ej. `forja ejecutar` o una terminal)
+    // nace DETRÁS de la ventana que la lanzó. Se trae al frente un instante
+    // después de crear la ventana.
+    traer_al_frente_al_arrancar();
 
     let theme = if auto_theme {
         MaterialTheme::system("#6750A4")
@@ -7337,6 +7453,10 @@ pub fn construir_y_ejecutar(
         );
     }
 
+    // Centrar la ventana en la pantalla. Sin esto Windows la ubica donde estaba
+    // la última ventana (por ejemplo, debajo de la consola desde la que se lanzó).
+    let posicion = posicion_centrada(initial_ancho, initial_alto);
+
     // Crear la app con WindowOptions que fija el tamaño inicial de la ventana
     let app = Xilem::new_simple(
         state,
@@ -7370,7 +7490,7 @@ pub fn construir_y_ejecutar(
             Box::new(observe_ancho(raiz_con_bg))
         },
         crate::chrome::aplicar_chrome(
-            opciones_ventana(titulo, &config, initial_ancho, initial_alto),
+            opciones_ventana(titulo, &config, initial_ancho, initial_alto, posicion),
             &tema_ventana,
         ),
     )
